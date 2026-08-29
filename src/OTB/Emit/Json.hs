@@ -18,10 +18,11 @@ import Data.List (intercalate)
 import OTB.Player (PerfNote (..), Performance (..))
 import OTB.Units (Bpm (..), Seconds (..), WholeNotes (..), secondsAt)
 
-renderJson :: Performance -> String
-renderJson (Performance tmap tracks) =
+renderJson :: String -> Performance -> String
+renderJson piece (Performance tmap tracks) =
   obj
-    [ ("tempoMap", arr (map tempoJson tmap))
+    [ ("piece", show piece)
+    , ("tempoMap", arr (map tempoJson tmap))
     , ("tracks", arr (map trackJson tracks))
     ]
   where

@@ -85,7 +85,7 @@ main = do
         (renderScl (T.pack (optTemperament o)) table)
   case optEmitJson o of
     Nothing -> pure ()
-    Just jsonPath -> writeFile jsonPath (renderJson p)
+    Just jsonPath -> writeFile jsonPath (renderJson (T.unpack piece) p)
   let Bpm bpm = scTempo score
   putStrLn $
     "voices " <> show (length (scVoices score))

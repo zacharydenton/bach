@@ -1,0 +1,9 @@
+{
+  "_": "BWV 846 fugue casting — chosen by ear on the patchboard, 2026-08-29. Channel -> patch; kern orders voices bass-first (ch0=bass ... ch4,5=soprano).",
+  "0": "/usr/share/surge-xt/patches_factory/Leads/DNA Sequencer.fxp",
+  "1": "/usr/share/surge-xt/patches_factory/Keys/EP 2.fxp",
+  "2": "/usr/share/surge-xt/patches_factory/Leads/Clean Shit.fxp",
+  "3": "/usr/share/surge-xt/patches_factory/Leads/Clean Shit.fxp",
+  "4": "/usr/share/surge-xt/patches_factory/Leads/Cray.fxp",
+  "5": "/usr/share/surge-xt/patches_factory/Leads/Cray.fxp"
+}

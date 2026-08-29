@@ -527,6 +527,9 @@ def main():
     ap.add_argument("--port", type=int, default=8766)
     ap.add_argument("--local", action="store_true",
                     help="also play on the local audio device (sounddevice)")
+    ap.add_argument("--casting", metavar="CASTING.json",
+                    help="channel->patch map to preload (default: "
+                         "config/casting/<piece>.json when present)")
     args = ap.parse_args()
 
     with open(args.perf) as f:
@@ -535,6 +538,24 @@ def main():
     if not cats:
         sys.exit("no Surge patch library found (patches_factory)")
     engine = Engine(perf, args.sr, args.scl)
+
+    # preload the canonical voicing — the same file render_showcase renders
+    casting_path = args.casting
+    if not casting_path and perf.get("piece"):
+        cand = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "config", "casting",
+                            perf["piece"] + ".json")
+        if os.path.isfile(cand):
+            casting_path = cand
+    if casting_path:
+        with open(casting_path) as f:
+            casting = json.load(f)
+        for pi, part in enumerate(engine.parts):
+            path = casting.get(str(part["channels"][0]))
+            if path and os.path.isfile(path):
+                engine.request_patch(pi, path)
+        print(f"casting preloaded from {casting_path}", flush=True)
+
     serve(engine, cats, args.port)
     print(f"patchboard: http://0.0.0.0:{args.port}/  "
           f"({len(engine.instances)} lanes, {len(engine.parts)} parts, "

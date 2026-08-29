@@ -30,18 +30,11 @@ PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1p01.json" \
   --scl "$OUT/w3.scl" -o "$OUT/wtc1p01_surge_cast.wav" \
   --patch "$FP/Plucks/Nice Pluck 2.fxp"
 
-# Fugue: four voices, four timbres. KERN ORDERS SPINES BASS-FIRST:
-#   voice 0 (BASS) ch0    | voice 1 (tenor) ch1
-#   voice 2 (alto) ch2,3  | voice 3 (SOPRANO) ch4,5
-#
-# Casting chosen BY EAR on the patchboard, 2026-08-29 — the first entry
-# in the project's actual taste log. (Claude's name-guessed casting it
-# replaced: Bass 1 / Smoothy Hollow / Clarinet / Classic Lead 1.)
-PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1f01.json" \
-  --scl "$OUT/w3.scl" -o "$OUT/wtc1f01_surge_cast.wav" \
-  --patch-ch "0:$FP/Leads/DNA Sequencer.fxp" \
-  --patch-ch "1:$FP/Keys/EP 2.fxp" \
-  --patch-ch "2:$FP/Leads/Clean Shit.fxp" \
-  --patch-ch "3:$FP/Leads/Clean Shit.fxp" \
-  --patch-ch "4:$FP/Leads/Cray.fxp" \
-  --patch-ch "5:$FP/Leads/Cray.fxp"
+# Fugue: the canonical voicing lives in config/casting/wtc1f01.json —
+# the same file the patchboard preloads. One source, two consumers.
+CAST_ARGS=$("$PY" -c "
+import json
+c = json.load(open('config/casting/wtc1f01.json'))
+print(' '.join(f'--patch-ch \"{k}:{v}\"' for k, v in sorted(c.items()) if k.isdigit()))")
+eval PYTHONPATH=\"$SURGEPY_DIR\" \"$PY\" tools/audition.py \"$OUT/wtc1f01.json\" \
+  --scl \"$OUT/w3.scl\" -o \"$OUT/wtc1f01_surge_cast.wav\" $CAST_ARGS
