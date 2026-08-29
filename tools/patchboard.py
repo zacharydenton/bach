@@ -272,7 +272,7 @@ async function listen(){
   await ctx.audioWorklet.addModule(url);
   const node = new AudioWorkletNode(ctx, 'player', {outputChannelCount:[2]});
   node.connect(ctx.destination);
-  const resp = await fetch('/pcm');
+  const resp = await fetch('pcm');
   const reader = resp.body.getReader();
   let pend = new Uint8Array(0);
   while (true){
@@ -290,7 +290,7 @@ async function listen(){
 }
 
 async function init(){
-  CATS = await (await fetch('/patches')).json();
+  CATS = await (await fetch('patches')).json();
   await refresh(); setInterval(refresh, 1000);
 }
 function opts(){
@@ -304,7 +304,7 @@ function opts(){
   return h;
 }
 async function refresh(){
-  STATE = await (await fetch('/state')).json();
+  STATE = await (await fetch('state')).json();
   document.getElementById('play').textContent = STATE.playing?'pause':'play';
   document.getElementById('pos').textContent =
     STATE.position.toFixed(1)+' / '+STATE.length.toFixed(1)+'s · '+
@@ -335,15 +335,15 @@ function sel(i){ return document.getElementById('sel'+i).value; }
 async function post(url, body){
   await fetch(url,{method:'POST',body:JSON.stringify(body)}); refresh();
 }
-function setPatch(i,path){ post('/patch',{part:i,path}); }
+function setPatch(i,path){ post('patch',{part:i,path}); }
 function step(i,d){
   const s = document.getElementById('sel'+i);
   s.selectedIndex = Math.max(0, Math.min(s.length-1, s.selectedIndex+d));
   setPatch(i, s.value);
 }
-function mute(i){ post('/mute',{part:i}); }
-function gain(i,v){ post('/gain',{part:i,gain:parseFloat(v)}); }
-function toggle(){ post('/toggle',{}); }
+function mute(i){ post('mute',{part:i}); }
+function gain(i,v){ post('gain',{part:i,gain:parseFloat(v)}); }
+function toggle(){ post('toggle',{}); }
 init();
 </script>"""
 
