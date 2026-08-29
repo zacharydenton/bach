@@ -1,0 +1,22 @@
+# Stack because Arch's system GHC ships dynamic-only artifacts (base has
+# .dyn_hi but no .hi), which stock cabal cannot build against. Stack brings
+# its own complete GHC — this is rung 3 of the plan's toolchain ladder.
+snapshot: lts-23.0 # ghc-9.8.4
+
+# Hackage rotated its TUF root keys; this stack release ships stale ones and
+# rejects the index. Accept the index without the threshold check (the git
+# dependency is pinned by commit; HCodecs is pinned by version+hash in the lock).
+package-index:
+  download-prefix: https://hackage.haskell.org/
+  hackage-security:
+    keyids: []
+    key-threshold: 0
+    ignore-expiry: true
+
+packages:
+  - .
+
+extra-deps:
+  - git: https://github.com/Euterpea/EuterpeaLite.git
+    commit: bfbd0e86515806ebd1f714b84218fb7038011222
+  - HCodecs-0.5.2

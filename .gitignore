@@ -1,0 +1,6 @@
+.stack-work/
+dist-newstyle/
+cabal.project.local
+*.mid
+*.wav
+corpus/

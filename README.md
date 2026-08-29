@@ -1,0 +1,63 @@
+# otb — One-Take Bach
+
+**An interpretation compiler: public-domain scores in, performances out.**
+
+Compiles `**kern` (Humdrum) encodings of Bach's keyboard works into performed
+MIDI — articulation, ornament realization, agogics, dynamics and temperament
+applied as versioned, diffable rules — for a six-voice analog ensemble
+(Elektron Analog Four ×4, Behringer Model D, Bass Station II) or Surge XT.
+The performance is recorded in **one simultaneous multitrack take**: the
+machine never misses a note; the human conducts.
+
+Wendy Carlos spent ~1,100 hours multitracking Switched-On Bach one monophonic
+line at a time. This project's thesis is that the modern equivalent of her
+method is a compiler, and the take is the only layer allowed to be
+unreproducible.
+
+```
+ .krn ──[scratch lexer + spine machine]──► Score ──[Player over Euterpea's
+        stems/beams stripped, ties merged,          Music algebra: the taste]──►
+        every accidental explicit (kern law)
+      ──► Performance ──► format-1 SMF ──► Surge XT / the hardware rig
+```
+
+## Why Haskell
+
+Nothing here is computationally intensive — a fugue is a few thousand notes —
+so the type system is the entire language criterion:
+
+- **Units as newtypes** (`WholeNotes`, `Seconds`, `Ticks`): mixing notated and
+  performed time fails to compile.
+- **Instrument capabilities as classes** (planned M6): the Model D takes no
+  velocity and no CC — a velocity lane aimed at it is a compile error.
+- **Counterpoint as a parser oracle** (planned M1): Bach doesn't write
+  parallel fifths; if the parse contains them, the parser is wrong. The mezzo
+  idea, inverted.
+- **EuterpeaLite** supplies the `Music` algebra (`:+:`/`:=:`) — Euterpea with
+  the PortMidi/realtime half removed; this compiler emits files and never
+  opens a MIDI port. The SMF writer is ours: temperament (M3) needs per-note
+  pitch bend interleaved per channel, which Euterpea's export cannot do.
+
+## Build
+
+Arch's system GHC ships dynamic-only artifacts and cannot build this; use
+stack (it brings its own GHC — see the comments in `stack.yaml`):
+
+```sh
+stack build
+stack test
+git clone --depth 1 https://github.com/humdrum-tools/bach-wtc corpus/bach-wtc
+stack run -- corpus/bach-wtc/kern/wtc1p01.krn -o bwv846.mid
+```
+
+Reference for A/B: `../bcrsim/switched_on_bach_bwv846.wav` — the same prelude,
+programmed into an emulated BCR2000 by OSC gestures and sequenced by real
+firmware. The compiler exists to replace that 107-second gesture session with
+a build step.
+
+## Status
+
+M0 (spine to sound). Roadmap and full design:
+`~/Documents/Vault/The One-Take Bach (2026-08-28).md`.
+
+License: GPL-2.0-or-later.

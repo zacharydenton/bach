@@ -1,0 +1,62 @@
+cabal-version:      3.0
+name:               otb
+version:            0.1.0
+synopsis:           One-Take Bach — score-to-performance interpretation compiler
+description:        Compiles **kern scores (Humdrum) into performed MIDI:
+                    articulation, ornament realization, agogics, dynamics and
+                    temperament as versioned, diffable rules over an immutable
+                    corpus. Euterpea's Music algebra is the score representation.
+license:            GPL-2.0-or-later
+author:             Zach
+build-type:         Simple
+
+common warnings
+    ghc-options: -Wall -Wincomplete-record-updates -Wincomplete-uni-patterns
+
+library
+    import:           warnings
+    hs-source-dirs:   src
+    default-language: GHC2021
+    default-extensions: OverloadedStrings LambdaCase DerivingStrategies
+    exposed-modules:
+        OTB.Units
+        OTB.Kern.Token
+        OTB.Kern.Lexer
+        OTB.Kern.Spine
+        OTB.Kern.Parser
+        OTB.Score
+        OTB.Player
+        OTB.Emit.Midi
+    build-depends:
+        base >=4.17 && <5,
+        EuterpeaLite,
+        text >=2.0,
+        bytestring,
+        containers
+
+executable otb
+    import:           warnings
+    hs-source-dirs:   app
+    main-is:          Main.hs
+    default-language: GHC2021
+    default-extensions: OverloadedStrings LambdaCase DerivingStrategies
+    build-depends:
+        base,
+        otb,
+        text,
+        bytestring,
+        optparse-applicative
+
+test-suite otb-test
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    default-language: GHC2021
+    default-extensions: OverloadedStrings LambdaCase DerivingStrategies
+    build-depends:
+        base,
+        otb,
+        text,
+        tasty,
+        tasty-hunit

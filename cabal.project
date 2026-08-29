@@ -1,0 +1,9 @@
+packages: .
+
+-- EuterpeaLite is not on Hackage; pin the GitHub HEAD (rung 1 of the adoption
+-- ladder in the plan). It is Euterpea's Music representation + MIDI export with
+-- the PortMidi/realtime dependencies removed — all this compiler needs.
+source-repository-package
+    type: git
+    location: https://github.com/Euterpea/EuterpeaLite.git
+    tag: bfbd0e86515806ebd1f714b84218fb7038011222
