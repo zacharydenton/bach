@@ -69,20 +69,50 @@ def scan_patches():
 
 
 class Engine:
-    def __init__(self, perf, sr, scl):
+    """Plays a *playlist* of PerformanceIRs in order, like an album side.
+
+    Surge instances are created once for the widest piece and persist
+    across pieces; gains, mutes and loaded patches live per *channel*, so
+    a casting you dial in survives piece changes unless a piece brings
+    its own config/casting/<piece>.json.
+    """
+
+    def __init__(self, playlist, sr, scl, casting_dir=None):
         self.sr = sr
-        self.parts = []
-        self.instances = {}
-        self.events = {}
-        self.pos = {}
-        self.sample = 0
+        self.playlist = playlist  # [(name, perf)]
+        self.casting_dir = casting_dir
         self.playing = True
-        self.pending = queue.Queue()
-        self.subscribers = set()  # queues of PCM byte chunks
+        self.pending = queue.Queue()  # (part_idx, path)
+        self.jump = None  # requested piece index
+        self.subscribers = set()
         self.sublock = threading.Lock()
 
-        # kern orders spines bass-first: name parts by register, computed
-        # from the notes, so nobody casts a lead onto the bass again
+        maxch = max(n["ch"] for _, p in playlist
+                    for tr in p["tracks"] for n in tr) + 1
+        self.instances, self.bufs = {}, {}
+        self.ch_gain = {ch: 0.25 for ch in range(maxch)}  # summing headroom
+        self.ch_mute = {ch: False for ch in range(maxch)}
+        self.ch_patch = {ch: "(init)" for ch in range(maxch)}
+        for ch in range(maxch):
+            s = surgepy.createSurge(sr)
+            if scl:
+                s.loadSCLFile(scl)
+            self.instances[ch] = s
+            self.bufs[ch] = s.createMultiBlock(CHUNK_FRAMES // BLOCK)
+
+        self.piece_i = -1
+        self.load_piece(0)
+
+    def load_piece(self, idx):
+        self.piece_i = idx % len(self.playlist)
+        name, perf = self.playlist[self.piece_i]
+        self.piece_name = name
+        self.sample = 0
+        self.events, self.pos = {}, {}
+        self.parts = []
+
+        # kern orders spines bass-first: name parts by register from the
+        # notes, so nobody casts a lead onto the bass again
         means = [sum(n["pitch"] for n in tr) / max(1, len(tr))
                  for tr in perf["tracks"]]
         order = sorted(range(len(means)), key=lambda i: means[i])
@@ -90,47 +120,46 @@ class Engine:
                     3: ["bass", "alto", "soprano"],
                     4: ["bass", "tenor", "alto", "soprano"],
                     5: ["bass", "tenor", "alto", "mezzo", "soprano"]}
-        labels = {}
         names = regnames.get(len(means))
-        for rank, vi in enumerate(order):
-            labels[vi] = (names[rank] if names else f"voice {vi}")
+        labels = {vi: (names[rank] if names else f"voice {vi}")
+                  for rank, vi in enumerate(order)}
 
         end = 0.0
         for vi, tr in enumerate(perf["tracks"]):
             chans = sorted({n["ch"] for n in tr})
             self.parts.append(
-                {"name": f"{labels[vi]} (voice {vi})", "channels": chans,
-                 # 0.25 leaves summing headroom: four hot parts at unity
-                 # ride the limiter constantly; start quiet, push up by ear
-                 "gain": 0.25, "mute": False, "patch": "(init)"})
+                {"name": f"{labels[vi]} (voice {vi})", "channels": chans})
             for n in tr:
                 ch = n["ch"]
-                on = int(n["onS"] * sr)
-                off = max(on + 1, int((n["onS"] + n["durS"]) * sr))
+                on = int(n["onS"] * self.sr)
+                off = max(on + 1, int((n["onS"] + n["durS"]) * self.sr))
                 end = max(end, n["onS"] + n["durS"])
                 evs = self.events.setdefault(ch, [])
                 evs.append((on, 0, n["bend"], 0))
                 evs.append((on, 1, n["pitch"], n["vel"]))
                 evs.append((off, 2, n["pitch"], 0))
-        # global tempo events: setTempo on every instance when crossed, so
-        # tempo-synced patch internals follow the piece and its rit
-        self.tempo_evs = sorted(
-            (int(t.get("onS", 0) * sr), t["bpm"])
-            for t in perf.get("tempoMap", []) if "onS" in t)
-        self.tempo_i = 0
-        self.bufs = {}
         for ch, evs in self.events.items():
             evs.sort(key=lambda e: (e[0], e[1]))
             self.pos[ch] = 0
-            s = surgepy.createSurge(sr)
-            if scl:
-                s.loadSCLFile(scl)
-            self.instances[ch] = s
-            self.bufs[ch] = s.createMultiBlock(CHUNK_FRAMES // BLOCK)
+        self.tempo_evs = sorted(
+            (int(t.get("onS", 0) * self.sr), t["bpm"])
+            for t in perf.get("tempoMap", []) if "onS" in t)
+        self.tempo_i = 0
         # BLOCK-aligned so chunk spans never straddle the wrap mid-block
-        self.loop_len = -(-int((end + 2.0) * sr) // BLOCK) * BLOCK
-        self.part_by_ch = {
-            ch: p for p in self.parts for ch in p["channels"]}
+        self.loop_len = -(-int((end + 2.0) * self.sr) // BLOCK) * BLOCK
+        for s in self.instances.values():
+            s.allNotesOff()
+        # a piece with its own casting file re-casts; otherwise the
+        # channels keep whatever patches are loaded (auditioning continuity)
+        if self.casting_dir:
+            cand = os.path.join(self.casting_dir, name + ".json")
+            if os.path.isfile(cand):
+                with open(cand) as f:
+                    casting = json.load(f)
+                for pi, part in enumerate(self.parts):
+                    path = casting.get(str(part["channels"][0]))
+                    if path and os.path.isfile(path):
+                        self.request_patch(pi, path)
 
     def request_patch(self, part_idx, path):
         self.pending.put((part_idx, path))
@@ -139,14 +168,15 @@ class Engine:
         try:
             while True:
                 pi, path = self.pending.get_nowait()
-                part = self.parts[pi]
-                for ch in part["channels"]:
+                if pi >= len(self.parts):
+                    continue
+                for ch in self.parts[pi]["channels"]:
                     s = self.instances[ch]
                     s.allNotesOff()
                     if path != "(init)":
                         s.loadPatch(path)
-                part["patch"] = (os.path.basename(path)[:-4]
-                                 if path != "(init)" else "(init)")
+                    self.ch_patch[ch] = (os.path.basename(path)[:-4]
+                                         if path != "(init)" else "(init)")
         except queue.Empty:
             pass
 
@@ -164,12 +194,13 @@ class Engine:
         self._apply_pending()
         done = 0
         while done < frames:
-            if self.sample >= self.loop_len:
-                self.sample = 0
-                self.tempo_i = 0
-                for ch, s in self.instances.items():
-                    s.allNotesOff()
-                    self.pos[ch] = 0
+            if self.jump is not None:
+                self.load_piece(self.jump)
+                self.jump = None
+                self._apply_pending()
+            if self.sample >= self.loop_len:  # piece over: next in the album
+                self.load_piece(self.piece_i + 1)
+                self._apply_pending()
             while (self.tempo_i < len(self.tempo_evs)
                    and self.tempo_evs[self.tempo_i][0] <= self.sample):
                 bpm = self.tempo_evs[self.tempo_i][1]
@@ -180,7 +211,8 @@ class Engine:
             span = min(frames - done, self.loop_len - self.sample)
             span -= span % BLOCK
             nblocks = span // BLOCK
-            for ch, s in self.instances.items():
+            for ch in self.events:
+                s = self.instances[ch]
                 buf = self.bufs[ch]
                 evs, i = self.events[ch], self.pos[ch]
                 cursor = 0  # blocks rendered so far within this span
@@ -206,10 +238,9 @@ class Engine:
                             s.releaseNote(0, a, 0)
                         i += 1
                 self.pos[ch] = i
-                part = self.part_by_ch[ch]
-                if not part["mute"]:
+                if not self.ch_mute[ch]:
                     out[:, done:done + span] += \
-                        buf.reshape(2, -1)[:, :span] * part["gain"]
+                        buf.reshape(2, -1)[:, :span] * self.ch_gain[ch]
             self.sample += span
             done += span
         return out
@@ -267,9 +298,14 @@ class Engine:
             "sr": self.sr,
             "peak": round(getattr(self, "peak", 0.0), 3),
             "listeners": len(self.subscribers),
+            "piece": self.piece_name,
+            "pieceIndex": self.piece_i,
+            "pieceCount": len(self.playlist),
             "parts": [
                 {"name": p["name"], "channels": p["channels"],
-                 "gain": p["gain"], "mute": p["mute"], "patch": p["patch"]}
+                 "gain": self.ch_gain[p["channels"][0]],
+                 "mute": self.ch_mute[p["channels"][0]],
+                 "patch": self.ch_patch[p["channels"][0]]}
                 for p in self.parts
             ],
         }
@@ -300,6 +336,12 @@ h1{font-size:1.2rem} .patch{color:#9c9} .pos{color:#777;font-size:.85rem}
  <button id=play onclick=toggle()>pause</button>
  <span class=pos id=pos></span>
  <span class=pos id=astat></span>
+</div>
+<div class=row style="margin-top:.4rem">
+ <button onclick=pieceStep(-1)>⏮</button>
+ <select id=piecesel onchange=setPiece(this.selectedIndex)
+   style="flex:1;min-width:10rem"></select>
+ <button onclick=pieceStep(1)>⏭</button>
 </div>
 <div id=parts></div>
 <h3>casting (paste into render_showcase / audition.py)</h3>
@@ -395,9 +437,18 @@ async function listen(){
   }
 }
 
+let PIECES=[];
 async function init(){
   CATS = await (await fetch('patches')).json();
+  PIECES = await (await fetch('pieces')).json();
+  const ps = document.getElementById('piecesel');
+  ps.innerHTML = PIECES.map((n,i)=>`<option>${n}</option>`).join('');
   await refresh(); setInterval(refresh, 1000);
+}
+function setPiece(i){ post('piece',{index:i}); }
+function pieceStep(d){
+  if (!STATE) return;
+  setPiece((STATE.pieceIndex + d + PIECES.length) % PIECES.length);
 }
 function opts(){
   let h = '<option value="(init)">(init patch)</option>';
@@ -413,9 +464,12 @@ async function refresh(){
   STATE = await (await fetch('state')).json();
   document.getElementById('play').textContent = STATE.playing?'pause':'play';
   document.getElementById('pos').textContent =
+    STATE.piece+' ('+(STATE.pieceIndex+1)+'/'+STATE.pieceCount+') · '+
     STATE.position.toFixed(1)+' / '+STATE.length.toFixed(1)+'s · '+
     STATE.listeners+' listening · peak '+STATE.peak+
     (STATE.peak>0.89?' ⚠CLIP-LIMITED':'');
+  const ps = document.getElementById('piecesel');
+  if (ps.selectedIndex != STATE.pieceIndex) ps.selectedIndex = STATE.pieceIndex;
   const div = document.getElementById('parts');
   if (div.childElementCount != STATE.parts.length){
     div.innerHTML = STATE.parts.map((p,i)=>`
@@ -482,6 +536,8 @@ def serve(engine, cats, port):
                 self._json(engine.state())
             elif self.path == "/patches":
                 self._json(cats)
+            elif self.path == "/pieces":
+                self._json([n for n, _ in engine.playlist])
             elif self.path == "/pcm":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
@@ -508,10 +564,15 @@ def serve(engine, cats, port):
             if self.path == "/patch":
                 engine.request_patch(body["part"], body["path"])
             elif self.path == "/mute":
-                p = engine.parts[body["part"]]
-                p["mute"] = not p["mute"]
+                chans = engine.parts[body["part"]]["channels"]
+                v = not engine.ch_mute[chans[0]]
+                for ch in chans:
+                    engine.ch_mute[ch] = v
             elif self.path == "/gain":
-                engine.parts[body["part"]]["gain"] = float(body["gain"])
+                for ch in engine.parts[body["part"]]["channels"]:
+                    engine.ch_gain[ch] = float(body["gain"])
+            elif self.path == "/piece":
+                engine.jump = int(body["index"])
             elif self.path == "/toggle":
                 engine.playing = not engine.playing
             self._json({"ok": True})
@@ -523,40 +584,52 @@ def serve(engine, cats, port):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("perf")
+    ap.add_argument("perf", nargs="+",
+                    help="PerformanceIR JSON file(s) or a directory of them; "
+                         "several = an album played in order")
     ap.add_argument("--scl")
     ap.add_argument("--sr", type=int, default=48000)
     ap.add_argument("--port", type=int, default=8766)
     ap.add_argument("--local", action="store_true",
                     help="also play on the local audio device (sounddevice)")
-    ap.add_argument("--casting", metavar="CASTING.json",
-                    help="channel->patch map to preload (default: "
-                         "config/casting/<piece>.json when present)")
+    ap.add_argument("--casting", metavar="DIR",
+                    help="directory of <piece>.json channel->patch maps "
+                         "(default: config/casting/)")
     args = ap.parse_args()
 
-    with open(args.perf) as f:
-        perf = json.load(f)
+    # expand dirs, order like the book: prelude then fugue per key number
+    paths = []
+    for p in args.perf:
+        if os.path.isdir(p):
+            paths.extend(os.path.join(p, f) for f in os.listdir(p)
+                         if f.endswith(".json"))
+        else:
+            paths.append(p)
+
+    def album_key(path):
+        b = os.path.splitext(os.path.basename(path))[0]
+        if len(b) == 7 and b.startswith("wtc") and b[4] in "pf":
+            return (0, int(b[3]), int(b[5:7]), 0 if b[4] == "p" else 1, "")
+        return (1, 0, 0, 0, b)
+
+    paths.sort(key=album_key)
+    playlist = []
+    for p in paths:
+        with open(p) as f:
+            perf = json.load(f)
+        name = perf.get("piece") or os.path.splitext(os.path.basename(p))[0]
+        playlist.append((name, perf))
+    if not playlist:
+        sys.exit("no performances found")
+
     cats = scan_patches()
     if not cats:
         sys.exit("no Surge patch library found (patches_factory)")
-    engine = Engine(perf, args.sr, args.scl)
-
-    # preload the canonical voicing — the same file render_showcase renders
-    casting_path = args.casting
-    if not casting_path and perf.get("piece"):
-        cand = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "..", "config", "casting",
-                            perf["piece"] + ".json")
-        if os.path.isfile(cand):
-            casting_path = cand
-    if casting_path:
-        with open(casting_path) as f:
-            casting = json.load(f)
-        for pi, part in enumerate(engine.parts):
-            path = casting.get(str(part["channels"][0]))
-            if path and os.path.isfile(path):
-                engine.request_patch(pi, path)
-        print(f"casting preloaded from {casting_path}", flush=True)
+    casting_dir = args.casting or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "config", "casting")
+    engine = Engine(playlist, args.sr, args.scl, casting_dir=casting_dir)
+    print(f"album: {len(playlist)} pieces, starting {playlist[0][0]}",
+          flush=True)
 
     serve(engine, cats, args.port)
     print(f"patchboard: http://0.0.0.0:{args.port}/  "
