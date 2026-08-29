@@ -26,6 +26,7 @@ library
         OTB.Kern.Parser
         OTB.Score
         OTB.Config
+        OTB.Tuning
         OTB.Interp.Articulation
         OTB.Player
         OTB.Emit.Midi

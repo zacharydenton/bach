@@ -61,20 +61,26 @@ tempoTrack bpm =
 voiceTrack :: [PerfNote] -> Builder
 voiceTrack notes = trackChunk (deltas 0 events)
   where
+    -- same-tick order is fixed as off (0) < bend (1) < on (2): releases
+    -- clear the channel, then the new note's temperament lands, then the
+    -- note — and the sort is total, so output stays byte-deterministic
     events =
-      sortOn fst $
+      sortOn (\(t, prio, _) -> (t, prio)) $
         concat
-          [ [ (onT, (0x90 .|. ch, p, fromIntegral (pnVel pn)))
-            , (offT, (0x80 .|. ch, p, 0))
+          [ [ (onT, 1 :: Int, (0xE0 .|. ch, bendLo, bendHi))
+            , (onT, 2, (0x90 .|. ch, p, fromIntegral (pnVel pn)))
+            , (offT, 0, (0x80 .|. ch, p, 0))
             ]
           | pn <- notes
           , let Ticks onT = toTicks (pnOnset pn)
                 Ticks offT = toTicks (pnOnset pn + pnDur pn)
                 ch = fromIntegral (pnChannel pn .&. 0x0F) :: Word8
                 p = fromIntegral (pnPitch pn .&. 0x7F) :: Word8
+                bendLo = fromIntegral (pnBend pn .&. 0x7F) :: Word8
+                bendHi = fromIntegral (pnBend pn `shiftR` 7 .&. 0x7F) :: Word8
           ]
     deltas _ [] = mempty
-    deltas prev ((t, (st, d1, d2)) : rest') =
+    deltas prev ((t, _, (st, d1, d2)) : rest') =
       vlq (t - prev) <> word8 st <> word8 d1 <> word8 d2 <> deltas t rest'
 
 -- | MIDI variable-length quantity.

@@ -20,7 +20,8 @@ import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
 import OTB.Emit.Midi (renderSmf)
 import OTB.Player (perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..))
-import OTB.Units (Bpm (..))
+import OTB.Tuning
+import OTB.Units (Bpm (..), Cents (..))
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath ((</>))
 import Test.Tasty
@@ -62,9 +63,16 @@ corpusSweep = do
             src <- TIO.readFile (corpusDir </> "wtc1p01.krn")
             let run () = do
                   s <- either error pure (parseKern (Bpm 72) src)
-                  pure (renderSmf (perform defaultArtParams s))
+                  either error pure
+                    (renderSmf <$> perform defaultArtParams werckmeister3 2 s)
             a <- run (); b <- run ()
             assertBool "byte-identical" (a == b)
+        , testCase "channel cardinality: every WTC piece fits 15 lanes" $ do
+            let overs =
+                  [ f | (f, Right s) <- results
+                  , Left _ <- [perform defaultArtParams equalTable 2 s]
+                  ]
+            assertEqual (unlines overs) [] overs
         , testCase "counterpoint oracle: fugues stay under threshold" $ do
             -- Bach doesn't write parallel perfects — mostly. The ceiling is
             -- calibrated to the corpus: wtc1f10 (E minor, the only 2-voice
@@ -143,6 +151,36 @@ units = testGroup "otb"
       , testCase "leaps stay détaché" $
           take 1 (gates [nt 60, nt 67, nt 55])
             @?= [apBase p]
+      ]
+  , testGroup "tuning"
+      [ testCase "equal temperament centers every bend" $
+          map (bendValue 2 . offsetFor equalTable) [60 .. 71]
+            @?= replicate 12 8192
+      , testCase "werckmeister C is pure, C# is -9.775" $ do
+          offsetFor werckmeister3 60 @?= Cents 0
+          offsetFor werckmeister3 61 @?= Cents (90.225 - 100)
+      , testCase "bend math at range 2: -9.775c = 7792" $
+          bendValue 2 (Cents (-9.775)) @?= (8192 - 400)
+      , testCase "scl round-trip: table -> scl -> same table" $ do
+          let scl = renderScl "wiii" werckmeister3
+          case parseScl scl of
+            Left e -> assertFailure e
+            Right t ->
+              let diffs =
+                    [ abs (c1 - c2)
+                    | pc <- [0 .. 11]
+                    , let Cents c1 = offsetFor t pc
+                          Cents c2 = offsetFor werckmeister3 pc
+                    ]
+               in assertBool ("max diff " <> show (maximum diffs))
+                    (maximum diffs < 1e-6)
+      , testCase "scl ratios parse: 3/2 is 701.955c" $ do
+          let scl = T.unlines
+                (["! r", "ratios", "12", "!"]
+                   <> replicate 11 "100.0" <> ["2/1"])
+          case parseScl scl of
+            Left e -> assertFailure e
+            Right _ -> pure ()
       ]
   , testGroup "config"
       [ testCase "piece override beats section beats default" $ do

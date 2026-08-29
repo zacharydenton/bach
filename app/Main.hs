@@ -10,11 +10,12 @@ module Main (main) where
 
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
-import OTB.Config (artParamsFor, loadConfig)
+import OTB.Config (artParamsFor, loadConfig, tuningBendRange)
 import OTB.Emit.Midi (writeSmf)
 import OTB.Kern.Parser (parseKern)
 import OTB.Player (perform)
 import OTB.Score (Score (..), Voice (..))
+import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
 import OTB.Units (Bpm (..))
 import Options.Applicative
 import System.Directory (doesFileExist)
@@ -26,6 +27,8 @@ data Opts = Opts
   , optOutput :: FilePath
   , optConfig :: FilePath
   , optTempo :: Double
+  , optTemperament :: String
+  , optEmitScl :: Maybe FilePath
   }
 
 opts :: Parser Opts
@@ -37,6 +40,11 @@ opts =
           <> help "interpretation rules + per-piece override log")
     <*> option auto (long "tempo" <> metavar "BPM" <> value 72
           <> help "fallback tempo when the score has no *MM")
+    <*> strOption (long "temperament" <> metavar "NAME|FILE.scl"
+          <> value "werckmeister3"
+          <> help "werckmeister3 (default), equal, or a Scala .scl file")
+    <*> optional (strOption (long "emit-scl" <> metavar "OUT.scl"
+          <> help "also write the temperament as .scl (for Surge's native microtuning)"))
 
 main :: IO ()
 main = do
@@ -47,10 +55,17 @@ main = do
   haveCfg <- doesFileExist (optConfig o)
   cfg <- if haveCfg then loadConfig <$> TIO.readFile (optConfig o)
          else pure (loadConfig "")
+  table <- resolveTemperament (optTemperament o)
   let piece = T.pack (takeBaseName (optInput o))
       ap = artParamsFor cfg piece
-      p = perform ap score
+  p <- either (die . ("perform: " <>)) pure
+        (perform ap table (tuningBendRange cfg) score)
   writeSmf (optOutput o) p
+  case optEmitScl o of
+    Nothing -> pure ()
+    Just sclPath ->
+      TIO.writeFile sclPath
+        (renderScl (T.pack (optTemperament o)) table)
   let Bpm bpm = scTempo score
   putStrLn $
     "voices " <> show (length (scVoices score))
@@ -61,4 +76,13 @@ main = do
       <> (if scTieLeftovers score > 0
             then " | WARN tie-leftovers " <> show (scTieLeftovers score)
             else "")
+      <> " | " <> optTemperament o
       <> " | -> " <> optOutput o
+
+resolveTemperament :: String -> IO TuningTable
+resolveTemperament name = case name of
+  "werckmeister3" -> pure werckmeister3
+  "equal" -> pure equalTable
+  path -> do
+    src <- TIO.readFile path
+    either (die . (("scl " <> path <> ": ") <>)) pure (parseScl src)

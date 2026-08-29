@@ -1,18 +1,22 @@
 -- | Score -> Performance, via Euterpea's Music algebra.
 --
--- The Score's flat (onset, dur, pitch) notes are rebuilt into a
--- @Music (AbsPitch, gate)@ value — voices in parallel (':=:'), each voice a
--- parallel bundle of monophonic lanes, each lane a ':+:' line of rests and
--- notes. Articulation is resolved *on the lanes* (where line context
--- exists) before the algebra is built, so the payload the Music carries is
--- already the interpretation. Performance is then a pure traversal.
+-- Each voice's notes are rebuilt into monophonic *lanes* (the spine paths
+-- they came from), articulation is resolved per lane where line context
+-- exists, and each lane becomes a @Music (pitch, gate)@ line whose
+-- traversal yields the performed events.
+--
+-- **The lane, not the voice, is the monophonic unit — so the lane gets
+-- the MIDI channel.** Pitch bend is per channel, and temperament needs a
+-- distinct bend per sounding note; a voice whose sub-spines hold a chord
+-- would smear one bend across it. Channel 9 (GM percussion) is skipped
+-- for the audition path's sake; more than 15 simultaneous lanes is a
+-- cardinality error, reported, not truncated.
 --
 -- License: GPL-2.0-or-later.
 module OTB.Player
   ( PerfNote (..)
   , Performance (..)
   , perform
-  , toMusic
   ) where
 
 import Data.List (sortOn)
@@ -20,6 +24,7 @@ import EuterpeaLite.Music (Music (..), Primitive (..), note, rest)
 import OTB.Config (ArtParams)
 import OTB.Interp.Articulation (articulateLane)
 import OTB.Score
+import OTB.Tuning (TuningTable, bendValue, offsetFor)
 import OTB.Units (Bpm, WholeNotes)
 
 data PerfNote = PerfNote
@@ -27,6 +32,7 @@ data PerfNote = PerfNote
   , pnDur :: !WholeNotes -- ^ sounding (post-articulation) duration
   , pnPitch :: !Int
   , pnVel :: !Int
+  , pnBend :: !Int -- ^ 14-bit, emitted on the note's channel before it sounds
   , pnChannel :: !Int
   }
   deriving (Show)
@@ -38,9 +44,8 @@ data Performance = Performance
   deriving (Show)
 
 -- | One voice's notes into monophonic lanes, greedily: a note goes to the
--- first lane that is free at its onset. Because the notes *came from*
--- monophonic spine paths, greedy assignment reconstructs them faithfully.
--- Lanes are built newest-first and reversed to chronological on the way out.
+-- first lane free at its onset. Because the notes came from monophonic
+-- spine paths, greedy assignment reconstructs them faithfully.
 lanes :: [ScoreNote] -> [[ScoreNote]]
 lanes = map reverse . foldl place [] . sortOn snOnset
   where
@@ -52,14 +57,12 @@ lanes = map reverse . foldl place [] . sortOn snOnset
             (prev : _) | snOnset prev + snDur prev <= snOnset sn -> (sn : l) : rest'
             _ -> l : go rest'
 
--- | Rebuild the Euterpea Music value with articulation resolved: payload is
--- (pitch, gate). Durations are already whole notes — the same unit as
--- Euterpea's Dur — so no time conversion happens here at all.
-toMusic :: ArtParams -> Voice -> Music (Int, Rational)
-toMusic ap v =
-  foldr1 (:=:) (map (laneMusic . articulateLane ap) (lanes (vNotes v)))
+-- | An articulated lane as a Music line: rests for the gaps, payload
+-- (pitch, gate). Durations are already whole notes — Euterpea's Dur —
+-- so no time conversion happens here.
+laneMusic :: [(ScoreNote, Rational)] -> Music (Int, Rational)
+laneMusic = go 0
   where
-    laneMusic = go 0
     go _ [] = rest 0
     go t ((sn, gate) : rest') =
       let gap = realToFrac (snOnset sn - t)
@@ -73,7 +76,7 @@ musicEvents t m = case m of
   Prim (Rest _) -> []
   a :+: b -> musicEvents t a <> musicEvents (t + durOf a) b
   a :=: b -> musicEvents t a <> musicEvents t b
-  Modify _ inner -> musicEvents t inner -- no controls emitted yet
+  Modify _ inner -> musicEvents t inner
 
 durOf :: Music a -> Rational
 durOf = \case
@@ -83,13 +86,28 @@ durOf = \case
   a :=: b -> max (durOf a) (durOf b)
   Modify _ inner -> durOf inner
 
--- | Interpretation applied per voice; channel = voice order.
-perform :: ArtParams -> Score -> Performance
-perform ap (Score tempo voices _) =
-  Performance tempo
-    [ sortOn pnOnset
-        [ PerfNote (fromRational t) (fromRational (d * gate)) p 96 ch
-        | (t, d, (p, gate)) <- musicEvents 0 (toMusic ap v)
-        ]
-    | (ch, v) <- zip [0 ..] voices
-    ]
+-- | Interpretation per voice; channel per lane; bend per note from the
+-- tuning table at the receiver's bend range.
+perform :: ArtParams -> TuningTable -> Double -> Score -> Either String Performance
+perform ap table bendRange (Score tempo voices _) = do
+  let voiceLanes = [(v, lanes (vNotes v)) | v <- voices]
+      totalLanes = sum (map (length . snd) voiceLanes)
+  if totalLanes > length usableChannels
+    then Left ("score needs " <> show totalLanes
+                 <> " monophonic lanes; only "
+                 <> show (length usableChannels) <> " MIDI channels available")
+    else
+      Right . Performance tempo . snd $
+        foldl voiceTrack (usableChannels, []) voiceLanes
+  where
+    usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
+    voiceTrack (chans, acc) (_, ls) =
+      let (mine, rest') = splitAt (length ls) chans
+          evs =
+            sortOn pnOnset
+              [ PerfNote (fromRational t) (fromRational (d * gate)) p 96 bend ch
+              | (ch, l) <- zip mine ls
+              , (t, d, (p, gate)) <- musicEvents 0 (laneMusic (articulateLane ap l))
+              , let bend = bendValue bendRange (offsetFor table p)
+              ]
+       in (rest', acc <> [evs])

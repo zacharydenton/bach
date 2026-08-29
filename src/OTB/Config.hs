@@ -9,9 +9,11 @@
 -- License: GPL-2.0-or-later.
 module OTB.Config
   ( ArtParams (..)
+  , Config
   , defaultArtParams
   , loadConfig
   , artParamsFor
+  , tuningBendRange
   ) where
 
 import Data.Map.Strict (Map)
@@ -62,6 +64,13 @@ loadConfig = snd . foldl step ("", Map.empty) . map clean . T.lines
       , Right (v, _) <- TR.double (T.strip (T.drop 1 rest)) =
           (sect, Map.insertWith Map.union sect (Map.singleton (T.strip k) v) m)
       | otherwise = (sect, m)
+
+-- | @[tuning] bend_range@ — the receiver's pitch-bend range in ± semitones.
+-- 2 is the near-universal power-on default; set it to whatever the
+-- hardware is actually configured for, or temperament lands scaled wrong.
+tuningBendRange :: Config -> Double
+tuningBendRange cfg =
+  maybe 2.0 id (Map.lookup "bend_range" =<< Map.lookup "tuning" cfg)
 
 -- | Parameters for a piece: defaults, overlaid with @[articulation]@,
 -- overlaid with @[piece.<name>]@.
