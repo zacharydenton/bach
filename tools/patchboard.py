@@ -110,6 +110,12 @@ class Engine:
                 evs.append((on, 0, n["bend"], 0))
                 evs.append((on, 1, n["pitch"], n["vel"]))
                 evs.append((off, 2, n["pitch"], 0))
+        # global tempo events: setTempo on every instance when crossed, so
+        # tempo-synced patch internals follow the piece and its rit
+        self.tempo_evs = sorted(
+            (int(t.get("onS", 0) * sr), t["bpm"])
+            for t in perf.get("tempoMap", []) if "onS" in t)
+        self.tempo_i = 0
         self.bufs = {}
         for ch, evs in self.events.items():
             evs.sort(key=lambda e: (e[0], e[1]))
@@ -158,9 +164,17 @@ class Engine:
         while done < frames:
             if self.sample >= self.loop_len:
                 self.sample = 0
+                self.tempo_i = 0
                 for ch, s in self.instances.items():
                     s.allNotesOff()
                     self.pos[ch] = 0
+            while (self.tempo_i < len(self.tempo_evs)
+                   and self.tempo_evs[self.tempo_i][0] <= self.sample):
+                bpm = self.tempo_evs[self.tempo_i][1]
+                for s in self.instances.values():
+                    if hasattr(s, "setTempo"):
+                        s.setTempo(bpm)
+                self.tempo_i += 1
             span = min(frames - done, self.loop_len - self.sample)
             span -= span % BLOCK
             nblocks = span // BLOCK

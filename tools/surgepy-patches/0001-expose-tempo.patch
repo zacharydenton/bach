@@ -1,0 +1,31 @@
+diff --git a/src/surge-python/surgepy.cpp b/src/surge-python/surgepy.cpp
+index 7f440f8..7bb616c 100644
+--- a/src/surge-python/surgepy.cpp
++++ b/src/surge-python/surgepy.cpp
+@@ -501,6 +501,15 @@ class SurgeSynthesizerWithPythonExtensions : public SurgeSynthesizer
+ 
+     void pitchBendWithInts(int ch, int bend) { pitchBend(ch, bend); }
+ 
++    // otb patch: tempo is hardcoded to 120 at creation; expose it so
++    // tempo-synced LFOs/delays can follow a performance's tempo map
++    void setTempo(float bpm)
++    {
++        if (bpm > 0)
++            time_data.tempo = bpm;
++    }
++    float getTempo() { return time_data.tempo; }
++
+     void polyAftertouchWithInts(int channel, int key, int value)
+     {
+         polyAftertouch(channel, key, value);
+@@ -1075,6 +1084,10 @@ PYBIND11_MODULE(surgepy, m)
+         .def("releaseNote", &SurgeSynthesizerWithPythonExtensions::releaseNoteWithInts,
+              "Release a note on this Surge XT instance.", py::arg("channel"), py::arg("midiNote"),
+              py::arg("releaseVelocity") = 0)
++        .def("setTempo", &SurgeSynthesizerWithPythonExtensions::setTempo,
++             "Set the internal tempo (BPM) used by tempo-synced LFOs and FX",
++             py::arg("bpm"))
++        .def("getTempo", &SurgeSynthesizerWithPythonExtensions::getTempo)
+         .def("pitchBend", &SurgeSynthesizerWithPythonExtensions::pitchBendWithInts,
+              "Set the pitch bend value on channel ch", py::arg("channel"), py::arg("bend"))
+         .def("allNotesOff", &SurgeSynthesizer::allNotesOff, "Turn off all playing notes")

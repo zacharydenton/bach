@@ -38,7 +38,7 @@ def load_perf(path):
 
 def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0):
     tracks = perf["tracks"]
-    events = []  # (samples, kind, ch, a, b) kind: 0=bend, 1=on, 2=off
+    events = []  # (samples, kind, ch, a, b) 0=bend 1=on 2=off 3=tempo(all)
     channels = set()
     for tr in tracks:
         for n in tr:
@@ -49,6 +49,11 @@ def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0):
             events.append((on, 0, ch, n["bend"], 0))
             events.append((on, 1, ch, n["pitch"], n["vel"]))
             events.append((max(off, on + 1), 2, ch, n["pitch"], 0))
+    # tempo map -> setTempo on every instance, so tempo-synced LFOs and
+    # delays track the piece (and its ritardando) instead of a fixed 120
+    tempo_evs = [(int(t.get("onS", 0) * sr), 3, None, t["bpm"], 0)
+                 for t in perf.get("tempoMap", []) if "onS" in t]
+    events.extend(tempo_evs)
     events.sort(key=lambda e: (e[0], e[1]))
     if not events:
         sys.exit("empty performance")
@@ -69,9 +74,11 @@ def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0):
     mix = np.zeros((2, nblocks * block), dtype=np.float32)
 
     for ch, s in synths.items():
+        if hasattr(s, "setTempo") and perf.get("tempoMap"):
+            s.setTempo(perf["tempoMap"][0]["bpm"])
         buf = s.createMultiBlock(nblocks)
         pos = 0  # in blocks
-        chev = [e for e in events if e[2] == ch]
+        chev = [e for e in events if e[2] == ch or e[1] == 3]
         for i, (smp, kind, _, a, b) in enumerate(chev):
             evblock = min(smp // block, nblocks)
             if evblock > pos:
@@ -82,6 +89,9 @@ def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0):
                 s.pitchBend(0, a - 8192)
             elif kind == 1:
                 s.playNote(0, a, b, 0)
+            elif kind == 3:
+                if hasattr(s, "setTempo"):
+                    s.setTempo(a)
             else:
                 s.releaseNote(0, a, 0)
         if pos < nblocks:

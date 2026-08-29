@@ -26,7 +26,8 @@ renderJson (Performance tmap tracks) =
     ]
   where
     tempoJson (WholeNotes w, Bpm b) =
-      obj [("wn", num (fromRational w)), ("bpm", num b)]
+      let Seconds s = secondsAt tmap (WholeNotes w)
+       in obj [("wn", num (fromRational w)), ("onS", num s), ("bpm", num b)]
     trackJson notes = arr (map noteJson notes)
     noteJson pn =
       let Seconds onS = secondsAt tmap (pnOnset pn)
