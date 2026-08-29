@@ -110,6 +110,7 @@ class Engine:
                 evs.append((on, 0, n["bend"], 0))
                 evs.append((on, 1, n["pitch"], n["vel"]))
                 evs.append((off, 2, n["pitch"], 0))
+        self.bufs = {}
         for ch, evs in self.events.items():
             evs.sort(key=lambda e: (e[0], e[1]))
             self.pos[ch] = 0
@@ -117,7 +118,9 @@ class Engine:
             if scl:
                 s.loadSCLFile(scl)
             self.instances[ch] = s
-        self.loop_len = int((end + 2.0) * sr)
+            self.bufs[ch] = s.createMultiBlock(CHUNK_FRAMES // BLOCK)
+        # BLOCK-aligned so chunk spans never straddle the wrap mid-block
+        self.loop_len = -(-int((end + 2.0) * sr) // BLOCK) * BLOCK
         self.part_by_ch = {
             ch: p for p in self.parts for ch in p["channels"]}
 
@@ -140,7 +143,13 @@ class Engine:
             pass
 
     def render(self, frames):
-        """Mix `frames` samples (multiple of BLOCK) of the looping piece."""
+        """Mix `frames` samples (multiple of BLOCK) of the looping piece.
+
+        Batched via createMultiBlock/processMultiBlock — the same approach
+        as audition.py (and the bcrsim rigs): per chunk, each instance gets
+        a handful of processMultiBlock calls split at event boundaries,
+        instead of a Python->C++ crossing per 32-sample block.
+        """
         out = np.zeros((2, frames), dtype=np.float32)
         if not self.playing:
             return out
@@ -152,24 +161,41 @@ class Engine:
                 for ch, s in self.instances.items():
                     s.allNotesOff()
                     self.pos[ch] = 0
+            span = min(frames - done, self.loop_len - self.sample)
+            span -= span % BLOCK
+            nblocks = span // BLOCK
             for ch, s in self.instances.items():
+                buf = self.bufs[ch]
                 evs, i = self.events[ch], self.pos[ch]
-                while i < len(evs) and evs[i][0] <= self.sample:
-                    _, kind, a, b = evs[i]
-                    if kind == 0:
-                        s.pitchBend(0, a - 8192)
-                    elif kind == 1:
-                        s.playNote(0, a, b, 0)
+                cursor = 0  # blocks rendered so far within this span
+                while cursor < nblocks:
+                    # next event inside the span, quantised to its block
+                    if i < len(evs) and evs[i][0] < self.sample + span:
+                        evb = min(nblocks,
+                                  max(cursor, (evs[i][0] - self.sample) // BLOCK))
                     else:
-                        s.releaseNote(0, a, 0)
-                    i += 1
+                        evb = nblocks
+                    if evb > cursor:
+                        s.processMultiBlock(buf, cursor, evb - cursor)
+                        cursor = evb
+                    while (i < len(evs)
+                           and (evs[i][0] - self.sample) // BLOCK <= cursor
+                           and evs[i][0] < self.sample + span):
+                        _, kind, a, b = evs[i]
+                        if kind == 0:
+                            s.pitchBend(0, a - 8192)
+                        elif kind == 1:
+                            s.playNote(0, a, b, 0)
+                        else:
+                            s.releaseNote(0, a, 0)
+                        i += 1
                 self.pos[ch] = i
                 part = self.part_by_ch[ch]
-                s.process()
                 if not part["mute"]:
-                    out[:, done:done + BLOCK] += s.getOutput() * part["gain"]
-            self.sample += BLOCK
-            done += BLOCK
+                    out[:, done:done + span] += \
+                        buf.reshape(2, -1)[:, :span] * part["gain"]
+            self.sample += span
+            done += span
         return out
 
     def subscribe(self):
@@ -257,6 +283,7 @@ h1{font-size:1.2rem} .patch{color:#9c9} .pos{color:#777;font-size:.85rem}
  <button id=listen class=big onclick=listen()>▶ listen</button>
  <button id=play onclick=toggle()>pause</button>
  <span class=pos id=pos></span>
+ <span class=pos id=astat></span>
 </div>
 <div id=parts></div>
 <h3>casting (paste into render_showcase / audition.py)</h3>
@@ -266,24 +293,51 @@ let CATS={}, STATE=null, audioOn=false;
 
 const WORKLET = `
 class Player extends AudioWorkletProcessor {
-  constructor(){ super(); this.buf=[]; this.frame=0; this.chunk=null;
-    this.port.onmessage = e => { if (this.buf.length < 64) this.buf.push(e.data); };
+  constructor(opts){
+    super();
+    this.ratio = opts.processorOptions.ratio; // streamRate / ctxRate
+    this.chunks = []; this.read = 0.0; this.total = 0; this.base = 0;
+    this.underruns = 0; this.dropped = 0;
+    this.port.onmessage = e => {
+      if (this.chunks.length >= 96){ // overflow: drop oldest, stay coherent
+        this.base += this.chunks[0].length/2;
+        this.chunks.shift(); this.dropped++;
+        if (this.read < this.base) this.read = this.base;
+      }
+      this.chunks.push(e.data); this.total += e.data.length/2;
+    };
+    this.stat = 0;
+  }
+  sampleAt(i){ // absolute frame index across the chunk FIFO
+    let rel = i - this.base;
+    for (const c of this.chunks){
+      const n = c.length/2;
+      if (rel < n) return [c[rel*2], c[rel*2+1]];
+      rel -= n;
+    }
+    return null;
+  }
+  gc(){
+    while (this.chunks.length && this.read - this.base >= this.chunks[0].length/2){
+      this.base += this.chunks[0].length/2; this.chunks.shift();
+    }
   }
   process(_, outputs){
-    const out = outputs[0]; let need = out[0].length, wrote = 0;
-    while (wrote < need){
-      if (!this.chunk){
-        if (!this.buf.length) break;
-        this.chunk = this.buf.shift(); this.frame = 0;
-      }
-      const frames = this.chunk.length/2 - this.frame;
-      const n = Math.min(frames, need - wrote);
-      for (let i=0;i<n;i++){
-        out[0][wrote+i] = this.chunk[(this.frame+i)*2];
-        out[1][wrote+i] = this.chunk[(this.frame+i)*2+1];
-      }
-      wrote += n; this.frame += n;
-      if (this.frame*2 >= this.chunk.length) this.chunk = null;
+    const out = outputs[0], need = out[0].length;
+    for (let i=0;i<need;i++){
+      const i0 = Math.floor(this.read), frac = this.read - i0;
+      const a = this.sampleAt(i0), b = this.sampleAt(i0+1);
+      if (!a){ out[0][i]=0; out[1][i]=0; this.underruns++; continue; }
+      const bb = b || a;
+      out[0][i] = a[0]+(bb[0]-a[0])*frac;
+      out[1][i] = a[1]+(bb[1]-a[1])*frac;
+      this.read += this.ratio;
+    }
+    this.gc();
+    if (++this.stat >= 300){ this.stat = 0;
+      this.port.postMessage({underruns:this.underruns, dropped:this.dropped,
+        buffered: this.total - Math.floor(this.read - this.base) -
+                  (this.base ? 0 : 0)});
     }
     return true;
   }
@@ -294,11 +348,19 @@ async function listen(){
   if (audioOn) return;
   audioOn = true;
   document.getElementById('listen').classList.add('on');
-  document.getElementById('listen').textContent = '● live';
   const ctx = new AudioContext({sampleRate: STATE ? STATE.sr : 48000});
+  const srStream = STATE ? STATE.sr : 48000;
+  const ratio = srStream / ctx.sampleRate;
+  document.getElementById('listen').textContent =
+    '● live @'+ctx.sampleRate+(ratio!=1?' (resampling '+srStream+'→)':'');
   const url = URL.createObjectURL(new Blob([WORKLET],{type:'text/javascript'}));
   await ctx.audioWorklet.addModule(url);
-  const node = new AudioWorkletNode(ctx, 'player', {outputChannelCount:[2]});
+  const node = new AudioWorkletNode(ctx, 'player',
+    {outputChannelCount:[2], processorOptions:{ratio}});
+  node.port.onmessage = e => {
+    document.getElementById('astat').textContent =
+      'underruns '+e.data.underruns+' · drops '+e.data.dropped;
+  };
   node.connect(ctx.destination);
   const resp = await fetch('pcm');
   const reader = resp.body.getReader();
