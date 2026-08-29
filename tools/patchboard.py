@@ -100,7 +100,9 @@ class Engine:
             chans = sorted({n["ch"] for n in tr})
             self.parts.append(
                 {"name": f"{labels[vi]} (voice {vi})", "channels": chans,
-                 "gain": 1.0, "mute": False, "patch": "(init)"})
+                 # 0.25 leaves summing headroom: four hot parts at unity
+                 # ride the limiter constantly; start quiet, push up by ear
+                 "gain": 0.25, "mute": False, "patch": "(init)"})
             for n in tr:
                 ch = n["ch"]
                 on = int(n["onS"] * sr)
@@ -424,7 +426,7 @@ async function refresh(){
         <select id=sel${i} onchange=setPatch(${i},this.value)>${opts()}</select>
         <button onclick=step(${i},1)>▶</button>
         <button id=mute${i} onclick=mute(${i})>mute</button>
-        <input type=range min=0 max=1.5 step=0.05 value=1
+        <input type=range min=0 max=1.5 step=0.05 value=${p.gain}
           onchange=gain(${i},this.value)>
       </div></div>`).join('');
   }
