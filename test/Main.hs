@@ -27,7 +27,7 @@ import OTB.Explain (renderWhys)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..), scoreNote)
 import OTB.Tuning
-import OTB.Units (Bpm (..), Cents (..), Seconds (..), secondsAt)
+import OTB.Units (Bpm (..), Cents (..), Seconds (..), WholeNotes (..), secondsAt)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
@@ -36,6 +36,11 @@ import System.FilePath ((</>))
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
+import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as BL
+import EuterpeaLite.IO.MIDI.ToMidi (writeMidi)
+import EuterpeaLite.Music qualified as E
+import SMFReader
 
 corpusDir :: FilePath
 corpusDir = "corpus/bach-wtc/kern"
@@ -43,7 +48,7 @@ corpusDir = "corpus/bach-wtc/kern"
 main :: IO ()
 main = do
   sweep <- corpusSweep
-  defaultMain $ testGroup "all" [units, laws, sweep]
+  defaultMain $ testGroup "all" [units, laws, sweep, oracle]
 
 -- | Parse every WTC file; assert full coverage and the known-baseline
 -- number of tie leftovers (encoding lapses in the corpus itself — see
@@ -589,3 +594,44 @@ laws = testGroup "laws (metamorphic)"
                             | (a, b) <- zip ns (drop 1 ns) ]
              in property (all ok byCh)
   ]
+
+
+-- ---------------------------------------------------------------------
+-- W5: Euterpea's ToMidi as third oracle
+
+oracle :: TestTree
+oracle = testCase "ToMidi oracle: Euterpea's writer and ours agree" $ do
+  present <- doesDirectoryExist corpusDir
+  if not present then pure () else do
+    src <- TIO.readFile (corpusDir </> "wtc1p01.krn")
+    s <- either (assertFailure . ("parse: " <>)) pure (parseKern (Bpm 72) src)
+    p <- either (assertFailure . ("perform: " <>)) pure
+           (perform defaultInterp s)
+    let ch0 = sortOn pnOnset
+                [n | tr <- perfTracks p, n <- tr, pnChannel n == 0]
+        m1 = go 0 ch0
+        go _ [] = E.rest 0
+        go t (n : more) =
+          let WholeNotes o = pnOnset n
+              WholeNotes d = pnDur n
+              gap = o - t
+           in E.rest gap E.:+: E.note d (E.pitch (pnPitch n),
+                                          [E.Volume (pnVel n)])
+                E.:+: go (o + d) more
+        tmpF = ".otb-oracle-tmp.mid"
+    writeMidi tmpF (m1 :: E.Music1)
+    theirsBytes <- BS.readFile tmpF
+    theirs <- either assertFailure pure (readSmf theirsBytes)
+    ours0 <- either assertFailure pure
+               (readSmf (BL.toStrict (renderSmf p)))
+    let ours = sortOn smfOnQ [x | x <- ours0, smfChannel x == 0]
+        them = sortOn smfOnQ theirs
+    assertEqual "note counts" (length ours) (length them)
+    let tol = 1 / 24 -- Euterpea's coarser division rounds; ours is 480
+        close a b =
+          smfPitch a == smfPitch b
+            && smfVel a == smfVel b
+            && abs (smfOnQ a - smfOnQ b) <= tol
+            && abs (smfDurQ a - smfDurQ b) <= 2 * tol
+        bad = [(a, b) | (a, b) <- zip ours them, not (close a b)]
+    assertBool ("disagreements: " <> show (take 3 bad)) (null bad)

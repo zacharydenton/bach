@@ -77,15 +77,18 @@ test-suite otb-test
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
     main-is:          Main.hs
+    other-modules:    SMFReader
     default-language: GHC2021
     default-extensions: OverloadedStrings LambdaCase DerivingStrategies
     build-depends:
         base,
         otb,
         text,
+        bytestring,
         directory,
         filepath,
         process,
+        EuterpeaLite,
         tasty,
         tasty-hunit,
         tasty-quickcheck
