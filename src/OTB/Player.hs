@@ -16,16 +16,31 @@
 module OTB.Player
   ( PerfNote (..)
   , Performance (..)
+  , Interp (..)
+  , defaultInterp
   , perform
   ) where
 
 import Data.List (sortOn)
 import EuterpeaLite.Music (Music (..), Primitive (..), note, rest)
-import OTB.Config (ArtParams)
+import OTB.Config (ArtParams, defaultArtParams)
+import OTB.Interp.Agogics
+  (AgogicParams, defaultAgogicParams, fermataFactor, tempoMap)
 import OTB.Interp.Articulation (articulateLane)
 import OTB.Score
-import OTB.Tuning (TuningTable, bendValue, offsetFor)
+import OTB.Tuning (TuningTable, bendValue, offsetFor, werckmeister3)
 import OTB.Units (Bpm, WholeNotes)
+
+-- | Everything the Player needs beyond the score: the interpretation.
+data Interp = Interp
+  { iArt :: !ArtParams
+  , iAgogics :: !AgogicParams
+  , iTuning :: !TuningTable
+  , iBendRange :: !Double
+  }
+
+defaultInterp :: Interp
+defaultInterp = Interp defaultArtParams defaultAgogicParams werckmeister3 2
 
 data PerfNote = PerfNote
   { pnOnset :: !WholeNotes
@@ -38,7 +53,7 @@ data PerfNote = PerfNote
   deriving (Show)
 
 data Performance = Performance
-  { perfTempo :: !Bpm
+  { perfTempoMap :: [(WholeNotes, Bpm)] -- ^ the conductor lane, generated
   , perfTracks :: [[PerfNote]] -- ^ one track per voice, onset-sorted
   }
   deriving (Show)
@@ -87,27 +102,35 @@ durOf = \case
   Modify _ inner -> durOf inner
 
 -- | Interpretation per voice; channel per lane; bend per note from the
--- tuning table at the receiver's bend range.
-perform :: ArtParams -> TuningTable -> Double -> Score -> Either String Performance
-perform ap table bendRange (Score tempo voices _) = do
+-- tuning table at the receiver's bend range; tempo curve over the whole.
+perform :: Interp -> Score -> Either String Performance
+perform (Interp ap ag table bendRange) (Score tempo voices _) = do
   let voiceLanes = [(v, lanes (vNotes v)) | v <- voices]
       totalLanes = sum (map (length . snd) voiceLanes)
+      end =
+        maximum (0 : [snOnset n + snDur n | v <- voices, n <- vNotes v])
   if totalLanes > length usableChannels
     then Left ("score needs " <> show totalLanes
                  <> " monophonic lanes; only "
                  <> show (length usableChannels) <> " MIDI channels available")
     else
-      Right . Performance tempo . snd $
+      Right . Performance (tempoMap ag tempo end) . snd $
         foldl voiceTrack (usableChannels, []) voiceLanes
   where
     usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
     voiceTrack (chans, acc) (_, ls) =
       let (mine, rest') = splitAt (length ls) chans
-          evs =
-            sortOn pnOnset
-              [ PerfNote (fromRational t) (fromRational (d * gate)) p 96 bend ch
-              | (ch, l) <- zip mine ls
-              , (t, d, (p, gate)) <- musicEvents 0 (laneMusic (articulateLane ap l))
+          -- laneMusic emits exactly one event per articulated note, in
+          -- order, so zipping arts with the traversal re-attaches marks
+          -- (fermata) to their performed events
+          evs = concat
+            [ [ PerfNote (fromRational t)
+                  (fromRational (d * gate * fermataFactor ag sn)) p 96 bend ch
+              | ((sn, gate), (t, d, (p, _))) <-
+                  zip arts (musicEvents 0 (laneMusic arts))
               , let bend = bendValue bendRange (offsetFor table p)
               ]
-       in (rest', acc <> [evs])
+            | (ch, l) <- zip mine ls
+            , let arts = articulateLane ap l
+            ]
+       in (rest', acc <> [sortOn pnOnset evs])

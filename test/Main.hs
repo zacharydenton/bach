@@ -18,7 +18,8 @@ import OTB.Kern.Lexer (lexNoteTok)
 import OTB.Kern.Parser (parseKern)
 import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
 import OTB.Emit.Midi (renderSmf)
-import OTB.Player (perform)
+import OTB.Interp.Agogics
+import OTB.Player (Interp (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..))
 import OTB.Tuning
 import OTB.Units (Bpm (..), Cents (..))
@@ -63,14 +64,13 @@ corpusSweep = do
             src <- TIO.readFile (corpusDir </> "wtc1p01.krn")
             let run () = do
                   s <- either error pure (parseKern (Bpm 72) src)
-                  either error pure
-                    (renderSmf <$> perform defaultArtParams werckmeister3 2 s)
+                  either error pure (renderSmf <$> perform defaultInterp s)
             a <- run (); b <- run ()
             assertBool "byte-identical" (a == b)
         , testCase "channel cardinality: every WTC piece fits 15 lanes" $ do
             let overs =
                   [ f | (f, Right s) <- results
-                  , Left _ <- [perform defaultArtParams equalTable 2 s]
+                  , Left _ <- [perform defaultInterp s]
                   ]
             assertEqual (unlines overs) [] overs
         , testCase "counterpoint oracle: fugues stay under threshold" $ do
@@ -181,6 +181,23 @@ units = testGroup "otb"
           case parseScl scl of
             Left e -> assertFailure e
             Right _ -> pure ()
+      ]
+  , testGroup "agogics"
+      [ testCase "tempo map: flat until the rit, then monotonic descent" $ do
+          let ag = defaultAgogicParams {agRitSpan = 1, agRitFloor = 0.5}
+              tm = tempoMap ag (Bpm 100) 4
+              bpms = [b | (_, Bpm b) <- tm]
+          take 1 bpms @?= [100]
+          assertBool ("not descending: " <> show bpms)
+            (and (zipWith (>=) bpms (drop 1 bpms)))
+          assertBool ("floor overshot: " <> show (last bpms))
+            (last bpms >= 50 && last bpms < 100)
+      , testCase "short piece: no rit, single tempo" $
+          length (tempoMap defaultAgogicParams (Bpm 100) (1 / 2)) @?= 1
+      , testCase "fermata holds" $ do
+          let sn = ScoreNote 0 (1 / 4) 60 [Fermata]
+          fermataFactor defaultAgogicParams sn @?= agFermataHold defaultAgogicParams
+          fermataFactor defaultAgogicParams (sn {snMarks = []}) @?= 1
       ]
   , testGroup "config"
       [ testCase "piece override beats section beats default" $ do

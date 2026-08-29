@@ -10,10 +10,11 @@ module Main (main) where
 
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
-import OTB.Config (artParamsFor, loadConfig, tuningBendRange)
+import OTB.Config (agogicsFor, artParamsFor, loadConfig, tuningBendRange)
 import OTB.Emit.Midi (writeSmf)
+import OTB.Interp.Agogics (defaultAgogicParams)
 import OTB.Kern.Parser (parseKern)
-import OTB.Player (perform)
+import OTB.Player (Interp (..), perform)
 import OTB.Score (Score (..), Voice (..))
 import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
 import OTB.Units (Bpm (..))
@@ -57,9 +58,13 @@ main = do
          else pure (loadConfig "")
   table <- resolveTemperament (optTemperament o)
   let piece = T.pack (takeBaseName (optInput o))
-      ap = artParamsFor cfg piece
-  p <- either (die . ("perform: " <>)) pure
-        (perform ap table (tuningBendRange cfg) score)
+      interp = Interp
+        { iArt = artParamsFor cfg piece
+        , iAgogics = agogicsFor cfg piece defaultAgogicParams
+        , iTuning = table
+        , iBendRange = tuningBendRange cfg
+        }
+  p <- either (die . ("perform: " <>)) pure (perform interp score)
   writeSmf (optOutput o) p
   case optEmitScl o of
     Nothing -> pure ()

@@ -11,6 +11,12 @@ repeated = 0.60   # repeated notes need separation to speak
 cantabile = 0.90  # stepwise motion at singing values leans legato
 min_gate = 0.10
 
+[agogics]
+rit_span = 1.0      # closing ritardando spans the last whole note
+rit_floor = 0.6     # ...easing to 60% of base tempo at the final barline
+tempo_step = 0.125  # curve granularity (eighth notes): smooth, not steppy
+fermata_hold = 1.75
+
 [tuning]
 bend_range = 2    # receiver's pitch-bend range in ± semitones. 2 is the
                   # power-on default nearly everywhere; MUST match what the

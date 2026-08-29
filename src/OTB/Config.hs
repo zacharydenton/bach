@@ -13,11 +13,14 @@ module OTB.Config
   , defaultArtParams
   , loadConfig
   , artParamsFor
+  , agogicsFor
   , tuningBendRange
   ) where
 
 import Data.Map.Strict (Map)
 import Data.Ratio (approxRational)
+import OTB.Interp.Agogics (AgogicParams (..))
+import OTB.Units (WholeNotes (..))
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -64,6 +67,23 @@ loadConfig = snd . foldl step ("", Map.empty) . map clean . T.lines
       , Right (v, _) <- TR.double (T.strip (T.drop 1 rest)) =
           (sect, Map.insertWith Map.union sect (Map.singleton (T.strip k) v) m)
       | otherwise = (sect, m)
+
+-- | Agogic parameters from @[agogics]@ overlaid with @[piece.<name>]@.
+agogicsFor :: Config -> Text -> AgogicParams -> AgogicParams
+agogicsFor cfg piece dflt =
+  apply (Map.findWithDefault Map.empty ("piece." <> piece) cfg)
+    (apply (Map.findWithDefault Map.empty "agogics" cfg) dflt)
+  where
+    apply m p =
+      p
+        { agRitSpan = getW "rit_span" (agRitSpan p)
+        , agRitFloor = maybe (agRitFloor p) id (Map.lookup "rit_floor" m)
+        , agTempoStep = getW "tempo_step" (agTempoStep p)
+        , agFermataHold = getR "fermata_hold" (agFermataHold p)
+        }
+      where
+        getW k dflt' = maybe dflt' (WholeNotes . (\v -> approxRational v 1e-9)) (Map.lookup k m)
+        getR k dflt' = maybe dflt' (\v -> approxRational v 1e-9) (Map.lookup k m)
 
 -- | @[tuning] bend_range@ — the receiver's pitch-bend range in ± semitones.
 -- 2 is the near-universal power-on default; set it to whatever the

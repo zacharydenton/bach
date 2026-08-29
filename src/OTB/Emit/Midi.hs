@@ -20,7 +20,7 @@ import Data.ByteString.Lazy qualified as BL
 import Data.List (sortOn)
 import Data.Word (Word8)
 import OTB.Player (PerfNote (..), Performance (..))
-import OTB.Units (Bpm (..), Ticks (..), ticksPerQuarter, toTicks)
+import OTB.Units (Bpm (..), Ticks (..), WholeNotes, ticksPerQuarter, toTicks)
 
 writeSmf :: FilePath -> Performance -> IO ()
 writeSmf fp = BL.writeFile fp . renderSmf
@@ -28,9 +28,9 @@ writeSmf fp = BL.writeFile fp . renderSmf
 -- | Pure render: the artifact is a function of the Performance alone, so
 -- determinism is assertable at the byte level (and a hash names a take).
 renderSmf :: Performance -> BL.ByteString
-renderSmf (Performance (Bpm bpm) tracks) =
+renderSmf (Performance tmap tracks) =
   toLazyByteString $
-    header (1 + length tracks) <> tempoTrack bpm <> foldMap voiceTrack tracks
+    header (1 + length tracks) <> tempoTrack tmap <> foldMap voiceTrack tracks
 
 header :: Int -> Builder
 header ntrks =
@@ -47,12 +47,18 @@ trackChunk body =
   where
     endOfTrack = vlq 0 <> word8 0xFF <> word8 0x2F <> word8 0x00
 
-tempoTrack :: Double -> Builder
-tempoTrack bpm =
-  trackChunk $
-    vlq 0 <> word8 0xFF <> word8 0x51 <> word8 0x03 <> word24BE usPerQn
+-- | The conductor lane: one tempo meta per curve point. Track 0 is
+-- entirely generated output — agogics live here.
+tempoTrack :: [(WholeNotes, Bpm)] -> Builder
+tempoTrack tmap = trackChunk (go 0 tmap)
   where
-    usPerQn = round (60_000_000 / bpm) :: Int
+    go _ [] = mempty
+    go prev ((w, Bpm bpm) : rest') =
+      let Ticks t = toTicks w
+          usPerQn = round (60_000_000 / bpm) :: Int
+       in vlq (t - prev)
+            <> word8 0xFF <> word8 0x51 <> word8 0x03 <> word24BE usPerQn
+            <> go t rest'
     word24BE v =
       word8 (fromIntegral (v `shiftR` 16 .&. 0xFF))
         <> word8 (fromIntegral (v `shiftR` 8 .&. 0xFF))

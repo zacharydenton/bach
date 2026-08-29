@@ -27,6 +27,7 @@ library
         OTB.Score
         OTB.Config
         OTB.Tuning
+        OTB.Interp.Agogics
         OTB.Interp.Articulation
         OTB.Player
         OTB.Emit.Midi
