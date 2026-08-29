@@ -15,12 +15,14 @@ module OTB.Config
   , artParamsFor
   , agogicsFor
   , phrasingFor
+  , ornamentsFor
   , tuningBendRange
   ) where
 
 import Data.Map.Strict (Map)
 import Data.Ratio (approxRational)
 import OTB.Interp.Agogics (AgogicParams (..))
+import OTB.Interp.Ornament (OrnamentParams (..))
 import OTB.Interp.Phrasing (PhraseParams (..))
 import OTB.Units (WholeNotes (..))
 import Data.Map.Strict qualified as Map
@@ -104,6 +106,15 @@ phrasingFor cfg piece dflt =
         }
       where
         getD k dflt' = maybe dflt' id (Map.lookup k m)
+
+-- | Ornament parameters from @[ornaments]@ overlaid with @[piece.<name>]@.
+ornamentsFor :: Config -> Text -> OrnamentParams -> OrnamentParams
+ornamentsFor cfg piece dflt =
+  apply (Map.findWithDefault Map.empty ("piece." <> piece) cfg)
+    (apply (Map.findWithDefault Map.empty "ornaments" cfg) dflt)
+  where
+    apply m p =
+      p {opTrillRate = maybe (opTrillRate p) id (Map.lookup "trill_rate" m)}
 
 -- | @[tuning] bend_range@ — the receiver's pitch-bend range in ± semitones.
 -- 2 is the near-universal power-on default; set it to whatever the

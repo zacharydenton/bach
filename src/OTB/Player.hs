@@ -27,6 +27,8 @@ import OTB.Config (ArtParams, defaultArtParams)
 import OTB.Interp.Agogics
   (AgogicParams, defaultAgogicParams, fermataFactor, tempoMap)
 import OTB.Interp.Articulation (articulateLane)
+import OTB.Interp.Ornament
+  (OrnamentParams, defaultOrnamentParams, realizeLane)
 import OTB.Interp.Phrasing (PhraseParams, breatheLane, defaultPhraseParams)
 import OTB.Score
 import OTB.Tuning (TuningTable, bendValue, offsetFor, werckmeister3)
@@ -37,13 +39,15 @@ data Interp = Interp
   { iArt :: !ArtParams
   , iAgogics :: !AgogicParams
   , iPhrasing :: !PhraseParams
+  , iOrnaments :: !OrnamentParams
   , iTuning :: !TuningTable
   , iBendRange :: !Double
   }
 
 defaultInterp :: Interp
 defaultInterp =
-  Interp defaultArtParams defaultAgogicParams defaultPhraseParams werckmeister3 2
+  Interp defaultArtParams defaultAgogicParams defaultPhraseParams
+    defaultOrnamentParams werckmeister3 2
 
 data PerfNote = PerfNote
   { pnOnset :: !WholeNotes
@@ -107,7 +111,7 @@ durOf = \case
 -- | Interpretation per voice; channel per lane; bend per note from the
 -- tuning table at the receiver's bend range; tempo curve over the whole.
 perform :: Interp -> Score -> Either String Performance
-perform (Interp ap ag pp table bendRange) (Score tempo voices _) = do
+perform (Interp ap ag pp orn table bendRange) (Score tempo voices _) = do
   let voiceLanes = [(v, lanes (vNotes v)) | v <- voices]
       totalLanes = sum (map (length . snd) voiceLanes)
       end =
@@ -134,6 +138,9 @@ perform (Interp ap ag pp table bendRange) (Score tempo voices _) = do
               , let bend = bendValue bendRange (offsetFor table p)
               ]
             | (ch, l) <- zip mine ls
-            , let arts = breatheLane pp l (articulateLane ap l)
+            , -- realise ornaments first so articulation and phrasing see
+              -- real notes; the solver runs at the piece's base tempo
+              let l' = realizeLane orn tempo l
+                  arts = breatheLane pp l' (articulateLane ap l')
             ]
        in (rest', acc <> [sortOn pnOnset evs])

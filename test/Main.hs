@@ -19,6 +19,7 @@ import OTB.Kern.Parser (parseKern)
 import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
 import OTB.Emit.Midi (renderSmf)
 import OTB.Interp.Agogics
+import OTB.Interp.Ornament
 import OTB.Interp.Phrasing
 import OTB.Player (Interp (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..))
@@ -199,6 +200,32 @@ units = testGroup "otb"
           let sn = ScoreNote 0 (1 / 4) 60 [Fermata]
           fermataFactor defaultAgogicParams sn @?= agFermataHold defaultAgogicParams
           fermataFactor defaultAgogicParams (sn {snMarks = []}) @?= 1
+      ]
+  , testGroup "ornaments"
+      [ testCase "trill: upper start, main-note end, duration preserved" $ do
+          let sn = ScoreNote 0 (1 / 2) 60 [Trill 2]
+              out = realizeLane defaultOrnamentParams (Bpm 120) [sn]
+          assertBool "at least 4 subnotes" (length out >= 4)
+          snPitch (head out) @?= 62 -- on the beat, upper auxiliary
+          snPitch (last out) @?= 60 -- ends on the main note
+          sum (map snDur out) @?= (1 / 2)
+          assertBool "even alternation" (even (length out))
+      , testCase "half-step trill uses the corpus's interval" $ do
+          let out = realizeLane defaultOrnamentParams (Bpm 120)
+                      [ScoreNote 0 (1 / 2) 64 [Trill 1]]
+          snPitch (head out) @?= 65
+      , testCase "mordent bites below and returns" $ do
+          let out = realizeLane defaultOrnamentParams (Bpm 120)
+                      [ScoreNote 0 (1 / 4) 67 [Mordent 2]]
+          map snPitch out @?= [67, 65, 67]
+          sum (map snDur out) @?= (1 / 4)
+      , testCase "turn: upper main lower main" $ do
+          let out = realizeLane defaultOrnamentParams (Bpm 120)
+                      [ScoreNote 0 (1 / 4) 60 [Turn]]
+          map snPitch out @?= [62, 60, 58, 60]
+      , testCase "unornamented notes pass through untouched" $ do
+          let sn = ScoreNote 0 (1 / 4) 60 [Staccato]
+          realizeLane defaultOrnamentParams (Bpm 120) [sn] @?= [sn]
       ]
   , testGroup "phrasing"
       [ testCase "a written rest is a boundary (Quantz)" $ do

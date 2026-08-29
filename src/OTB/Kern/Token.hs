@@ -49,16 +49,22 @@ data Tie = TieNone | TieOpen | TieContinue | TieClose
 
 -- | Marks the parser retains but does not realise — realisation is
 -- interpretation and belongs in the Player, not the parser.
+--
+-- Ornament intervals come straight from kern's case convention (uppercase
+-- = whole tone, lowercase = semitone), so the auxiliary needs no scale
+-- inference: the corpus states it.
 data Mark
-  = Staccato   -- ^ @'@
-  | Tenuto     -- ^ @~@
-  | Accent     -- ^ @^@
-  | Fermata    -- ^ @;@
-  | Trill      -- ^ @T@ / @t@
-  | Mordent    -- ^ @M@ / @m@
-  | Turn       -- ^ @S@ / @$@ / @W@ / @w@
-  | SlurOpen   -- ^ @(@
-  | SlurClose  -- ^ @)@
+  = Staccato        -- ^ @'@
+  | Tenuto          -- ^ @~@
+  | Accent          -- ^ @^@
+  | Fermata         -- ^ @;@
+  | Trill !Int      -- ^ @T@=2 / @t@=1 semitones above
+  | Mordent !Int    -- ^ @M@=2 / @m@=1 semitones below (lower neighbour)
+  | InvMordent !Int -- ^ @W@=2 / @w@=1 semitones above (Pralltriller)
+  | Turn            -- ^ @S@
+  | InvTurn         -- ^ @$@
+  | SlurOpen        -- ^ @(@
+  | SlurClose       -- ^ @)@
   deriving (Eq, Show)
 
 data NoteTok = NoteTok

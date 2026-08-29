@@ -28,6 +28,10 @@ w_gap = 1.2         # written rest after the note (strongest signal)
 w_dur = 0.7         # long note arriving after shorter ones
 w_leap = 0.5        # leap away from the note
 
+[ornaments]
+trill_rate = 12   # trill subnotes per second — C.P.E. Bach ties rate to
+                  # tempo and affect; 10–14 covers keyboard practice
+
 [tuning]
 bend_range = 2    # receiver's pitch-bend range in ± semitones. 2 is the
                   # power-on default nearly everywhere; MUST match what the

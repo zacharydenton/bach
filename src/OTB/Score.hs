@@ -21,7 +21,7 @@ data ScoreNote = ScoreNote
   , snPitch :: !Int -- ^ MIDI note number
   , snMarks :: ![Mark]
   }
-  deriving (Show)
+  deriving (Eq, Show)
 
 data Voice = Voice
   { vIndex :: !Int -- ^ original top-level spine index
