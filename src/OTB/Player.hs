@@ -206,5 +206,23 @@ perform (Interp ap ag pp orn dyn ex piece table bendRange)
                      <> " monophonic lanes; only "
                      <> show (length usableChannels)
                      <> " MIDI channels available")
-        else Right . Performance tmap . rollFinal . snd $
+        else Right . Performance tmap . map enforceMono . rollFinal . snd $
                foldl voiceTrack (usableChannels, []) (zip [0 ..] voiceLanes)
+  where
+    -- The IR's contract: a channel is monophonic — no note may overlap its
+    -- channel successor. Jitter, leans, overhold and legato gates can each
+    -- push an off past the next on (which then releases the WRONG note:
+    -- an audible dropout, invisible to transport counters). Clamp here,
+    -- at the source, so every consumer inherits the guarantee; a 1.5 ms
+    -- gap keeps off strictly before on even after downstream rounding.
+    enforceMono track =
+      let byCh = sortOn (\n -> (pnChannel n, pnOnset n)) track
+          clamp n (Just nx)
+            | pnChannel nx == pnChannel n
+            , pnOnset n + pnDur n > gapBefore nx =
+                n {pnDur = max (WholeNotes (1 / 512))
+                             (gapBefore nx - pnOnset n)}
+          clamp n _ = n
+          gapBefore nx = pnOnset nx - WholeNotes (1 / 512)
+       in sortOn pnOnset
+            (zipWith clamp byCh (map Just (drop 1 byCh) <> [Nothing]))

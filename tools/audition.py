@@ -58,7 +58,10 @@ def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0):
     tempo_evs = [(int(t.get("onS", 0) * sr), 3, None, t["bpm"], 0)
                  for t in perf.get("tempoMap", []) if "onS" in t]
     events.extend(tempo_evs)
-    events.sort(key=lambda e: (e[0], e[1]))
+    # same-tick order: tempo < off < bend < on — off-before-on prevents a
+    # just-started note being released by its predecessor's note-off
+    prio = {3: 0, 2: 1, 0: 2, 1: 3}
+    events.sort(key=lambda e: (e[0], prio[e[1]]))
     if not events:
         sys.exit("empty performance")
 

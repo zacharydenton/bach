@@ -28,6 +28,7 @@ import argparse
 import json
 import os
 import queue
+import subprocess
 import sys
 import threading
 import time
@@ -143,7 +144,7 @@ class Engine:
                 evs.append((on, 1, n["pitch"], n["vel"]))
                 evs.append((off, 2, n["pitch"], 0))
         for ch, evs in self.events.items():
-            evs.sort(key=lambda e: (e[0], e[1]))
+            evs.sort(key=lambda e: (e[0], {2: 0, 0: 1, 1: 2}[e[1]]))
             self.pos[ch] = 0
         self.tempo_evs = sorted(
             (int(t.get("onS", 0) * self.sr), t["bpm"])
@@ -265,6 +266,7 @@ class Engine:
         period = CHUNK_FRAMES / self.sr
         deadline = time.monotonic()
         limiter_gain = 1.0
+        applied = 1.0
         while True:
             mix = self.render(CHUNK_FRAMES)
             # peak meter (pre-limiter) + a simple riding limiter: browsers
@@ -274,8 +276,13 @@ class Engine:
             target = min(1.0, 0.89 / peak) if peak > 0.89 else 1.0
             # fast attack, slow release
             limiter_gain = min(target, limiter_gain * 1.02)
-            if limiter_gain < 1.0 or target < 1.0:
-                mix = mix * min(limiter_gain, target)
+            g = min(limiter_gain, target)
+            if g < 1.0 or applied < 1.0:
+                # ramp across the chunk: a per-chunk gain STEP is itself an
+                # audible discontinuity when peaks hover near the ceiling
+                mix = mix * np.linspace(applied, g, mix.shape[1],
+                                        dtype=np.float32)[None, :]
+            applied = g
             data = mix.T.reshape(-1).astype("<f4").tobytes()  # interleaved
             with self.sublock:
                 subs = list(self.subscribers)
@@ -338,7 +345,8 @@ h1{font-size:1.2rem} .patch{color:#9c9} .pos{color:#777;font-size:.85rem}
 </style>
 <h1>otb patchboard</h1>
 <div class=row>
- <button id=listen class=big onclick=listen()>▶ listen</button>
+ <button id=listenr class=big onclick=listenRemote()>▶ listen</button>
+ <button id=listen onclick=listen()>live (LAN)</button>
  <button id=play onclick=toggle()>pause</button>
  <span class=pos id=pos></span>
  <span class=pos id=astat></span>
@@ -407,6 +415,36 @@ class Player extends AudioWorkletProcessor {
   }
 }
 registerProcessor('player', Player);`;
+
+const BUFFER_S = 4; // cushion against WAN/DERP stalls at 100 km
+function listenRemote(){
+  // Opus 256k over ffmpeg (~32 kB/s instead of 384): transparent for
+  // music, and the <audio> element buffers. We hold playback until
+  // BUFFER_S seconds are banked, and rebank after any stall.
+  if (audioOn) return;
+  audioOn = true;
+  const a = new Audio('opus');
+  a.preload = 'auto';
+  const b = document.getElementById('listenr');
+  b.classList.add('on');
+  const stat = s => { b.textContent = s; };
+  stat('buffering…');
+  let started = false;
+  const ahead = () => {
+    try { return a.buffered.length ? a.buffered.end(a.buffered.length-1) - a.currentTime : 0; }
+    catch(e){ return 0; }
+  };
+  setInterval(() => {
+    const buf = ahead();
+    if (!started || a.paused){
+      if (buf >= BUFFER_S){ a.play(); started = true; }
+      stat('buffering ' + buf.toFixed(1) + '/' + BUFFER_S + 's');
+    } else {
+      stat('● listening (' + buf.toFixed(1) + 's banked)');
+    }
+  }, 500);
+  a.addEventListener('waiting', () => { a.pause(); stat('stall — rebuffering'); });
+}
 
 async function listen(){
   if (audioOn) return;
@@ -549,6 +587,45 @@ def serve(engine, cats, port):
                 self._json(cats)
             elif self.path == "/pieces":
                 self._json([n for n, _ in engine.playlist])
+            elif self.path == "/opus":
+                # remote path: Opus at ~160 kbps through ffmpeg, streamed
+                # as Ogg — the <audio> element's own jitter buffering
+                # absorbs WAN stalls that starve the raw PCM path
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/ogg")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                q = engine.subscribe()
+                proc = subprocess.Popen(
+                    ["ffmpeg", "-loglevel", "quiet",
+                     "-f", "f32le", "-ar", str(engine.sr), "-ac", "2",
+                     "-i", "pipe:0", "-c:a", "libopus", "-b:a", "256k",
+                     "-application", "audio", "-frame_duration", "60", "-f", "ogg",
+                     "-flush_packets", "1", "pipe:1"],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+
+                def feed():
+                    try:
+                        while True:
+                            proc.stdin.write(q.get())
+                            proc.stdin.flush()
+                    except (BrokenPipeError, OSError):
+                        pass
+                threading.Thread(target=feed, daemon=True).start()
+                try:
+                    while True:
+                        data = proc.stdout.read(4096)
+                        if not data:
+                            break
+                        self.wfile.write(
+                            f"{len(data):X}\r\n".encode() + data + b"\r\n")
+                        self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    pass
+                finally:
+                    engine.unsubscribe(q)
+                    proc.kill()
             elif self.path == "/pcm":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
