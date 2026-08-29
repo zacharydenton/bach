@@ -557,16 +557,20 @@ laws = testGroup "laws (metamorphic)"
                   === pitchesTimes pb
               _ -> property False
   , testProperty "Werckmeister does NOT commute: some bend must move" $
-      forAll genScore $ \s ->
+      forAll (genScore `suchThat` (not . null . concatMap vNotes . scVoices)) $ \s ->
         let ip = defaultInterp
-            bends q = sort [pnBend n | tr <- perfTracks q, n <- tr]
+            notes q = [n | tr <- perfTracks q, n <- tr]
          in case (perform ip (transposeScore 1 s), perform ip s) of
               (Right pa, Right pb) ->
-                -- shifting every pitch by a semitone permutes the
-                -- Werckmeister offsets; no two adjacent offsets in the
-                -- table are equal, so the bend multiset must move — the
-                -- asymmetry IS what well-temperament exists to have
-                property (bends pa /= bends pb)
+                -- perform is structurally parallel across a transposition,
+                -- so compare note-for-note: a semitone shift permutes the
+                -- Werckmeister offsets and no two adjacent offsets in the
+                -- table are equal, so some note's bend must move — the
+                -- asymmetry IS what well-temperament exists to have.
+                -- (Multiset comparison is too weak: distinct pitch sets
+                -- can shift onto each other's offsets and it flakes.)
+                property (any (\(x, y) -> pnBend x /= pnBend y)
+                            (zip (notes pa) (notes pb)))
               _ -> property False
   , testProperty "inegales preserve lane duration sum" $
       forAll genLane $ \l ->

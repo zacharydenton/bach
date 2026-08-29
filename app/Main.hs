@@ -22,11 +22,11 @@ import OTB.Config
   ( agogicsFor, artParamsFor, dynamicsFor, expressFor, emptyConfig, loadConfig
   , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
 import OTB.Config qualified
-import OTB.Emit.Midi (renderSmf)
+import OTB.Emit.Midi (renderSmf, writeSmf)
+import OTB.Generate (generateScore)
 import OTB.Interp.Express (chargesForLane)
 import OTB.Kern.Token (Mark (..))
 import OTB.Emit.Json (renderJson)
-import OTB.Emit.Midi (writeSmf)
 import OTB.Explain (renderWhys)
 import OTB.Instrument (hardwareTracks)
 import OTB.Interp.Agogics (defaultAgogicParams)
@@ -35,7 +35,7 @@ import OTB.Interp.Express (defaultExpressParams)
 import OTB.Interp.Ornament (defaultOrnamentParams)
 import OTB.Interp.Phrasing (defaultPhraseParams)
 import OTB.Kern.Parser (parseKern)
-import OTB.Player (Interp (..), PerfNote (..), Performance (..), perform)
+import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..))
 import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
 import OTB.Units (Bpm (..), WholeNotes (..))
@@ -56,6 +56,7 @@ data Cmd
   | Explain Common (Maybe Int) (Maybe (Int, Int))
   | Album FilePath FilePath FilePath Double String
   | Stats FilePath FilePath Double
+  | Ground String Int Double String FilePath (Maybe FilePath) (Maybe FilePath)
 
 common :: Parser Common
 common =
@@ -102,6 +103,18 @@ albumCmd =
     <*> option auto (long "tempo" <> value 72)
     <*> strOption (long "temperament" <> value "werckmeister3")
 
+groundCmd :: Parser Cmd
+groundCmd =
+  Ground
+    <$> strOption (long "bass" <> metavar "NAME"
+          <> help "folia | romanesca | pachelbel")
+    <*> option auto (long "variations" <> value 6)
+    <*> option auto (long "tempo" <> value 96)
+    <*> strOption (long "temperament" <> value "werckmeister3")
+    <*> strOption (long "output" <> short 'o' <> value "ground.mid")
+    <*> optional (strOption (long "emit-scl" <> metavar "OUT.scl"))
+    <*> optional (strOption (long "emit-json" <> metavar "OUT.json"))
+
 statsCmd :: Parser Cmd
 statsCmd =
   Stats
@@ -123,6 +136,9 @@ cmdP =
         <> command "stats"
              (info statsCmd
                 (progDesc "whole-corpus interpretation statistics"))
+        <> command "ground"
+             (info groundCmd
+                (progDesc "generate a ground-bass variation set (pole two)"))
     )
     <|> compileCmd -- bare invocation = compile
 
@@ -135,6 +151,8 @@ main = do
     Explain com mbar mnote -> runExplain com mbar mnote
     Album corpus outDir cfgPath tempo temp -> runAlbum corpus outDir cfgPath tempo temp
     Stats corpus cfgPath tempo -> runStats corpus cfgPath tempo
+    Ground bass nvar tempo temp out mscl mjson ->
+      runGround bass nvar tempo temp out mscl mjson
 
 load :: Common -> IO (String, Score, Performance, TuningTable, Bool)
 load com = do
@@ -324,3 +342,24 @@ runStats corpus cfgPath tempo = do
   putStrLn ("suspect 72-BPM placeholder tempos ("
               <> show (length placeholders) <> "): "
               <> unwords placeholders)
+
+-- ---------------------------------------------------------------------
+-- W7: pole two — a generated ground through the same Player
+
+runGround
+  :: String -> Int -> Double -> String
+  -> FilePath -> Maybe FilePath -> Maybe FilePath -> IO ()
+runGround bass nvar tempo temp out mscl mjson = do
+  table <- resolveTemperament temp
+  s <- either die pure (generateScore bass nvar (Bpm tempo))
+  let piece = "ground-" <> bass
+      ip = defaultInterp {iPiece = piece, iTuning = table}
+  p <- either die pure (perform ip s)
+  writeSmf out p
+  putStrLn (out <> ": " <> bass <> ", " <> show nvar <> " variations")
+  case mscl of
+    Nothing -> pure ()
+    Just fp -> TIO.writeFile fp (renderScl (T.pack temp) table)
+  case mjson of
+    Nothing -> pure ()
+    Just fp -> writeFile fp (renderJson piece p)

@@ -38,6 +38,7 @@ library
         OTB.Explain
         OTB.Interp
         OTB.Annotate
+        OTB.Generate
         OTB.Instrument
         OTB.Tuning
         OTB.Interp.Agogics
