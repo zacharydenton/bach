@@ -13,6 +13,7 @@ import Data.Text.IO qualified as TIO
 import OTB.Config
   ( agogicsFor, artParamsFor, dynamicsFor, loadConfig, ornamentsFor
   , phrasingFor, tuningBendRange )
+import OTB.Emit.Json (renderJson)
 import OTB.Emit.Midi (writeSmf)
 import OTB.Interp.Agogics (defaultAgogicParams)
 import OTB.Interp.Dynamics (defaultDynParams)
@@ -35,6 +36,7 @@ data Opts = Opts
   , optTempo :: Double
   , optTemperament :: String
   , optEmitScl :: Maybe FilePath
+  , optEmitJson :: Maybe FilePath
   }
 
 opts :: Parser Opts
@@ -51,6 +53,8 @@ opts =
           <> help "werckmeister3 (default), equal, or a Scala .scl file")
     <*> optional (strOption (long "emit-scl" <> metavar "OUT.scl"
           <> help "also write the temperament as .scl (for Surge's native microtuning)"))
+    <*> optional (strOption (long "emit-json" <> metavar "OUT.json"
+          <> help "also write PerformanceIR as JSON (absolute seconds; for surgepy audition and future live players)"))
 
 main :: IO ()
 main = do
@@ -79,6 +83,9 @@ main = do
     Just sclPath ->
       TIO.writeFile sclPath
         (renderScl (T.pack (optTemperament o)) table)
+  case optEmitJson o of
+    Nothing -> pure ()
+    Just jsonPath -> writeFile jsonPath (renderJson p)
   let Bpm bpm = scTempo score
   putStrLn $
     "voices " <> show (length (scVoices score))

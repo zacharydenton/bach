@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""audition.py — render otb PerformanceIR through Surge XT, offline.
+
+    otb SCORE.krn -o x.mid --emit-json perf.json --emit-scl w3.scl
+    .venv-audition/bin/python tools/audition.py perf.json -o out.wav \
+        [--scl w3.scl] [--patch path.fxp] [--patch-ch 3:other.fxp] [--sr 48000]
+
+One Surge instance per MIDI channel (a channel is a monophonic lane, so
+each may carry its own patch), events scheduled sample-accurately between
+processMultiBlock calls, instances summed and written as 16-bit WAV.
+
+Temperament: prefer --scl (Surge's native microtuning — the ground-truth
+path); without it the JSON's per-note pitch-bend values are sent instead,
+which is exactly what the hardware will receive. Rendering the same
+performance both ways and comparing is the tuning oracle.
+
+Deps: surgepy (built from surge-src), numpy. Everything else stdlib.
+License: GPL-2.0-or-later.
+"""
+
+import argparse
+import json
+import math
+import struct
+import sys
+import wave
+
+import numpy as np
+import surgepy
+
+BLOCK = 32  # surge block size; queried per instance below
+
+
+def load_perf(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0):
+    tracks = perf["tracks"]
+    events = []  # (samples, kind, ch, a, b) kind: 0=bend, 1=on, 2=off
+    channels = set()
+    for tr in tracks:
+        for n in tr:
+            ch = n["ch"]
+            channels.add(ch)
+            on = int(n["onS"] * sr)
+            off = int((n["onS"] + n["durS"]) * sr)
+            events.append((on, 0, ch, n["bend"], 0))
+            events.append((on, 1, ch, n["pitch"], n["vel"]))
+            events.append((max(off, on + 1), 2, ch, n["pitch"], 0))
+    events.sort(key=lambda e: (e[0], e[1]))
+    if not events:
+        sys.exit("empty performance")
+
+    total = events[-1][0] + int(tail * sr)
+    synths = {}
+    for ch in sorted(channels):
+        s = surgepy.createSurge(sr)
+        if scl:
+            s.loadSCLFile(scl)
+        patch = (patches or {}).get(ch, (patches or {}).get(None))
+        if patch:
+            s.loadPatch(patch)
+        synths[ch] = s
+
+    block = synths[min(channels)].getBlockSize()
+    nblocks = total // block + 1
+    mix = np.zeros((2, nblocks * block), dtype=np.float32)
+
+    for ch, s in synths.items():
+        buf = s.createMultiBlock(nblocks)
+        pos = 0  # in blocks
+        chev = [e for e in events if e[2] == ch]
+        for i, (smp, kind, _, a, b) in enumerate(chev):
+            evblock = min(smp // block, nblocks)
+            if evblock > pos:
+                s.processMultiBlock(buf, pos, evblock - pos)
+                pos = evblock
+            if kind == 0:
+                # surgepy pitchBend takes the signed 14-bit range
+                s.pitchBend(0, a - 8192)
+            elif kind == 1:
+                s.playNote(0, a, b, 0)
+            else:
+                s.releaseNote(0, a, 0)
+        if pos < nblocks:
+            s.processMultiBlock(buf, pos, nblocks - pos)
+        mix += buf.reshape(2, -1)[:, : mix.shape[1]]
+
+    peak = float(np.max(np.abs(mix))) or 1.0
+    if peak > 0.891:  # normalise only if we'd clip past -1 dBFS
+        mix *= 0.891 / peak
+    return mix
+
+
+def write_wav(path, mix, sr):
+    data = (np.clip(mix, -1, 1) * 32767).astype("<i2")
+    interleaved = np.empty(data.shape[1] * 2, dtype="<i2")
+    interleaved[0::2] = data[0]
+    interleaved[1::2] = data[1]
+    with wave.open(path, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(interleaved.tobytes())
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("perf", help="PerformanceIR JSON from otb --emit-json")
+    ap.add_argument("-o", "--output", default="out.wav")
+    ap.add_argument("--scl", help=".scl from otb --emit-scl: native microtuning")
+    ap.add_argument("--patch", help="default .fxp patch for every voice")
+    ap.add_argument("--patch-ch", action="append", default=[],
+                    metavar="CH:FILE.fxp", help="per-channel patch override")
+    ap.add_argument("--sr", type=int, default=48000)
+    args = ap.parse_args()
+
+    patches = {}
+    if args.patch:
+        patches[None] = args.patch
+    for spec in args.patch_ch:
+        ch, _, path = spec.partition(":")
+        patches[int(ch)] = path
+
+    perf = load_perf(args.perf)
+    mix = render(perf, args.sr, scl=args.scl, patches=patches)
+    write_wav(args.output, mix, args.sr)
+    n = sum(len(t) for t in perf["tracks"])
+    print(f"{n} notes | {mix.shape[1]/args.sr:.1f}s | "
+          f"{'scl-tuned' if args.scl else 'bend-tuned'} | -> {args.output}")
+
+
+if __name__ == "__main__":
+    main()

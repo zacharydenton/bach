@@ -34,6 +34,7 @@ library
         OTB.Interp.Phrasing
         OTB.Player
         OTB.Emit.Midi
+        OTB.Emit.Json
         OTB.Analysis.Counterpoint
     build-depends:
         base >=4.17 && <5,

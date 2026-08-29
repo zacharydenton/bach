@@ -15,6 +15,7 @@ module OTB.Units
   , ticksPerQuarter
   , toTicks
   , toSeconds
+  , secondsAt
   ) where
 
 import Data.Ratio (denominator, numerator)
@@ -50,3 +51,14 @@ toTicks (WholeNotes w) =
 toSeconds :: Bpm -> WholeNotes -> Seconds
 toSeconds (Bpm bpm) (WholeNotes w) =
   Seconds (fromRational w * 4 * 60 / bpm)
+
+-- | Absolute wall-clock position of a score position under a tempo map
+-- (piecewise integration; the map is (onset, tempo-from-here) ascending).
+secondsAt :: [(WholeNotes, Bpm)] -> WholeNotes -> Seconds
+secondsAt tmap target = go 0 tmap
+  where
+    go acc ((t1, bpm) : rest@((t2, _) : _))
+      | target <= t2 = acc + toSeconds bpm (max 0 (target - t1))
+      | otherwise = go (acc + toSeconds bpm (t2 - t1)) rest
+    go acc [(t1, bpm)] = acc + toSeconds bpm (max 0 (target - t1))
+    go acc [] = acc
