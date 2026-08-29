@@ -8,7 +8,7 @@
 module Main (main) where
 
 import Control.Monad (forM, forM_)
-import Data.List (isSuffixOf, nub, sort)
+import Data.List (isInfixOf, isSuffixOf, nub, sort)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import OTB.Analysis.Counterpoint (parallelPerfects)
@@ -23,6 +23,7 @@ import OTB.Interp.Dynamics
 import OTB.Interp.Express
 import OTB.Interp.Ornament
 import OTB.Interp.Phrasing
+import OTB.Explain (renderWhys)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..), scoreNote)
 import OTB.Tuning
@@ -446,6 +447,23 @@ units = testGroup "otb"
       , testCase "no meter degrades gracefully" $ do
           let l = [scoreNote 0 (1/4) 66 []]
           length (dynamicsLane defaultDynParams [] [False] l) @?= 1
+      ]
+  , testGroup "explain"
+      [ testCase "provenance reaches the Performance with citations" $ do
+          present <- doesDirectoryExist corpusDir
+          if not present then pure () else do
+           src <- TIO.readFile (corpusDir </> "wtc1f01.krn")
+           s <- either (assertFailure . ("parse: " <>)) pure
+                  (parseKern (Bpm 72) src)
+           p <- either (assertFailure . ("perform: " <>)) pure
+                  (perform defaultInterp s)
+           let ws = concat [w | ((_, _), w) <- perfWhys p]
+               rendered = renderWhys (take 200 ws)
+           assertBool "articulation cited"
+             ("articulation" `isInfixOf` rendered)
+           assertBool "CPE Bach cited" ("CPE Bach" `isInfixOf` rendered)
+           assertBool "Quantz cited" ("Quantz" `isInfixOf` rendered)
+           assertBool "Sloboda cited" ("Sloboda 1983" `isInfixOf` rendered)
       ]
   , testGroup "config"
       [ testCase "junk and out-of-range values are rejected" $ do

@@ -1,78 +1,119 @@
 -- | otb — the One-Take Bach interpretation compiler.
 --
---   otb corpus/bach-wtc/kern/wtc1p01.krn -o out.mid [--config config/default.toml]
+--   otb compile SCORE.krn -o out.mid [--emit-json ..] [--emit-scl ..]
+--   otb explain SCORE.krn [--bar N | --ch C --note I]
 --
+-- (bare @otb SCORE.krn ...@ still works: compile is the default command.)
 -- The piece name for per-piece config overrides is the input basename
 -- (wtc1p01.krn -> [piece.wtc1p01]).
 --
 -- License: GPL-2.0-or-later.
 module Main (main) where
 
+import Control.Monad (when)
+import Data.List (sortOn)
+import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import OTB.Config
   ( agogicsFor, artParamsFor, dynamicsFor, expressFor, emptyConfig, loadConfig
   , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
-import OTB.Interp.Express (defaultExpressParams)
 import OTB.Emit.Json (renderJson)
 import OTB.Emit.Midi (writeSmf)
+import OTB.Explain (renderWhys)
 import OTB.Interp.Agogics (defaultAgogicParams)
 import OTB.Interp.Dynamics (defaultDynParams)
+import OTB.Interp.Express (defaultExpressParams)
 import OTB.Interp.Ornament (defaultOrnamentParams)
 import OTB.Interp.Phrasing (defaultPhraseParams)
 import OTB.Kern.Parser (parseKern)
-import OTB.Player (Interp (..), perform)
+import OTB.Player (Interp (..), PerfNote (..), Performance (..), perform)
 import OTB.Score (Score (..), Voice (..))
 import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
-import OTB.Units (Bpm (..))
+import OTB.Units (Bpm (..), WholeNotes (..))
 import Options.Applicative
 import System.Directory (doesFileExist)
-import Control.Monad (when)
 import System.Exit (die)
 import System.FilePath (takeBaseName)
 
-data Opts = Opts
-  { optInput :: FilePath
-  , optOutput :: FilePath
-  , optConfig :: FilePath
-  , optTempo :: Double
-  , optTemperament :: String
-  , optEmitScl :: Maybe FilePath
-  , optEmitJson :: Maybe FilePath
+data Common = Common
+  { cInput :: FilePath
+  , cConfig :: FilePath
+  , cTempo :: Double
+  , cTemperament :: String
   }
 
-opts :: Parser Opts
-opts =
-  Opts
+data Cmd
+  = Compile Common FilePath (Maybe FilePath) (Maybe FilePath)
+  | Explain Common (Maybe Int) (Maybe (Int, Int))
+
+common :: Parser Common
+common =
+  Common
     <$> argument str (metavar "SCORE.krn")
-    <*> strOption (long "output" <> short 'o' <> metavar "OUT.mid" <> value "out.mid")
-    <*> strOption (long "config" <> metavar "RULES.toml" <> value "config/default.toml"
+    <*> strOption (long "config" <> metavar "RULES.toml"
+          <> value "config/default.toml"
           <> help "interpretation rules + per-piece override log")
     <*> option auto (long "tempo" <> metavar "BPM" <> value 72
           <> help "fallback tempo when the score has no *MM")
     <*> strOption (long "temperament" <> metavar "NAME|FILE.scl"
           <> value "werckmeister3"
           <> help "werckmeister3 (default), equal, or a Scala .scl file")
+
+compileCmd :: Parser Cmd
+compileCmd =
+  Compile
+    <$> common
+    <*> strOption (long "output" <> short 'o' <> metavar "OUT.mid"
+          <> value "out.mid")
     <*> optional (strOption (long "emit-scl" <> metavar "OUT.scl"
-          <> help "also write the temperament as .scl (for Surge's native microtuning)"))
+          <> help "also write the temperament as .scl (Surge native tuning)"))
     <*> optional (strOption (long "emit-json" <> metavar "OUT.json"
-          <> help "also write PerformanceIR as JSON (absolute seconds; for surgepy audition and future live players)"))
+          <> help "also write PerformanceIR as JSON (the renderer seam)"))
+
+explainCmd :: Parser Cmd
+explainCmd =
+  Explain
+    <$> common
+    <*> optional (option auto (long "bar" <> metavar "N"
+          <> help "explain every note in bar N (1-based)"))
+    <*> optional
+          ((,) <$> option auto (long "ch" <> metavar "C")
+               <*> option auto (long "note" <> metavar "I"))
+
+cmdP :: Parser Cmd
+cmdP =
+  hsubparser
+    ( command "compile"
+        (info compileCmd (progDesc "score -> performed MIDI"))
+        <> command "explain"
+             (info explainCmd
+                (progDesc "per-note rule traces with citations"))
+    )
+    <|> compileCmd -- bare invocation = compile
 
 main :: IO ()
 main = do
-  o <- execParser (info (opts <**> helper)
-        (fullDesc <> progDesc "Compile a **kern score to performed MIDI"))
-  src <- TIO.readFile (optInput o)
-  score0 <- either (die . ("parse: " <>)) pure (parseKern (Bpm (optTempo o)) src)
-  haveCfg <- doesFileExist (optConfig o)
-  cfg <- if haveCfg
-           then either (die . (("config " <> optConfig o <> ": ") <>)) pure
-                  . loadConfig =<< TIO.readFile (optConfig o)
-           else pure emptyConfig
-  when (isNaN (optTempo o) || isInfinite (optTempo o) || optTempo o <= 0)
+  c <- execParser (info (cmdP <**> helper)
+        (fullDesc <> progDesc "One-Take Bach interpretation compiler"))
+  case c of
+    Compile com out mscl mjson -> runCompile com out mscl mjson
+    Explain com mbar mnote -> runExplain com mbar mnote
+
+load :: Common -> IO (String, Score, Performance, TuningTable, Bool)
+load com = do
+  when (isNaN (cTempo com) || isInfinite (cTempo com) || cTempo com <= 0)
     (die "--tempo must be a finite number > 0")
-  table <- resolveTemperament (optTemperament o)
-  let piece = T.pack (takeBaseName (optInput o))
+  src <- TIO.readFile (cInput com)
+  score0 <- either (die . ("parse: " <>)) pure
+              (parseKern (Bpm (cTempo com)) src)
+  haveCfg <- doesFileExist (cConfig com)
+  cfg <- if haveCfg
+           then either (die . (("config " <> cConfig com <> ": ") <>)) pure
+                  . loadConfig =<< TIO.readFile (cConfig com)
+           else pure emptyConfig
+  table <- resolveTemperament (cTemperament com)
+  let piece = T.pack (takeBaseName (cInput com))
       score = maybe score0 (\bpm -> score0 {scTempo = Bpm bpm})
                 (pieceTempo cfg piece)
       interp = Interp
@@ -87,21 +128,21 @@ main = do
         , iBendRange = tuningBendRange cfg
         }
   p <- either (die . ("perform: " <>)) pure (perform interp score)
-  writeSmf (optOutput o) p
-  case optEmitScl o of
-    Nothing -> pure ()
-    Just sclPath ->
-      TIO.writeFile sclPath
-        (renderScl (T.pack (optTemperament o)) table)
-  case optEmitJson o of
-    Nothing -> pure ()
-    Just jsonPath -> writeFile jsonPath (renderJson (T.unpack piece) p)
+  pure (T.unpack piece, score, p, table, haveCfg)
+
+runCompile :: Common -> FilePath -> Maybe FilePath -> Maybe FilePath -> IO ()
+runCompile com out mscl mjson = do
+  (piece, score, p, table, haveCfg) <- load com
+  writeSmf out p
+  mapM_ (\sp -> TIO.writeFile sp
+           (renderScl (T.pack (cTemperament com)) table)) mscl
+  mapM_ (\jp -> writeFile jp (renderJson piece p)) mjson
   let Bpm bpm = scTempo score
   putStrLn $
     "voices " <> show (length (scVoices score))
       <> " | notes " <> show (sum (map (length . vNotes) (scVoices score)))
       <> " | tempo " <> show bpm
-      <> " | piece " <> T.unpack piece
+      <> " | piece " <> piece
       <> (if haveCfg then "" else " | WARN no config file, defaults only")
       <> (if scTieLeftovers score > 0
             then " | WARN tie-leftovers " <> show (scTieLeftovers score)
@@ -112,8 +153,39 @@ main = do
       <> (if scGraceDropped score > 0
             then " | WARN grace-notes-dropped " <> show (scGraceDropped score)
             else "")
-      <> " | " <> optTemperament o
-      <> " | -> " <> optOutput o
+      <> " | " <> cTemperament com
+      <> " | -> " <> out
+
+runExplain :: Common -> Maybe Int -> Maybe (Int, Int) -> IO ()
+runExplain com mbar mnote = do
+  (piece, score, p, _, _) <- load com
+  let whys = perfWhys p
+      notes = sortOn pnOnset (concat (perfTracks p))
+      barLen = case scMeter score of
+        ((_, (n, d)) : _) -> WholeNotes (fromIntegral n / fromIntegral d)
+        [] -> 1
+      inBar b n =
+        let lo = fromIntegral (b - 1) * barLen
+         in lo <= pnOnset n && pnOnset n < lo + barLen
+      selected = case (mbar, mnote) of
+        (Just b, _) -> filter (inBar b) notes
+        (_, Just (ch, i)) ->
+          filter (\n -> pnChannel n == ch && pnIndex n == i) notes
+        _ -> take 8 notes
+  putStrLn ("== " <> piece <> maybe "" ((" bar " <>) . show) mbar <> " ==")
+  mapM_ (explainNote whys) selected
+  where
+    explainNote whys n = do
+      let WholeNotes t = pnOnset n
+          ws = fromMaybe [] (lookup (pnChannel n, pnIndex n) whys)
+      putStrLn ""
+      putStrLn $
+        "note ch" <> show (pnChannel n) <> " #" <> show (pnIndex n)
+          <> "  pitch " <> show (pnPitch n)
+          <> "  t=" <> show (fromRational t :: Double) <> "wn"
+          <> "  vel " <> show (pnVel n)
+          <> "  bend " <> show (pnBend n)
+      putStrLn (renderWhys ws)
 
 resolveTemperament :: String -> IO TuningTable
 resolveTemperament name = case name of
