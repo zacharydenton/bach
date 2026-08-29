@@ -87,4 +87,5 @@ test-suite otb-test
         filepath,
         process,
         tasty,
-        tasty-hunit
+        tasty-hunit,
+        tasty-quickcheck

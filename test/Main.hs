@@ -8,7 +8,7 @@
 module Main (main) where
 
 import Control.Monad (forM, forM_)
-import Data.List (isInfixOf, isSuffixOf, nub, sort)
+import Data.List (isInfixOf, isSuffixOf, nub, sort, sortOn)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import OTB.Analysis.Counterpoint (parallelPerfects)
@@ -35,6 +35,7 @@ import System.Process (readProcessWithExitCode)
 import System.FilePath ((</>))
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck
 
 corpusDir :: FilePath
 corpusDir = "corpus/bach-wtc/kern"
@@ -42,7 +43,7 @@ corpusDir = "corpus/bach-wtc/kern"
 main :: IO ()
 main = do
   sweep <- corpusSweep
-  defaultMain $ testGroup "all" [units, sweep]
+  defaultMain $ testGroup "all" [units, laws, sweep]
 
 -- | Parse every WTC file; assert full coverage and the known-baseline
 -- number of tie leftovers (encoding lapses in the corpus itself — see
@@ -502,3 +503,89 @@ units = testGroup "otb"
     nt pit = scoreNote 0 (1 / 4) pit [] -- quarter notes, onset irrelevant to rules
     with n ms = n {snMarks = ms, snSegs = [(snDur n, ms)]}
     gates = map snd . articulateLane p
+
+-- ---------------------------------------------------------------------
+-- W4: metamorphic laws (the algebra respects structure)
+
+genLane :: Gen [ScoreNote]
+genLane = do
+  n <- chooseInt (1, 12)
+  durs <- vectorOf n (elements [1/16, 1/8, 3/16, 1/4, 1/2])
+  gaps <- vectorOf n (elements [0, 0, 0, 1/8, 1/4]) -- mostly contiguous
+  pitches <- vectorOf n (chooseInt (36, 84))
+  let onsets = scanl (\t (d, g) -> t + d + g) 0 (zip durs gaps)
+  pure [scoreNote t d p [] | (t, d, p) <- zip3 onsets durs pitches]
+
+genScore :: Gen Score
+genScore = do
+  nv <- chooseInt (1, 3)
+  vs <- vectorOf nv genLane
+  pure (Score (Bpm 96) [Voice i l | (i, l) <- zip [0 ..] vs]
+          0 0 [(0, (4, 4))] 0)
+
+transposeScore :: Int -> Score -> Score
+transposeScore n s =
+  s { scVoices = [ v { vNotes = [ sn { snPitch = snPitch sn + n
+                                     , snSource =
+                                         (fst (snSource sn),
+                                          snd (snSource sn) + n) }
+                                | sn <- vNotes v ] }
+                 | v <- scVoices s ] }
+
+pitchesTimes :: Performance -> [(Rational, Rational, Int)]
+pitchesTimes p =
+  sort [ (toRational (pnOnset n), toRational (pnDur n), pnPitch n)
+       | tr <- perfTracks p, n <- tr ]
+  where
+    toRational = realToFrac
+
+laws :: TestTree
+laws = testGroup "laws (metamorphic)"
+  [ testProperty "equal temperament: transposition commutes with performance" $
+      forAll genScore $ \s -> forAll (chooseInt (-11, 11)) $ \n ->
+        let ip = defaultInterp {iTuning = equalTable}
+            a = perform ip (transposeScore n s)
+            b = perform ip s
+         in case (a, b) of
+              (Right pa, Right pb) ->
+                [ (t, d, p - n) | (t, d, p) <- pitchesTimes pa ]
+                  === pitchesTimes pb
+              _ -> property False
+  , testProperty "Werckmeister does NOT commute: some bend must move" $
+      forAll genScore $ \s ->
+        let ip = defaultInterp
+            bends q = sort [pnBend n | tr <- perfTracks q, n <- tr]
+         in case (perform ip (transposeScore 1 s), perform ip s) of
+              (Right pa, Right pb) ->
+                -- shifting every pitch by a semitone permutes the
+                -- Werckmeister offsets; no two adjacent offsets in the
+                -- table are equal, so the bend multiset must move — the
+                -- asymmetry IS what well-temperament exists to have
+                property (bends pa /= bends pb)
+              _ -> property False
+  , testProperty "inegales preserve lane duration sum" $
+      forAll genLane $ \l ->
+        sum (map snDur (inegalLane 0.33 l)) === sum (map snDur l)
+  , testProperty "ornament realisation preserves duration sum" $
+      forAll genLane $ \l ->
+        let l' = [sn {snMarks = [Trill 2]} | sn <- l]
+         in sum (map snDur (realizeLane defaultOrnamentParams (Bpm 96) l'))
+              === sum (map snDur l')
+  , testProperty "overhold never overlaps the lane successor" $
+      forAll genLane $ \l ->
+        let held = overholdLane 1.0 l
+            ok = and [ snOnset a + snDur a <= snOnset b
+                     | (a, b) <- zip held (drop 1 held) ]
+         in property ok
+  , testProperty "performance is channel-monophonic" $
+      forAll genScore $ \s ->
+        case perform defaultInterp s of
+          Left _ -> property True -- cardinality refusal is legal
+          Right p ->
+            let byCh = [ sortOn pnOnset [n | tr <- perfTracks p, n <- tr
+                                           , pnChannel n == c]
+                       | c <- [0 .. 15] ]
+                ok ns = and [ pnOnset a + pnDur a <= pnOnset b
+                            | (a, b) <- zip ns (drop 1 ns) ]
+             in property (all ok byCh)
+  ]
