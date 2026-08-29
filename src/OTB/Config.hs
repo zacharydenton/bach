@@ -17,6 +17,8 @@ module OTB.Config
   , phrasingFor
   , ornamentsFor
   , dynamicsFor
+  , expressFor
+  , pieceTempo
   , tuningBendRange
   ) where
 
@@ -24,6 +26,7 @@ import Data.Map.Strict (Map)
 import Data.Ratio (approxRational)
 import OTB.Interp.Agogics (AgogicParams (..))
 import OTB.Interp.Dynamics (DynParams (..))
+import OTB.Interp.Express (ExpressParams (..))
 import OTB.Interp.Ornament (OrnamentParams (..))
 import OTB.Interp.Phrasing (PhraseParams (..))
 import OTB.Units (WholeNotes (..))
@@ -136,6 +139,45 @@ dynamicsFor cfg piece dflt =
         }
       where
         g k dflt' = maybe dflt' id (Map.lookup k m)
+
+-- | Expressive-layer parameters. Two master knobs in @[interpretation]@
+-- (Director Musices' architecture: rule quantities scaled by family
+-- multipliers), rule quantities in their own sections, and the style
+-- *decisions* (inegal, overhold, tempo) living per piece.
+expressFor :: Config -> Text -> ExpressParams -> ExpressParams
+expressFor cfg piece dflt =
+  overlay pieceSec
+    (overlay (sec "performance")
+      (overlay (sec "arches")
+        (overlay (sec "dissonance")
+          (overlay (sec "interpretation") dflt))))
+  where
+    sec k = Map.findWithDefault Map.empty k cfg
+    pieceSec = Map.findWithDefault Map.empty ("piece." <> piece) cfg
+    overlay m p =
+      p
+        { exExpression = g "expression" (exExpression p)
+        , exEnsemble = g "ensemble" (exEnsemble p)
+        , exDisVel = g "dis_vel" (exDisVel p)
+        , exDisLean = g "dis_lean" (exDisLean p)
+        , exArchPiece = g "arch_piece" (exArchPiece p)
+        , exArchGroup = g "arch_group" (exArchGroup p)
+        , exArchBars = maybe (exArchBars p) round (Map.lookup "arch_bars" m)
+        , exLeadMs = g "lead_ms" (exLeadMs p)
+        , exRollMs = g "roll_ms" (exRollMs p)
+        , exJitterMs = g "jitter_ms" (exJitterMs p)
+        , exJitterVel = g "jitter_vel" (exJitterVel p)
+        , exInegal = g "inegal" (exInegal p)
+        , exOverhold = g "overhold" (exOverhold p)
+        }
+      where
+        g k dflt' = maybe dflt' id (Map.lookup k m)
+
+-- | Per-piece tempo override (@[piece.X] tempo = 96@) — half of Book II's
+-- preludes carry the encoder's 72-BPM placeholder, not a musical choice.
+pieceTempo :: Config -> Text -> Maybe Double
+pieceTempo cfg piece =
+  Map.lookup "tempo" =<< Map.lookup ("piece." <> piece) cfg
 
 -- | @[tuning] bend_range@ — the receiver's pitch-bend range in ± semitones.
 -- 2 is the near-universal power-on default; set it to whatever the

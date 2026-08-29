@@ -11,8 +11,9 @@ module Main (main) where
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import OTB.Config
-  ( agogicsFor, artParamsFor, dynamicsFor, loadConfig, ornamentsFor
-  , phrasingFor, tuningBendRange )
+  ( agogicsFor, artParamsFor, dynamicsFor, expressFor, loadConfig
+  , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
+import OTB.Interp.Express (defaultExpressParams)
 import OTB.Emit.Json (renderJson)
 import OTB.Emit.Midi (writeSmf)
 import OTB.Interp.Agogics (defaultAgogicParams)
@@ -61,18 +62,22 @@ main = do
   o <- execParser (info (opts <**> helper)
         (fullDesc <> progDesc "Compile a **kern score to performed MIDI"))
   src <- TIO.readFile (optInput o)
-  score <- either (die . ("parse: " <>)) pure (parseKern (Bpm (optTempo o)) src)
+  score0 <- either (die . ("parse: " <>)) pure (parseKern (Bpm (optTempo o)) src)
   haveCfg <- doesFileExist (optConfig o)
   cfg <- if haveCfg then loadConfig <$> TIO.readFile (optConfig o)
          else pure (loadConfig "")
   table <- resolveTemperament (optTemperament o)
   let piece = T.pack (takeBaseName (optInput o))
+      score = maybe score0 (\bpm -> score0 {scTempo = Bpm bpm})
+                (pieceTempo cfg piece)
       interp = Interp
         { iArt = artParamsFor cfg piece
         , iAgogics = agogicsFor cfg piece defaultAgogicParams
         , iPhrasing = phrasingFor cfg piece defaultPhraseParams
         , iOrnaments = ornamentsFor cfg piece defaultOrnamentParams
         , iDynamics = dynamicsFor cfg piece defaultDynParams
+        , iExpress = expressFor cfg piece defaultExpressParams
+        , iPiece = T.unpack piece
         , iTuning = table
         , iBendRange = tuningBendRange cfg
         }

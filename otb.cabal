@@ -30,6 +30,7 @@ library
         OTB.Interp.Agogics
         OTB.Interp.Articulation
         OTB.Interp.Dynamics
+        OTB.Interp.Express
         OTB.Interp.Ornament
         OTB.Interp.Phrasing
         OTB.Player

@@ -18,7 +18,7 @@ module OTB.Units
   , secondsAt
   ) where
 
-import Data.Ratio (denominator, numerator)
+import Data.Ratio ()
 
 -- | Notated duration/onset, in whole notes (kern's and Euterpea's native unit:
 -- a kern @4c@ is 1/4 whole note).
@@ -43,10 +43,14 @@ ticksPerQuarter :: Int
 ticksPerQuarter = 480
 
 -- | Exact where the rational is exact (all plain kern durations are).
+-- Rounded through Double rather than integer division: expressive-layer
+-- rationals quantised from Doubles can carry large denominators, and a
+-- numerator/denominator Int conversion can overflow — wrapping a
+-- denominator to zero was a real bug. Tick counts are ~1e6, far inside
+-- Double exactness.
 toTicks :: WholeNotes -> Ticks
 toTicks (WholeNotes w) =
-  let q = w * 4 * fromIntegral ticksPerQuarter
-   in Ticks (fromIntegral (numerator q) `div` fromIntegral (denominator q))
+  Ticks (round (fromRational (w * 4 * fromIntegral ticksPerQuarter) :: Double))
 
 toSeconds :: Bpm -> WholeNotes -> Seconds
 toSeconds (Bpm bpm) (WholeNotes w) =

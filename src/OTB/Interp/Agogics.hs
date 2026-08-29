@@ -48,24 +48,49 @@ defaultAgogicParams = AgogicParams
   , agFermataHold = 7 / 4
   }
 
--- | The piece's tempo curve: base tempo from zero, then stepped easing
--- across the closing span. Pairs are (onset, tempo-from-here).
-tempoMap :: AgogicParams -> Bpm -> WholeNotes -> [(WholeNotes, Bpm)]
-tempoMap ag (Bpm base) end
-  | agRitSpan ag <= 0 || end <= agRitSpan ag = [(0, Bpm base)]
-  | otherwise = (0, Bpm base) : steps
+-- | The piece's tempo curve. Three multiplicative layers on the base:
+-- Todd (1992) arches at whole-piece and bar-group level (tempo and
+-- loudness co-vary: faster toward centres, easing at boundaries), then
+-- the Friberg–Sundberg closing rit. Pairs are (onset, tempo-from-here);
+-- the whole curve is discretised at agTempoStep.
+--
+-- archPiece/archGroup are fractional depths (0.03 = ±3%); groupBars
+-- converts through the meter's bar length (whole notes per bar).
+tempoMap :: AgogicParams -> Double -> Double -> WholeNotes -> Bpm -> WholeNotes
+         -> [(WholeNotes, Bpm)]
+tempoMap ag archPiece archGroup groupLen (Bpm base) end
+  | end <= 0 = [(0, Bpm base)]
+  | otherwise = thin [(t, Bpm (base * factor t)) | t <- gridPts]
   where
+    gridPts = takeWhile (< end) (iterate (+ agTempoStep ag) 0)
+    factor t = arch archPiece 0 end t * groupArch t * ritF t
+    arch depth a b t
+      | depth <= 0 || b <= a = 1
+      | otherwise =
+          let x = realToFrac ((t - a) / (b - a)) :: Double
+           in 1 + depth * (4 * x * (1 - x) * 2 - 1) -- ±depth, peak centre
+    groupArch t
+      | archGroup <= 0 || groupLen <= 0 = 1
+      | otherwise =
+          let WholeNotes tw = t
+              WholeNotes gw = groupLen
+              a = fromRational (gw * fromIntegral (floor (tw / gw) :: Integer))
+           in arch archGroup (WholeNotes (toRational a))
+                (WholeNotes (toRational a) + groupLen) t
+    ritF t
+      | agRitSpan ag <= 0 || end <= agRitSpan ag || t < start = 1
+      | otherwise =
+          let WholeNotes progress = (t - start) / agRitSpan ag
+              x = min 1 (realToFrac progress) :: Double
+              w = agRitFloor ag
+              q = max 1 (agRitCurve ag)
+           in (1 + (w ** q - 1) * x) ** (1 / q)
     start = end - agRitSpan ag
-    stepList = takeWhile (< end) (iterate (+ agTempoStep ag) start)
-    steps =
-      [ (t, Bpm (base * factor))
-      | t <- stepList
-      , let WholeNotes progress = (t - start) / agRitSpan ag
-            x = realToFrac progress :: Double
-            w = agRitFloor ag
-            q = max 1 (agRitCurve ag)
-            factor = (1 + (w ** q - 1) * x) ** (1 / q)
-      ]
+    -- collapse runs of equal tempo so flat stretches stay one event
+    thin ((t1, b1) : (t2, b2) : rest)
+      | b1 == b2 = thin ((t1, b1) : rest)
+      | otherwise = (t1, b1) : thin ((t2, b2) : rest)
+    thin xs = xs
 
 -- | Duration multiplier for a note's marks.
 fermataFactor :: AgogicParams -> ScoreNote -> Rational

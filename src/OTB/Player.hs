@@ -22,19 +22,21 @@ module OTB.Player
   ) where
 
 import Data.List (sortOn)
+import Data.Ratio (approxRational)
 import EuterpeaLite.Music (Music (..), Primitive (..), note, rest)
 import OTB.Config (ArtParams, defaultArtParams)
 import OTB.Interp.Agogics
   (AgogicParams, defaultAgogicParams, fermataFactor, tempoMap)
 import OTB.Interp.Articulation (articulateLane)
 import OTB.Interp.Dynamics (DynParams, defaultDynParams, dynamicsLane)
+import OTB.Interp.Express
 import OTB.Interp.Ornament
   (OrnamentParams, defaultOrnamentParams, realizeLane)
 import OTB.Interp.Phrasing
   (PhraseParams (..), boundaryStrengths, breatheLane, defaultPhraseParams)
 import OTB.Score
 import OTB.Tuning (TuningTable, bendValue, offsetFor, werckmeister3)
-import OTB.Units (Bpm, WholeNotes)
+import OTB.Units (Bpm (..), WholeNotes (..))
 
 -- | Everything the Player needs beyond the score: the interpretation.
 data Interp = Interp
@@ -43,6 +45,8 @@ data Interp = Interp
   , iPhrasing :: !PhraseParams
   , iOrnaments :: !OrnamentParams
   , iDynamics :: !DynParams
+  , iExpress :: !ExpressParams
+  , iPiece :: !String -- ^ seeds the deterministic jitter
   , iTuning :: !TuningTable
   , iBendRange :: !Double
   }
@@ -50,7 +54,8 @@ data Interp = Interp
 defaultInterp :: Interp
 defaultInterp =
   Interp defaultArtParams defaultAgogicParams defaultPhraseParams
-    defaultOrnamentParams defaultDynParams werckmeister3 2
+    defaultOrnamentParams defaultDynParams defaultExpressParams ""
+    werckmeister3 2
 
 data PerfNote = PerfNote
   { pnOnset :: !WholeNotes
@@ -112,41 +117,94 @@ durOf = \case
   Modify _ inner -> durOf inner
 
 -- | Interpretation per voice; channel per lane; bend per note from the
--- tuning table at the receiver's bend range; tempo curve over the whole.
+-- tuning table; tempo curve (Todd arches + closing rit) over the whole.
+--
+-- Order per lane: raw -> inégales -> overhold -> ornaments -> dissonance
+-- charges (against everything that actually sounds) -> articulation ->
+-- breaths -> agogic lean -> dynamics (+charge). Assembly then applies the
+-- asynchrony family: melody lead, final-chord roll, seeded jitter.
 perform :: Interp -> Score -> Either String Performance
-perform (Interp ap ag pp orn dyn table bendRange) (Score tempo voices _ meter) = do
-  let voiceLanes = [(v, lanes (vNotes v)) | v <- voices]
+perform (Interp ap ag pp orn dyn ex piece table bendRange)
+        (Score tempo voices _ meter) =
+  let prepLane =
+        realizeLane orn tempo
+          . overholdLane (exOverhold ex)
+          . inegalLane (exInegal ex)
+      voiceLanes = [(v, map prepLane (lanes (vNotes v))) | v <- voices]
       totalLanes = sum (map (length . snd) voiceLanes)
-      end =
-        maximum (0 : [snOnset n + snDur n | v <- voices, n <- vNotes v])
-  if totalLanes > length usableChannels
-    then Left ("score needs " <> show totalLanes
-                 <> " monophonic lanes; only "
-                 <> show (length usableChannels) <> " MIDI channels available")
-    else
-      Right . Performance (tempoMap ag tempo end) . snd $
-        foldl voiceTrack (usableChannels, []) voiceLanes
-  where
-    usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
-    voiceTrack (chans, acc) (_, ls) =
-      let (mine, rest') = splitAt (length ls) chans
-          -- laneMusic emits exactly one event per articulated note, in
-          -- order, so zipping arts with the traversal re-attaches marks
-          -- (fermata) to their performed events
-          evs = concat
-            [ [ PerfNote (fromRational t)
-                  (fromRational (d * gate * fermataFactor ag sn)) p v bend ch
-              | ((sn, gate), v, (t, d, (p, _))) <-
-                  zip3 arts vels (musicEvents 0 (laneMusic arts))
-              , let bend = bendValue bendRange (offsetFor table p)
+      allSounding =
+        [ (snOnset n, snDur n, snPitch n)
+        | (_, ls) <- voiceLanes, l <- ls, n <- l ]
+      end = maximum (0 : [o + d | (o, d, _) <- allSounding])
+      barLen =
+        maybe 1 (\(n, d) -> WholeNotes (fromIntegral n / fromIntegral d)) meter
+      exN = exExpression ex
+      tmap =
+        tempoMap ag (exN * exArchPiece ex) (exN * exArchGroup ex)
+          (barLen * fromIntegral (exArchBars ex)) tempo end
+      -- highest mean pitch is the melody, which leads (Palmer 1996)
+      meanPitch v =
+        let ps = map snPitch (vNotes v)
+         in if null ps then 0 else sum ps `div` length ps
+      melodyVi =
+        fst (last (sortOn snd
+          [(vi, meanPitch v) | (vi, (v, _)) <- zip [0 :: Int ..] voiceLanes]))
+      Bpm bpmD = tempo
+      msToWn ms = WholeNotes (approxRational (ms / 1000 * bpmD / 240) 1e-6)
+      seed = seedOf piece
+      clampV = max 1 . min 127
+      usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
+
+      voiceTrack (chans, acc) (vi, (_, ls)) =
+        let (mine, rest') = splitAt (length ls) chans
+            lead = if vi == melodyVi
+                     then msToWn (exEnsemble ex * exLeadMs ex) else 0
+            evs = concat
+              [ [ PerfNote (max 0 (fromRational t - lead + jit))
+                    (fromRational (d * gate' * fermataFactor ag sn))
+                    p v' bend ch
+                | (i, ((sn, gate), charge, (t, d, (p, _)))) <-
+                    zip [0 :: Int ..]
+                      (zip3 arts charges (musicEvents 0 (laneMusic arts)))
+                , let gate' = leanGate ex charge gate
+                      jit = msToWn (exEnsemble ex * exJitterMs ex
+                              * seededJitter seed (i * 13 + ch * 7 + 1))
+                      v' = clampV (vels !! min i (length vels - 1)
+                             + round (exN * exDisVel ex * charge
+                                 + exEnsemble ex * exJitterVel ex
+                                     * seededJitter seed (i * 31 + ch * 3)))
+                      bend = bendValue bendRange (offsetFor table p)
+                ]
+              | (ch, l') <- zip mine ls
+              , let bounds =
+                      map (>= ppThreshold pp) (boundaryStrengths pp l')
+                    arts = breatheLane pp l' (articulateLane ap l')
+                    vels = dynamicsLane dyn meter bounds l'
+                    charges = chargesForLane allSounding l'
               ]
-            | (ch, l) <- zip mine ls
-            , -- realise ornaments first so articulation, phrasing and
-              -- dynamics see real notes; boundaries are shared between
-              -- breaths and phrase arches so they agree about lines
-              let l' = realizeLane orn tempo l
-                  bounds = map (>= ppThreshold pp) (boundaryStrengths pp l')
-                  arts = breatheLane pp l' (articulateLane ap l')
-                  vels = dynamicsLane dyn meter bounds l'
-            ]
-       in (rest', acc <> [sortOn pnOnset evs])
+         in (rest', acc <> [sortOn pnOnset evs])
+
+      -- final chord rolled bass-upward (universal keyboard practice)
+      rollFinal tracks
+        | rollStep <= 0 = tracks
+        | otherwise =
+            let lastOn = maximum (0 : [pnOnset n | tr <- tracks, n <- tr])
+                finals =
+                  sortOn snd [ (pnPitch n, pnPitch n)
+                             | tr <- tracks, n <- tr, pnOnset n == lastOn ]
+                rankOf p = length (takeWhile ((< p) . fst) finals)
+                shift n
+                  | pnOnset n == lastOn =
+                      let dt = rollStep * fromIntegral (rankOf (pnPitch n))
+                       in n { pnOnset = pnOnset n + dt
+                            , pnDur = max (pnDur n - dt) (msToWn 30) }
+                  | otherwise = n
+             in map (map shift) tracks
+        where rollStep = msToWn (exEnsemble ex * exRollMs ex)
+   in if totalLanes > length usableChannels
+        then Left ("score needs " <> show totalLanes
+                     <> " monophonic lanes; only "
+                     <> show (length usableChannels)
+                     <> " MIDI channels available")
+        else Right . Performance tmap . rollFinal . snd $
+               foldl voiceTrack (usableChannels, []) (zip [0 ..] voiceLanes)

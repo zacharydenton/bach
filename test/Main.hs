@@ -20,6 +20,7 @@ import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
 import OTB.Emit.Midi (renderSmf)
 import OTB.Interp.Agogics
 import OTB.Interp.Dynamics
+import OTB.Interp.Express
 import OTB.Interp.Ornament
 import OTB.Interp.Phrasing
 import OTB.Player (Interp (..), defaultInterp, perform)
@@ -186,17 +187,24 @@ units = testGroup "otb"
             Right _ -> pure ()
       ]
   , testGroup "agogics"
-      [ testCase "tempo map: flat until the rit, then monotonic descent" $ do
+      [ testCase "tempo map: rit still descends to the floor (arches off)" $ do
           let ag = defaultAgogicParams {agRitSpan = 1, agRitFloor = 0.5}
-              tm = tempoMap ag (Bpm 100) 4
+              tm = tempoMap ag 0 0 1 (Bpm 100) 4
               bpms = [b | (_, Bpm b) <- tm]
           take 1 bpms @?= [100]
           assertBool ("not descending: " <> show bpms)
             (and (zipWith (>=) bpms (drop 1 bpms)))
           assertBool ("floor overshot: " <> show (last bpms))
             (last bpms >= 50 && last bpms < 100)
+      , testCase "Todd arches: tempo rises to centre, sane bounds" $ do
+          let ag = defaultAgogicParams {agRitSpan = 0}
+              tm = tempoMap ag 0.05 0 1 (Bpm 100) 8
+              bpms = [b | (_, Bpm b) <- tm]
+              mid = bpms !! (length bpms `div` 2)
+          assertBool ("no arch: " <> show (take 5 bpms)) (mid > 100)
+          assertBool "bounded" (all (\b -> b > 90 && b < 110) bpms)
       , testCase "short piece: no rit, single tempo" $
-          length (tempoMap defaultAgogicParams (Bpm 100) (1 / 2)) @?= 1
+          length (tempoMap defaultAgogicParams 0 0 1 (Bpm 100) (1 / 2)) @?= 1
       , testCase "fermata holds" $ do
           let sn = ScoreNote 0 (1 / 4) 60 [Fermata]
           fermataFactor defaultAgogicParams sn @?= agFermataHold defaultAgogicParams
@@ -227,6 +235,28 @@ units = testGroup "otb"
       , testCase "unornamented notes pass through untouched" $ do
           let sn = ScoreNote 0 (1 / 4) 60 [Staccato]
           realizeLane defaultOrnamentParams (Bpm 120) [sn] @?= [sn]
+      ]
+  , testGroup "express"
+      [ testCase "inegal: conjunct pair swings long-short, total preserved" $ do
+          let l = [ScoreNote 0 (1/16) 60 [], ScoreNote (1/16) (1/16) 62 []]
+              out = inegalLane 0.33 l
+          sum (map snDur out) @?= (1/8)
+          assertBool "first longer" (snDur (out !! 0) > snDur (out !! 1))
+          snOnset (out !! 1) @?= snOnset (out !! 0) + snDur (out !! 0)
+      , testCase "inegal: leaps stay equal (Quantz)" $ do
+          let l = [ScoreNote 0 (1/16) 60 [], ScoreNote (1/16) (1/16) 67 []]
+          map snDur (inegalLane 0.33 l) @?= [1/16, 1/16]
+      , testCase "overhold fills the gap fraction" $ do
+          let l = [ScoreNote 0 (1/16) 60 [], ScoreNote (1/4) (1/16) 62 []]
+              out = overholdLane 1.0 l
+          snDur (out !! 0) @?= (1/4)
+      , testCase "dissonance: minor 2nd charges 1, octave charges 0" $ do
+          let others = [(0, 1, 61), (0, 1, 72)]
+          chargesForLane others [ScoreNote 0 (1/4) 60 []] @?= [1.0]
+          chargesForLane [(0, 1, 72)] [ScoreNote 0 (1/4) 60 []] @?= [0.0]
+      , testCase "jitter is deterministic" $
+          seededJitter (seedOf "wtc1p01") 42
+            @?= seededJitter (seedOf "wtc1p01") 42
       ]
   , testGroup "phrasing"
       [ testCase "a written rest is a boundary (Quantz)" $ do
