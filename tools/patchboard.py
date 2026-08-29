@@ -186,8 +186,18 @@ class Engine:
         """Wall-clock-paced render loop feeding every /pcm listener."""
         period = CHUNK_FRAMES / self.sr
         deadline = time.monotonic()
+        limiter_gain = 1.0
         while True:
             mix = self.render(CHUNK_FRAMES)
+            # peak meter (pre-limiter) + a simple riding limiter: browsers
+            # hard-clip anything past 0 dBFS, which sounds like ring mod.
+            peak = float(np.max(np.abs(mix))) if mix.size else 0.0
+            self.peak = max(peak, getattr(self, "peak", 0.0) * 0.94)
+            target = min(1.0, 0.89 / peak) if peak > 0.89 else 1.0
+            # fast attack, slow release
+            limiter_gain = min(target, limiter_gain * 1.02)
+            if limiter_gain < 1.0 or target < 1.0:
+                mix = mix * min(limiter_gain, target)
             data = mix.T.reshape(-1).astype("<f4").tobytes()  # interleaved
             with self.sublock:
                 subs = list(self.subscribers)
@@ -213,6 +223,7 @@ class Engine:
             "position": self.sample / self.sr,
             "length": self.loop_len / self.sr,
             "sr": self.sr,
+            "peak": round(getattr(self, "peak", 0.0), 3),
             "listeners": len(self.subscribers),
             "parts": [
                 {"name": p["name"], "channels": p["channels"],
@@ -325,7 +336,8 @@ async function refresh(){
   document.getElementById('play').textContent = STATE.playing?'pause':'play';
   document.getElementById('pos').textContent =
     STATE.position.toFixed(1)+' / '+STATE.length.toFixed(1)+'s · '+
-    STATE.listeners+' listening';
+    STATE.listeners+' listening · peak '+STATE.peak+
+    (STATE.peak>0.89?' ⚠CLIP-LIMITED':'');
   const div = document.getElementById('parts');
   if (div.childElementCount != STATE.parts.length){
     div.innerHTML = STATE.parts.map((p,i)=>`
