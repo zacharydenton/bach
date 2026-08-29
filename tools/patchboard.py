@@ -425,7 +425,10 @@ class Player extends AudioWorkletProcessor {
 }
 registerProcessor('player', Player);`;
 
-const BUFFER_S = 4; // cushion against WAN/DERP stalls at 100 km
+const START_S = 1.5; // browsers cap paused-media readahead (~2.3 s
+// observed), so gating playback on a big pre-buffer DEADLOCKS. Start
+// early instead: while PLAYING the browser buffers aggressively, and the
+// server's 5 s history burst builds the real cushion during playback.
 function listenRemote(){
   // Opus 256k over ffmpeg (~32 kB/s instead of 384): transparent for
   // music, and the <audio> element buffers. We hold playback until
@@ -446,13 +449,13 @@ function listenRemote(){
   setInterval(() => {
     const buf = ahead();
     if (!started || a.paused){
-      if (buf >= BUFFER_S){ a.play(); started = true; }
-      stat('buffering ' + buf.toFixed(1) + '/' + BUFFER_S + 's');
+      if (buf >= START_S){ a.play(); started = true; }
+      stat('buffering ' + buf.toFixed(1) + '/' + START_S + 's');
     } else {
       stat('● listening (' + buf.toFixed(1) + 's banked)');
     }
   }, 500);
-  a.addEventListener('waiting', () => { a.pause(); stat('stall — rebuffering'); });
+  a.addEventListener('waiting', () => stat('stall — refilling'));
 }
 
 async function listen(){
