@@ -25,8 +25,10 @@ module OTB.Interp.Dynamics
   ( DynParams (..)
   , defaultDynParams
   , dynamicsLane
+  , dynamicsLane'
   ) where
 
+import OTB.Explain (Why, why)
 import OTB.Kern.Token (Mark (..))
 import OTB.Score (ScoreNote (..))
 import OTB.Units (WholeNotes (..))
@@ -57,16 +59,31 @@ defaultDynParams = DynParams
 -- come from the phrasing detector so arches and breaths agree.
 dynamicsLane :: DynParams -> [(WholeNotes, (Int, Int))] -> [Bool] -> [ScoreNote] -> [Int]
 dynamicsLane dp meters bounds ns =
-  zipWith3 vel ns (archPositions bounds ns) ns
+  map (fst . clamp) (dynamicsLane' dp meters bounds ns)
   where
-    vel n x _ =
-      clamp . round $
-        dyBase dp
-          + metrical n
-          + dyArch dp * 4 * x * (1 - x)
-          + dyHighLoud dp * fromIntegral (snPitch n - 66)
-          + (if Accent `elem` snMarks n then dyAccent dp else 0)
-    clamp = max 1 . min 127
+    clamp (v, ws) = (max 1 (min 127 v), ws)
+
+-- | The same computation with its components named — the explain engine's
+-- view. Velocity is UNclamped here (assembly clamps after jitter).
+dynamicsLane'
+  :: DynParams -> [(WholeNotes, (Int, Int))] -> [Bool] -> [ScoreNote]
+  -> [(Int, [Why])]
+dynamicsLane' dp meters bounds ns =
+  zipWith vel ns (archPositions bounds ns)
+  where
+    vel n x =
+      let m = metrical n
+          arch = dyArch dp * 4 * x * (1 - x)
+          high = dyHighLoud dp * fromIntegral (snPitch n - 66)
+          acc = if Accent `elem` snMarks n then dyAccent dp else 0
+          v = round (dyBase dp + m + arch + high + acc)
+          ws =
+            [ why "meter" (showD m) "Sloboda 1983" | m /= 0 ]
+              <> [ why "phrase-arch" (showD arch) "Todd 1992" | abs arch >= 0.5 ]
+              <> [ why "high-loud" (showD high) "KTH rules" | abs high >= 0.5 ]
+              <> [ why "accent-mark" (showD acc) "kern ^" | acc /= 0 ]
+       in (v, ws)
+    showD d = (if d >= 0 then "+" else "") <> show (round d :: Int) <> " vel"
 
     -- the meter in force at the note: last change at or before its onset,
     -- with bar positions counted from that change

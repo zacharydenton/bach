@@ -28,7 +28,7 @@ writeSmf fp = BL.writeFile fp . renderSmf
 -- | Pure render: the artifact is a function of the Performance alone, so
 -- determinism is assertable at the byte level (and a hash names a take).
 renderSmf :: Performance -> BL.ByteString
-renderSmf (Performance tmap tracks) =
+renderSmf (Performance tmap tracks _) =
   toLazyByteString $
     header (1 + length tracks) <> tempoTrack tmap <> foldMap voiceTrack tracks
 

@@ -35,6 +35,9 @@ library
         OTB.Kern.Parser
         OTB.Score
         OTB.Config
+        OTB.Explain
+        OTB.Interp
+        OTB.Annotate
         OTB.Tuning
         OTB.Interp.Agogics
         OTB.Interp.Articulation

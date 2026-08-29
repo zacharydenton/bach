@@ -26,9 +26,11 @@ module OTB.Interp.Phrasing
   ( PhraseParams (..)
   , defaultPhraseParams
   , breatheLane
+  , breatheLane'
   , boundaryStrengths
   ) where
 
+import OTB.Explain (Why, why)
 import OTB.Score (ScoreNote (..))
 import OTB.Units (WholeNotes (..))
 
@@ -80,9 +82,20 @@ boundaryStrengths pp ns = zipWith3 strength ns nexts prevs
 -- silence. The lane's final note is left alone — the final rit owns
 -- endings.
 breatheLane :: PhraseParams -> [ScoreNote] -> [(ScoreNote, Rational)] -> [(ScoreNote, Rational)]
-breatheLane pp raw arts = zipWith3 apply arts (boundaryStrengths pp raw) lastFlags
+breatheLane pp raw = map (\(n, g, _) -> (n, g)) . breatheLane' pp raw
+
+-- | The same rule with provenance — the annotator's view. The Maybe Why is
+-- Nothing on notes that do not breathe.
+breatheLane' :: PhraseParams -> [ScoreNote] -> [(ScoreNote, Rational)]
+             -> [(ScoreNote, Rational, Maybe Why)]
+breatheLane' pp raw arts = zipWith3 apply arts (boundaryStrengths pp raw) lastFlags
   where
     lastFlags = map (const False) (drop 1 arts) <> [True]
     apply (sn, gate) s isLast
-      | not isLast, s >= ppThreshold pp = (sn, gate * (1 - ppBreath pp))
-      | otherwise = (sn, gate)
+      | not isLast, s >= ppThreshold pp =
+          ( sn, gate * (1 - ppBreath pp)
+          , Just (why "breath"
+              ("micropause: gate x" <> show (fromRational (1 - ppBreath pp) :: Double)
+                 <> ", boundary strength " <> show (fromIntegral (round (s*100)) / 100 :: Double))
+              "Quantz XI; KTH Punctuation") )
+      | otherwise = (sn, gate, Nothing)
