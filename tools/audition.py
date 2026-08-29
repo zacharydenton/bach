@@ -46,7 +46,11 @@ def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0):
             channels.add(ch)
             on = int(n["onS"] * sr)
             off = int((n["onS"] + n["durS"]) * sr)
-            events.append((on, 0, ch, n["bend"], 0))
+            if not scl:
+                # bend carries the temperament ONLY when Surge isn't
+                # natively tuned — with .scl loaded, sending bends too
+                # would apply the temperament twice
+                events.append((on, 0, ch, n["bend"], 0))
             events.append((on, 1, ch, n["pitch"], n["vel"]))
             events.append((max(off, on + 1), 2, ch, n["pitch"], 0))
     # tempo map -> setTempo on every instance, so tempo-synced LFOs and

@@ -81,6 +81,7 @@ class Engine:
         self.sr = sr
         self.playlist = playlist  # [(name, perf)]
         self.casting_dir = casting_dir
+        self.scl_active = bool(scl)
         self.playing = True
         self.pending = queue.Queue()  # (part_idx, path)
         self.jump = None  # requested piece index
@@ -136,7 +137,9 @@ class Engine:
                 off = max(on + 1, int((n["onS"] + n["durS"]) * self.sr))
                 end = max(end, n["onS"] + n["durS"])
                 evs = self.events.setdefault(ch, [])
-                evs.append((on, 0, n["bend"], 0))
+                if not self.scl_active:
+                    # with native .scl tuning, bends would tune twice
+                    evs.append((on, 0, n["bend"], 0))
                 evs.append((on, 1, n["pitch"], n["vel"]))
                 evs.append((off, 2, n["pitch"], 0))
         for ch, evs in self.events.items():
