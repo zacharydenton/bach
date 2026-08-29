@@ -10,6 +10,7 @@
 -- License: GPL-2.0-or-later.
 module OTB.Emit.Midi
   ( writeSmf
+  , renderSmf
   ) where
 
 import Data.Bits (shiftR, (.&.), (.|.))
@@ -22,8 +23,13 @@ import OTB.Player (PerfNote (..), Performance (..))
 import OTB.Units (Bpm (..), Ticks (..), ticksPerQuarter, toTicks)
 
 writeSmf :: FilePath -> Performance -> IO ()
-writeSmf fp (Performance (Bpm bpm) tracks) =
-  BL.writeFile fp . toLazyByteString $
+writeSmf fp = BL.writeFile fp . renderSmf
+
+-- | Pure render: the artifact is a function of the Performance alone, so
+-- determinism is assertable at the byte level (and a hash names a take).
+renderSmf :: Performance -> BL.ByteString
+renderSmf (Performance (Bpm bpm) tracks) =
+  toLazyByteString $
     header (1 + length tracks) <> tempoTrack bpm <> foldMap voiceTrack tracks
 
 header :: Int -> Builder

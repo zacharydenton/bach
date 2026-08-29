@@ -25,6 +25,8 @@ library
         OTB.Kern.Spine
         OTB.Kern.Parser
         OTB.Score
+        OTB.Config
+        OTB.Interp.Articulation
         OTB.Player
         OTB.Emit.Midi
         OTB.Analysis.Counterpoint
@@ -46,6 +48,8 @@ executable otb
         otb,
         text,
         bytestring,
+        directory,
+        filepath,
         optparse-applicative
 
 test-suite otb-test

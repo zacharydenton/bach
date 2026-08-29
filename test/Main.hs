@@ -12,9 +12,13 @@ import Data.List (isSuffixOf, sort)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import OTB.Analysis.Counterpoint (parallelPerfects)
+import OTB.Config (ArtParams (..), artParamsFor, defaultArtParams, loadConfig)
+import OTB.Interp.Articulation (articulateLane)
 import OTB.Kern.Lexer (lexNoteTok)
 import OTB.Kern.Parser (parseKern)
-import OTB.Kern.Token (NoteTok (..), Tie (..))
+import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
+import OTB.Emit.Midi (renderSmf)
+import OTB.Player (perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..))
 import OTB.Units (Bpm (..))
 import System.Directory (doesDirectoryExist, listDirectory)
@@ -54,6 +58,13 @@ corpusSweep = do
             -- Any change to this number is a parser regression.
             let leftovers = sum [scTieLeftovers s | (_, Right s) <- results]
             assertEqual "leftover notes" 31 leftovers
+        , testCase "determinism: same score + same rules = same bytes" $ do
+            src <- TIO.readFile (corpusDir </> "wtc1p01.krn")
+            let run () = do
+                  s <- either error pure (parseKern (Bpm 72) src)
+                  pure (renderSmf (perform defaultArtParams s))
+            a <- run (); b <- run ()
+            assertBool "byte-identical" (a == b)
         , testCase "counterpoint oracle: fugues stay under threshold" $ do
             -- Bach doesn't write parallel perfects — mostly. The ceiling is
             -- calibrated to the corpus: wtc1f10 (E minor, the only 2-voice
@@ -112,4 +123,42 @@ units = testGroup "otb"
               snDur n @?= (1 / 2)
             Right s -> assertFailure ("unexpected shape: " <> show s)
       ]
+  , testGroup "articulation"
+      [ testCase "détaché base, legato final" $
+          gates [nt 60, nt 64, nt 67]
+            @?= [apBase p, apBase p, apLegato p]
+      , testCase "staccato mark wins over context" $
+          take 1 (gates [nt 60 `with` [Staccato], nt 60])
+            @?= [apStaccato p]
+      , testCase "slur spans to the close" $
+          gates [nt 60 `with` [SlurOpen], nt 62, nt 64 `with` [SlurClose], nt 55]
+            @?= [apLegato p, apLegato p, apLegato p, apLegato p]
+            -- final note is legato by the lane-end rule anyway
+      , testCase "repeated note sharpened" $
+          take 1 (gates [nt 60, nt 60, nt 67])
+            @?= [apRepeated p]
+      , testCase "stepwise at singing values sings" $
+          take 1 (gates [nt 60, nt 62, nt 55])
+            @?= [apCantabile p]
+      , testCase "leaps stay détaché" $
+          take 1 (gates [nt 60, nt 67, nt 55])
+            @?= [apBase p]
+      ]
+  , testGroup "config"
+      [ testCase "piece override beats section beats default" $ do
+          let cfg = loadConfig (T.unlines
+                [ "[articulation]"
+                , "base = 0.7  # global taste"
+                , "[piece.x]"
+                , "base = 0.9"
+                ])
+          apBase (artParamsFor cfg "x") @?= 0.9
+          apBase (artParamsFor cfg "y") @?= 0.7
+          apStaccato (artParamsFor cfg "x") @?= apStaccato defaultArtParams
+      ]
   ]
+  where
+    p = defaultArtParams
+    nt pit = ScoreNote 0 (1 / 4) pit [] -- quarter notes, onset irrelevant to rules
+    with n ms = n {snMarks = ms}
+    gates = map snd . articulateLane p

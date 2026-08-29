@@ -1,0 +1,15 @@
+# The interpretation, as data. A performance = corpus commit + this file +
+# compiler version. Per-piece sections are the exception log: every override
+# carries its why.
+
+[articulation]
+base = 0.78       # détaché: the default speech of a baroque line
+staccato = 0.40
+tenuto = 0.95
+legato = 1.00
+repeated = 0.60   # repeated notes need separation to speak
+cantabile = 0.90  # stepwise motion at singing values leans legato
+min_gate = 0.10
+
+[piece.wtc1p01]
+base = 0.85       # pure arpeggiated figuration: let it ring toward pedal
