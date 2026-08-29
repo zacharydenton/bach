@@ -30,14 +30,14 @@ PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1p01.json" \
   --scl "$OUT/w3.scl" -o "$OUT/wtc1p01_surge_cast.wav" \
   --patch "$FP/Plucks/Nice Pluck 2.fxp"
 
-# Fugue: four voices, four timbres. wtc1f01 lanes:
-#   voice 0 (soprano) ch0 | voice 1 (alto) ch1
-#   voice 2 (tenor)  ch2,3 | voice 3 (bass) ch4,5
+# Fugue: four voices, four timbres. KERN ORDERS SPINES BASS-FIRST:
+#   voice 0 (BASS) ch0    | voice 1 (tenor) ch1
+#   voice 2 (alto) ch2,3  | voice 3 (SOPRANO) ch4,5
 PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1f01.json" \
   --scl "$OUT/w3.scl" -o "$OUT/wtc1f01_surge_cast.wav" \
-  --patch-ch "0:$FP/Leads/Classic Lead 1.fxp" \
-  --patch-ch "1:$FP/Winds/Clarinet.fxp" \
-  --patch-ch "2:$FP/Leads/Smoothy Hollow.fxp" \
-  --patch-ch "3:$FP/Leads/Smoothy Hollow.fxp" \
-  --patch-ch "4:$FP/Basses/Bass 1.fxp" \
-  --patch-ch "5:$FP/Basses/Bass 1.fxp"
+  --patch-ch "0:$FP/Basses/Bass 1.fxp" \
+  --patch-ch "1:$FP/Leads/Smoothy Hollow.fxp" \
+  --patch-ch "2:$FP/Winds/Clarinet.fxp" \
+  --patch-ch "3:$FP/Winds/Clarinet.fxp" \
+  --patch-ch "4:$FP/Leads/Classic Lead 1.fxp" \
+  --patch-ch "5:$FP/Leads/Classic Lead 1.fxp"

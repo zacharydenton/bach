@@ -78,11 +78,25 @@ class Engine:
         self.subscribers = set()  # queues of PCM byte chunks
         self.sublock = threading.Lock()
 
+        # kern orders spines bass-first: name parts by register, computed
+        # from the notes, so nobody casts a lead onto the bass again
+        means = [sum(n["pitch"] for n in tr) / max(1, len(tr))
+                 for tr in perf["tracks"]]
+        order = sorted(range(len(means)), key=lambda i: means[i])
+        regnames = {1: ["solo"], 2: ["bass", "soprano"],
+                    3: ["bass", "alto", "soprano"],
+                    4: ["bass", "tenor", "alto", "soprano"],
+                    5: ["bass", "tenor", "alto", "mezzo", "soprano"]}
+        labels = {}
+        names = regnames.get(len(means))
+        for rank, vi in enumerate(order):
+            labels[vi] = (names[rank] if names else f"voice {vi}")
+
         end = 0.0
         for vi, tr in enumerate(perf["tracks"]):
             chans = sorted({n["ch"] for n in tr})
             self.parts.append(
-                {"name": f"voice {vi}", "channels": chans,
+                {"name": f"{labels[vi]} (voice {vi})", "channels": chans,
                  "gain": 1.0, "mute": False, "patch": "(init)"})
             for n in tr:
                 ch = n["ch"]
