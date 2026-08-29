@@ -93,6 +93,7 @@ class Engine:
         self.ch_gain = {ch: 0.25 for ch in range(maxch)}  # summing headroom
         self.ch_mute = {ch: False for ch in range(maxch)}
         self.ch_patch = {ch: "(init)" for ch in range(maxch)}
+        self.ch_patch_path = {ch: "(init)" for ch in range(maxch)}
         for ch in range(maxch):
             s = surgepy.createSurge(sr)
             if scl:
@@ -177,6 +178,7 @@ class Engine:
                         s.loadPatch(path)
                     self.ch_patch[ch] = (os.path.basename(path)[:-4]
                                          if path != "(init)" else "(init)")
+                    self.ch_patch_path[ch] = path
         except queue.Empty:
             pass
 
@@ -305,7 +307,8 @@ class Engine:
                 {"name": p["name"], "channels": p["channels"],
                  "gain": self.ch_gain[p["channels"][0]],
                  "mute": self.ch_mute[p["channels"][0]],
-                 "patch": self.ch_patch[p["channels"][0]]}
+                 "patch": self.ch_patch[p["channels"][0]],
+                 "patchPath": self.ch_patch_path[p["channels"][0]]}
                 for p in self.parts
             ],
         }
@@ -487,6 +490,11 @@ async function refresh(){
   STATE.parts.forEach((p,i)=>{
     document.getElementById('pn'+i).textContent = p.patch;
     document.getElementById('mute'+i).className = p.mute?'on':'';
+    // keep the select showing what's actually loaded (piece changes and
+    // casting preloads happen server-side), but not while it has focus
+    const s = document.getElementById('sel'+i);
+    if (s && document.activeElement !== s && s.value !== p.patchPath)
+      s.value = p.patchPath;
   });
   document.getElementById('cast').textContent = STATE.parts.map((p,i)=>
     p.patch=='(init)'?'':p.channels.map(c=>
