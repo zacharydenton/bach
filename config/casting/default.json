@@ -1,0 +1,9 @@
+{
+  "_": "Standing rig casting, chosen by ear 2026-08-28. Applied once at patchboard startup; per-piece casting files override; live tweaks survive piece changes. Channel -> patch, bass-first.",
+  "0": "/usr/share/surge-xt/patches_factory/Leads/DNA Sequencer.fxp",
+  "1": "/usr/share/surge-xt/patches_factory/Keys/EP 2.fxp",
+  "2": "/usr/share/surge-xt/patches_factory/Leads/Clean Shit.fxp",
+  "3": "/usr/share/surge-xt/patches_factory/Leads/Clean Shit.fxp",
+  "4": "/usr/share/surge-xt/patches_factory/Leads/Cray.fxp",
+  "5": "/usr/share/surge-xt/patches_factory/Leads/Cray.fxp"
+}
