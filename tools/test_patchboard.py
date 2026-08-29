@@ -256,6 +256,14 @@ class OpusBoundary(unittest.TestCase):
                         time.sleep(0.05)
                     self.assertEqual(subscriber_count, 0)
                     self.assertEqual(feeders, [])
+                    # the feeder can exit on its own stop-flag timeout while
+                    # the handler is still inside proc.wait() — reaping is
+                    # guaranteed but not ordered before the signals above,
+                    # so poll for it rather than racing it
+                    for _ in range(60):
+                        if processes[-1].poll() is not None:
+                            break
+                        time.sleep(0.05)
                     self.assertIsNotNone(processes[-1].poll())
             finally:
                 server.shutdown()
