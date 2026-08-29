@@ -17,6 +17,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Read qualified as TR
 import OTB.Kern.Lexer (lexRecord)
 import OTB.Kern.Spine
 import OTB.Kern.Token
@@ -28,6 +29,7 @@ type ParseError = String
 data PSt = PSt
   { psSpines :: SpineState
   , psTempo :: Maybe Bpm
+  , psMeter :: Maybe (Int, Int)
   , psDone :: Map Int [ScoreNote] -- ^ per voice, reverse order
   , psTies :: Map (Int, Int) [ScoreNote]
     -- ^ open ties by (voice, pitch) — a FIFO, because two sub-spines of one
@@ -49,7 +51,7 @@ parseKern defaultTempo src = do
       | any isExclusive fs -> Right (h, rest)
     _ -> Left "no **kern exclusive interpretation record found"
   st0 <- initFromHeader header
-  final <- foldM step (PSt st0 Nothing Map.empty Map.empty) body
+  final <- foldM step (PSt st0 Nothing Nothing Map.empty Map.empty) body
   -- flush unclosed ties as sounding notes: they *were* heard for their
   -- accumulated duration (usually an enharmonic respelling at the close, or
   -- an editorial quirk); the count is surfaced, not fatal
@@ -65,7 +67,9 @@ parseKern defaultTempo src = do
         | (i, ns) <- Map.toAscList flushed
         , not (null ns)
         ]
-  Right (Score (fromMaybe defaultTempo (psTempo final)) voices (length leftovers))
+  Right
+    (Score (fromMaybe defaultTempo (psTempo final)) voices
+       (length leftovers) (psMeter final))
   where
     foldM f z = foldl (\acc x -> acc >>= \s -> f s x) (Right z)
 
@@ -96,6 +100,7 @@ step st (Record n fs)
       Right st
         { psSpines = fromMaybe (psSpines st) changed
         , psTempo = case psTempo st of Nothing -> tempo'; t -> t
+        , psMeter = case psMeter st of Nothing -> firstMeter is; m -> m
         }
   | otherwise = do
       pairs <-
@@ -108,6 +113,15 @@ step st (Record n fs)
     asInterp (FInterp i) = Right i
     asInterp f = Left ("line " <> show n <> ": mixed interpretation record: " <> show f)
     firstTempo is = case [b | ITempo b <- is] of (b : _) -> Just b; [] -> Nothing
+    firstMeter is = case [m | IMeter txt <- is, Just m <- [readMeter txt]] of
+      (m : _) -> Just m; [] -> Nothing
+    readMeter txt = case T.splitOn "/" txt of
+      [a, b]
+        | Right (n, _) <- decimalT a
+        , Right (d, _) <- decimalT b
+        , n > 0, d > 0 -> Just (n, d)
+      _ -> Nothing
+    decimalT = TR.decimal
     -- advance each path's clock by its field's (first) note duration
     advance = map (\(p, f) -> (advancePath p f, f))
     advancePath p (FData (t : _)) = p {pClock = pClock p + ntDur t}

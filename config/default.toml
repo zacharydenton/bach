@@ -28,6 +28,16 @@ w_gap = 1.2         # written rest after the note (strongest signal)
 w_dur = 0.7         # long note arriving after shorter ones
 w_leap = 0.5        # leap away from the note
 
+[dynamics]
+vel_base = 84       # centre velocity
+vel_bar = 12        # Sloboda: the barline is marked loudest...
+vel_halfbar = 6     # ...mid-bar next (even meters)...
+vel_beat = 3        # ...beats next; subdivisions get nothing
+vel_arch = 8        # Todd: loudness arches to the phrase middle
+vel_highloud = 0.25 # KTH: per semitone — melodic peaks carry
+vel_accent = 14     # kern ^ marks: the score's own emphasis
+# NB: velocity lands on the A4 and BS2; the Model D ignores it (CV + hands)
+
 [ornaments]
 trill_rate = 12   # trill subnotes per second — C.P.E. Bach ties rate to
                   # tempo and affect; 10–14 covers keyboard practice

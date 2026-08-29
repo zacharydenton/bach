@@ -16,12 +16,14 @@ module OTB.Config
   , agogicsFor
   , phrasingFor
   , ornamentsFor
+  , dynamicsFor
   , tuningBendRange
   ) where
 
 import Data.Map.Strict (Map)
 import Data.Ratio (approxRational)
 import OTB.Interp.Agogics (AgogicParams (..))
+import OTB.Interp.Dynamics (DynParams (..))
 import OTB.Interp.Ornament (OrnamentParams (..))
 import OTB.Interp.Phrasing (PhraseParams (..))
 import OTB.Units (WholeNotes (..))
@@ -115,6 +117,25 @@ ornamentsFor cfg piece dflt =
   where
     apply m p =
       p {opTrillRate = maybe (opTrillRate p) id (Map.lookup "trill_rate" m)}
+
+-- | Dynamic parameters from @[dynamics]@ overlaid with @[piece.<name>]@.
+dynamicsFor :: Config -> Text -> DynParams -> DynParams
+dynamicsFor cfg piece dflt =
+  apply (Map.findWithDefault Map.empty ("piece." <> piece) cfg)
+    (apply (Map.findWithDefault Map.empty "dynamics" cfg) dflt)
+  where
+    apply m p =
+      p
+        { dyBase = g "vel_base" (dyBase p)
+        , dyBar = g "vel_bar" (dyBar p)
+        , dyHalfBar = g "vel_halfbar" (dyHalfBar p)
+        , dyBeat = g "vel_beat" (dyBeat p)
+        , dyArch = g "vel_arch" (dyArch p)
+        , dyHighLoud = g "vel_highloud" (dyHighLoud p)
+        , dyAccent = g "vel_accent" (dyAccent p)
+        }
+      where
+        g k dflt' = maybe dflt' id (Map.lookup k m)
 
 -- | @[tuning] bend_range@ — the receiver's pitch-bend range in ± semitones.
 -- 2 is the near-universal power-on default; set it to whatever the

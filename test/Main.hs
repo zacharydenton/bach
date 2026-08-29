@@ -19,6 +19,7 @@ import OTB.Kern.Parser (parseKern)
 import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
 import OTB.Emit.Midi (renderSmf)
 import OTB.Interp.Agogics
+import OTB.Interp.Dynamics
 import OTB.Interp.Ornament
 import OTB.Interp.Phrasing
 import OTB.Player (Interp (..), defaultInterp, perform)
@@ -116,7 +117,7 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score (Bpm t) vs 0) -> do
+            Right (Score (Bpm t) vs 0 _) -> do
               t @?= 96
               map (length . vNotes) vs @?= [2, 2]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -129,7 +130,7 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ [n]] 0) ->
+            Right (Score _ [Voice _ [n]] 0 _) ->
               snDur n @?= (1 / 2)
             Right s -> assertFailure ("unexpected shape: " <> show s)
       ]
@@ -242,6 +243,26 @@ units = testGroup "otb"
               arts = [(head l, 0.8), (l !! 1, 1.0)]
               out = map snd (breatheLane defaultPhraseParams l arts)
           out @?= [0.8 * (1 - ppBreath defaultPhraseParams), 1.0]
+      ]
+  , testGroup "dynamics"
+      [ testCase "downbeat outweighs offbeat (Sloboda)" $ do
+          let l = [ScoreNote (fromIntegral i / 16) (1 / 16) 66 [] | i <- [0 .. 15 :: Int]]
+              vs = dynamicsLane defaultDynParams (Just (4, 4)) (replicate 16 False) l
+          assertBool ("bar<=beat: " <> show vs) (vs !! 0 > vs !! 1)
+          assertBool ("halfbar: " <> show vs) (vs !! 8 > vs !! 1)
+          assertBool ("beat: " <> show vs) (vs !! 4 > vs !! 1)
+      , testCase "phrase arch peaks in the middle (Todd)" $ do
+          let l = [ScoreNote (fromIntegral i / 4 + 1/64) (1/8) 66 [] | i <- [0 .. 8 :: Int]]
+              -- offset by 1/64 so metre contributes nothing
+              vs = dynamicsLane defaultDynParams (Just (4, 4)) (replicate 9 False) l
+          assertBool ("arch: " <> show vs) (vs !! 4 > vs !! 0 && vs !! 4 > vs !! 8)
+      , testCase "accent mark honoured" $ do
+          let l = [ScoreNote (1/64) (1/8) 66 [Accent], ScoreNote (9/64) (1/8) 66 []]
+              vs = dynamicsLane defaultDynParams Nothing (replicate 2 False) l
+          assertBool (show vs) (vs !! 0 > vs !! 1)
+      , testCase "no meter degrades gracefully" $ do
+          let l = [ScoreNote 0 (1/4) 66 []]
+          length (dynamicsLane defaultDynParams Nothing [False] l) @?= 1
       ]
   , testGroup "config"
       [ testCase "piece override beats section beats default" $ do

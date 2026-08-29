@@ -21,7 +21,7 @@ import OTB.Units (WholeNotes)
 -- successive onset slices where both voices moved in the same direction
 -- and the interval class stayed a perfect consonance (0 or 7 mod 12).
 parallelPerfects :: Score -> Int
-parallelPerfects (Score _ voices _) =
+parallelPerfects (Score _ voices _ _) =
   sum [pairCount a b | (a, bs) <- zip voices (drop 1 (iterate (drop 1) voices)), b <- bs]
 
 pairCount :: Voice -> Voice -> Int

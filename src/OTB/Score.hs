@@ -35,5 +35,8 @@ data Score = Score
   , scTieLeftovers :: !Int
     -- ^ ties still open at EOF, flushed as sounding notes; nonzero usually
     -- means an enharmonic respelling at the close. Diagnostic, not fatal.
+  , scMeter :: !(Maybe (Int, Int))
+    -- ^ first @*M@ record (numerator, denominator); metrical dynamics
+    -- degrade gracefully without one
   }
   deriving (Show)

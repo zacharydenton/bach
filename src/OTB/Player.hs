@@ -27,9 +27,11 @@ import OTB.Config (ArtParams, defaultArtParams)
 import OTB.Interp.Agogics
   (AgogicParams, defaultAgogicParams, fermataFactor, tempoMap)
 import OTB.Interp.Articulation (articulateLane)
+import OTB.Interp.Dynamics (DynParams, defaultDynParams, dynamicsLane)
 import OTB.Interp.Ornament
   (OrnamentParams, defaultOrnamentParams, realizeLane)
-import OTB.Interp.Phrasing (PhraseParams, breatheLane, defaultPhraseParams)
+import OTB.Interp.Phrasing
+  (PhraseParams (..), boundaryStrengths, breatheLane, defaultPhraseParams)
 import OTB.Score
 import OTB.Tuning (TuningTable, bendValue, offsetFor, werckmeister3)
 import OTB.Units (Bpm, WholeNotes)
@@ -40,6 +42,7 @@ data Interp = Interp
   , iAgogics :: !AgogicParams
   , iPhrasing :: !PhraseParams
   , iOrnaments :: !OrnamentParams
+  , iDynamics :: !DynParams
   , iTuning :: !TuningTable
   , iBendRange :: !Double
   }
@@ -47,7 +50,7 @@ data Interp = Interp
 defaultInterp :: Interp
 defaultInterp =
   Interp defaultArtParams defaultAgogicParams defaultPhraseParams
-    defaultOrnamentParams werckmeister3 2
+    defaultOrnamentParams defaultDynParams werckmeister3 2
 
 data PerfNote = PerfNote
   { pnOnset :: !WholeNotes
@@ -111,7 +114,7 @@ durOf = \case
 -- | Interpretation per voice; channel per lane; bend per note from the
 -- tuning table at the receiver's bend range; tempo curve over the whole.
 perform :: Interp -> Score -> Either String Performance
-perform (Interp ap ag pp orn table bendRange) (Score tempo voices _) = do
+perform (Interp ap ag pp orn dyn table bendRange) (Score tempo voices _ meter) = do
   let voiceLanes = [(v, lanes (vNotes v)) | v <- voices]
       totalLanes = sum (map (length . snd) voiceLanes)
       end =
@@ -132,15 +135,18 @@ perform (Interp ap ag pp orn table bendRange) (Score tempo voices _) = do
           -- (fermata) to their performed events
           evs = concat
             [ [ PerfNote (fromRational t)
-                  (fromRational (d * gate * fermataFactor ag sn)) p 96 bend ch
-              | ((sn, gate), (t, d, (p, _))) <-
-                  zip arts (musicEvents 0 (laneMusic arts))
+                  (fromRational (d * gate * fermataFactor ag sn)) p v bend ch
+              | ((sn, gate), v, (t, d, (p, _))) <-
+                  zip3 arts vels (musicEvents 0 (laneMusic arts))
               , let bend = bendValue bendRange (offsetFor table p)
               ]
             | (ch, l) <- zip mine ls
-            , -- realise ornaments first so articulation and phrasing see
-              -- real notes; the solver runs at the piece's base tempo
+            , -- realise ornaments first so articulation, phrasing and
+              -- dynamics see real notes; boundaries are shared between
+              -- breaths and phrase arches so they agree about lines
               let l' = realizeLane orn tempo l
+                  bounds = map (>= ppThreshold pp) (boundaryStrengths pp l')
                   arts = breatheLane pp l' (articulateLane ap l')
+                  vels = dynamicsLane dyn meter bounds l'
             ]
        in (rest', acc <> [sortOn pnOnset evs])
