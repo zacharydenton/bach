@@ -55,6 +55,36 @@ programmed into an emulated BCR2000 by OSC gestures and sequenced by real
 firmware. The compiler exists to replace that 107-second gesture session with
 a build step.
 
+## macOS (the patchboard / audition side)
+
+The tools have no platform branches — PortAudio is CoreAudio on macOS and
+the patchboard outputs to the browser anyway. What the Mac needs is a
+surgepy build:
+
+```sh
+# once: xcode-select --install ; brew install cmake ninja ; uv python install 3.11
+git clone https://github.com/surge-synthesizer/surge && cd surge   # or copy surge-src
+git submodule update --init --recursive
+uv venv --python 3.11 ~/.venv-audition && uv pip install --python ~/.venv-audition/bin/python numpy
+cmake -S . -B build -DSURGE_BUILD_PYTHON_BINDINGS=ON -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+      -DPython_EXECUTABLE=~/.venv-audition/bin/python
+cmake --build build --target surgepy -j
+```
+
+Then, with `examples/` shipped in this repo (no Haskell toolchain needed):
+
+```sh
+PYTHONPATH=<dir with surgepy*.so> ~/.venv-audition/bin/python \
+  tools/patchboard.py examples/bwv846f.json --scl examples/w3.scl
+```
+
+Patch library discovery: installed Surge XT locations are searched
+automatically; a bare checkout works too, or set `SURGE_PATCHES=/path/to/patches_factory`.
+Vendored pybind11 caps the venv at Python 3.11. AudioWorklet needs a
+secure context: open via localhost, or put tailscale serve in front as
+on Linux.
+
 ## Status
 
 M0 (spine to sound). Roadmap and full design:

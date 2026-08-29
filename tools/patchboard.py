@@ -42,13 +42,16 @@ CHUNK_FRAMES = 4096  # ~85 ms at 48k: the broadcast unit
 
 def patch_dirs():
     cands = [
+        os.environ.get("SURGE_PATCHES", ""),  # explicit override wins
         "/usr/share/surge-xt/patches_factory",
         "/usr/share/surge-xt/patches_3rdparty",
         os.path.expanduser(
             "~/Library/Application Support/Surge XT/patches_factory"),
         "/Library/Application Support/Surge XT/patches_factory",
+        # a surge-src checkout works without installing Surge at all
+        os.path.expanduser("~/code/surge-src/resources/data/patches_factory"),
     ]
-    return [d for d in cands if os.path.isdir(d)]
+    return [d for d in cands if d and os.path.isdir(d)]
 
 
 def scan_patches():
