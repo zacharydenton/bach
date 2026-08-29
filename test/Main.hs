@@ -19,6 +19,7 @@ import OTB.Kern.Parser (parseKern)
 import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
 import OTB.Emit.Midi (renderSmf)
 import OTB.Interp.Agogics
+import OTB.Interp.Phrasing
 import OTB.Player (Interp (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..))
 import OTB.Tuning
@@ -198,6 +199,22 @@ units = testGroup "otb"
           let sn = ScoreNote 0 (1 / 4) 60 [Fermata]
           fermataFactor defaultAgogicParams sn @?= agFermataHold defaultAgogicParams
           fermataFactor defaultAgogicParams (sn {snMarks = []}) @?= 1
+      ]
+  , testGroup "phrasing"
+      [ testCase "a written rest is a boundary (Quantz)" $ do
+          let l = [ScoreNote 0 (1/4) 60 [], ScoreNote (1/2) (1/4) 62 [], ScoreNote (3/4) (1/4) 64 []]
+              -- note 1 is followed by a quarter rest
+              ss = boundaryStrengths defaultPhraseParams l
+          assertBool ("rest not salient: " <> show ss) (ss !! 0 >= 1.0)
+      , testCase "stepwise continuity is not a boundary" $ do
+          let l = [ScoreNote (fromIntegral t / 4) (1/4) (60 + i) [] | (t, i) <- zip [0 :: Int ..] [0, 2, 4]]
+              ss = boundaryStrengths defaultPhraseParams l
+          assertBool ("step breathed: " <> show ss) (ss !! 0 < 1.0)
+      , testCase "breath shortens the pre-boundary note, spares the last" $ do
+          let l = [ScoreNote 0 (1/4) 60 [], ScoreNote (1/2) (1/4) 62 []]
+              arts = [(head l, 0.8), (l !! 1, 1.0)]
+              out = map snd (breatheLane defaultPhraseParams l arts)
+          out @?= [0.8 * (1 - ppBreath defaultPhraseParams), 1.0]
       ]
   , testGroup "config"
       [ testCase "piece override beats section beats default" $ do

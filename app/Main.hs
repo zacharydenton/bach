@@ -10,9 +10,10 @@ module Main (main) where
 
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
-import OTB.Config (agogicsFor, artParamsFor, loadConfig, tuningBendRange)
+import OTB.Config (agogicsFor, artParamsFor, loadConfig, phrasingFor, tuningBendRange)
 import OTB.Emit.Midi (writeSmf)
 import OTB.Interp.Agogics (defaultAgogicParams)
+import OTB.Interp.Phrasing (defaultPhraseParams)
 import OTB.Kern.Parser (parseKern)
 import OTB.Player (Interp (..), perform)
 import OTB.Score (Score (..), Voice (..))
@@ -61,6 +62,7 @@ main = do
       interp = Interp
         { iArt = artParamsFor cfg piece
         , iAgogics = agogicsFor cfg piece defaultAgogicParams
+        , iPhrasing = phrasingFor cfg piece defaultPhraseParams
         , iTuning = table
         , iBendRange = tuningBendRange cfg
         }

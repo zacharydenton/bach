@@ -14,12 +14,14 @@ module OTB.Config
   , loadConfig
   , artParamsFor
   , agogicsFor
+  , phrasingFor
   , tuningBendRange
   ) where
 
 import Data.Map.Strict (Map)
 import Data.Ratio (approxRational)
 import OTB.Interp.Agogics (AgogicParams (..))
+import OTB.Interp.Phrasing (PhraseParams (..))
 import OTB.Units (WholeNotes (..))
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
@@ -78,12 +80,30 @@ agogicsFor cfg piece dflt =
       p
         { agRitSpan = getW "rit_span" (agRitSpan p)
         , agRitFloor = maybe (agRitFloor p) id (Map.lookup "rit_floor" m)
+        , agRitCurve = maybe (agRitCurve p) id (Map.lookup "rit_curve" m)
         , agTempoStep = getW "tempo_step" (agTempoStep p)
         , agFermataHold = getR "fermata_hold" (agFermataHold p)
         }
       where
         getW k dflt' = maybe dflt' (WholeNotes . (\v -> approxRational v 1e-9)) (Map.lookup k m)
         getR k dflt' = maybe dflt' (\v -> approxRational v 1e-9) (Map.lookup k m)
+
+-- | Phrasing parameters from @[phrasing]@ overlaid with @[piece.<name>]@.
+phrasingFor :: Config -> Text -> PhraseParams -> PhraseParams
+phrasingFor cfg piece dflt =
+  apply (Map.findWithDefault Map.empty ("piece." <> piece) cfg)
+    (apply (Map.findWithDefault Map.empty "phrasing" cfg) dflt)
+  where
+    apply m p =
+      p
+        { ppThreshold = getD "breath_threshold" (ppThreshold p)
+        , ppBreath = maybe (ppBreath p) (\v -> approxRational v 1e-9) (Map.lookup "breath" m)
+        , ppWGap = getD "w_gap" (ppWGap p)
+        , ppWDur = getD "w_dur" (ppWDur p)
+        , ppWLeap = getD "w_leap" (ppWLeap p)
+        }
+      where
+        getD k dflt' = maybe dflt' id (Map.lookup k m)
 
 -- | @[tuning] bend_range@ — the receiver's pitch-bend range in ± semitones.
 -- 2 is the near-universal power-on default; set it to whatever the
