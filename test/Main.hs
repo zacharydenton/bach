@@ -8,7 +8,7 @@
 module Main (main) where
 
 import Control.Monad (forM, forM_)
-import Data.List (isInfixOf, isSuffixOf, nub, sort, sortOn)
+import Data.List (groupBy, isInfixOf, isSuffixOf, nub, sort, sortOn)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import OTB.Analysis.Counterpoint (parallelPerfects)
@@ -24,10 +24,11 @@ import OTB.Interp.Express
 import OTB.Interp.Ornament
 import OTB.Interp.Phrasing
 import OTB.Explain (renderWhys)
+import OTB.Instrument (hardwareTracks)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..), scoreNote)
 import OTB.Tuning
-import OTB.Units (Bpm (..), Cents (..), Seconds (..), WholeNotes (..), secondsAt)
+import OTB.Units (Bpm (..), Cents (..), Seconds (..), WholeNotes (..), secondsAt, toTicks)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
@@ -48,7 +49,7 @@ corpusDir = "corpus/bach-wtc/kern"
 main :: IO ()
 main = do
   sweep <- corpusSweep
-  defaultMain $ testGroup "all" [units, laws, sweep, oracle]
+  defaultMain $ testGroup "all" [units, laws, sweep, oracle, review]
 
 -- | Parse every WTC file; assert full coverage and the known-baseline
 -- number of tie leftovers (encoding lapses in the corpus itself — see
@@ -639,3 +640,51 @@ oracle = testCase "ToMidi oracle: Euterpea's writer and ours agree" $ do
             && abs (smfDurQ a - smfDurQ b) <= 2 * tol
         bad = [(a, b) | (a, b) <- zip ours them, not (close a b)]
     assertBool ("disagreements: " <> show (take 3 bad)) (null bad)
+
+
+-- ---------------------------------------------------------------------
+-- Review regressions (2026-08-29 findings)
+
+review :: TestTree
+review = testGroup "review regressions"
+  [ testCase "conductor: no base-tempo reset after the closing rit" $
+      withCorpus "wtc1p01.krn" $ \p _ -> do
+        let tm = perfTempoMap p
+            Bpm lastB = snd (last tm)
+            Bpm firstB = snd (head tm)
+        assertBool "tempo map non-empty" (not (null tm))
+        -- the final rit must stand: last point well below base, and no
+        -- trailing entry restoring the opening tempo
+        assertBool ("closing rit cancelled: ends at " <> show lastB
+                      <> " vs opening " <> show firstB)
+          (lastB < firstB * 0.9)
+  , testCase "hardware: every note survives tick rounding (no stuck notes)" $
+      withCorpus "wtc1f01.krn" $ \p0 _ -> do
+        (p, clipped) <- either assertFailure pure (hardwareTracks p0)
+        let bad = [ n | tr <- perfTracks p, n <- tr
+                  , toTicks (pnOnset n) >= toTicks (pnOnset n + pnDur n) ]
+        assertBool "mono-reduction clipped something (sanity)" (clipped > 0)
+        assertEqual "zero-tick notes (would stick on hardware)" 0 (length bad)
+  , testCase "hardware: provenance rekeyed to surviving identities" $
+      withCorpus "wtc1f01.krn" $ \p0 _ -> do
+        (p, _) <- either assertFailure pure (hardwareTracks p0)
+        let keys = [ (pnChannel n, pnIndex n) | tr <- perfTracks p, n <- tr ]
+            stale = [ k | (k, _) <- perfWhys p, k `notElem` keys ]
+        assertBool "whys survive the remap" (not (null (perfWhys p)))
+        assertEqual "stale/colliding provenance keys" 0 (length stale)
+        assertEqual "no duplicate note identities"
+          (length keys) (length (nubOrd keys))
+  ]
+  where
+    nubOrd = map head' . groupBy (==) . sort
+    head' (x : _) = x
+    head' [] = error "impossible"
+    withCorpus f k = do
+      present <- doesDirectoryExist corpusDir
+      if not present then pure () else do
+        src <- TIO.readFile (corpusDir </> f)
+        s <- either (assertFailure . ("parse: " <>)) pure
+               (parseKern (Bpm 72) src)
+        p <- either (assertFailure . ("perform: " <>)) pure
+               (perform defaultInterp s)
+        k p s

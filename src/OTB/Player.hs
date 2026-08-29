@@ -42,6 +42,9 @@ data PerfNote = PerfNote
   , pnBend :: !Int -- ^ 14-bit, emitted on the note's channel before it sounds
   , pnChannel :: !Int
   , pnIndex :: !Int -- ^ position within its lane; explain key with channel
+  , pnSrcOn :: !WholeNotes
+    -- ^ notated score onset — bar selection must use this, not 'pnOnset',
+    -- which melody lead and jitter have already moved
   }
   deriving (Show)
 
@@ -217,7 +220,7 @@ assemble ip tempo tmap finalOnset melodyVi trs =
            in ( ( evFinal ev
                 , PerfNote (max 0 (fromRational t - lead + jit))
                     (fromRational (d * evGate ev * evHold ev))
-                    (evPitch ev) vel bend ch i )
+                    (evPitch ev) vel bend ch i (evSrcOn ev) )
               , ((ch, i), ws) )
         showMs v = showD v
         showD v =

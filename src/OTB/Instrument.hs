@@ -34,6 +34,7 @@ module OTB.Instrument
 
 import Data.List (sortOn)
 import OTB.Player (PerfNote (..), Performance (..))
+import OTB.Units (toTicks)
 
 data Target = A4Track | ModelD | BS2
 
@@ -78,16 +79,23 @@ hardwareChannel voice = case voice of
 -- enforced through the typed accessors. A voice whose sub-spines were
 -- polyphonic is reduced to monophony — the decision a human arranger
 -- makes when a fugue voice goes to one mono synth — and the number of
--- clipped overlaps is reported, never silent. More voices than seats is
--- an error.
+-- clipped\/dropped overlaps is reported, never silent. A note whose
+-- clipped duration would not survive tick rounding is DROPPED entirely:
+-- the SMF writer orders same-tick offs before ons, so a zero-tick note
+-- would emit an on with no following release — a stuck hardware note.
+-- Provenance is rekeyed to the new (channel, index) identities; dropped
+-- notes lose theirs. More voices than seats is an error.
 hardwareTracks :: Performance -> Either String (Performance, Int)
 hardwareTracks (Performance tmap tracks whys) = do
   seated <- sequence
-    [ (\(hw, _) -> map (remap hw) tr) <$> hardwareChannel vi
+    [ (\(hw, _) -> [((pnChannel n, pnIndex n), remap hw n) | n <- tr])
+        <$> hardwareChannel vi
     | (vi, tr) <- zip [0 ..] tracks ]
-  let reduced = map monoReduce seated
-      clipped = sum (zipWith countClips seated reduced)
-  pure (Performance tmap reduced whys, clipped)
+  let (reduced, counts) = unzip (map reduceTrack seated)
+      whys' =
+        [ ((pnChannel n, pnIndex n), ws)
+        | tr <- reduced, (old, n) <- tr, Just ws <- [lookup old whys] ]
+  pure (Performance tmap (map (map snd) reduced) whys', sum counts)
   where
     remap hw n =
       let vel = case hw of
@@ -96,13 +104,20 @@ hardwareTracks (Performance tmap tracks whys) = do
             _ -> velocityFor @'A4Track n
        in n {pnChannel = hw, pnVel = vel}
     -- mono reduction: within the voice's single channel, a note ends
-    -- where its successor begins (keep the moving line, clip the held)
-    monoReduce tr =
-      let srt = sortOn pnOnset tr
-       in zipWith clip srt (map Just (drop 1 srt) <> [Nothing])
-    clip n (Just nx)
+    -- where its successor begins (keep the moving line, clip the held);
+    -- notes whose clip does not survive tick rounding are dropped
+    reduceTrack tr =
+      let srt = sortOn (pnOnset . snd) tr
+          clipped = zipWith clip srt (map Just (drop 1 srt) <> [Nothing])
+          survivors = [(k, n) | (k, n, _) <- clipped, audible n]
+          nChanged = length [() | (_, n, True) <- clipped, audible n]
+          nDropped = length clipped - length survivors
+       in (reindex survivors, nChanged + nDropped)
+    clip (k, n) (Just (_, nx))
       | pnOnset n + pnDur n > pnOnset nx =
-          n {pnDur = max 0 (pnOnset nx - pnOnset n)}
-    clip n _ = n
-    countClips a b =
-      length [() | (x, y) <- zip a b, pnDur x /= pnDur y]
+          (k, n {pnDur = max 0 (pnOnset nx - pnOnset n)}, True)
+    clip (k, n) _ = (k, n, False)
+    audible n = toTicks (pnOnset n) < toTicks (pnOnset n + pnDur n)
+    -- lanes collapsing onto one channel would collide on their old lane
+    -- indices; renumber within the hardware channel
+    reindex tr = [(k, n {pnIndex = j}) | (j, (k, n)) <- zip [0 ..] tr]

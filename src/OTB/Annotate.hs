@@ -20,7 +20,7 @@
 -- License: GPL-2.0-or-later.
 module OTB.Annotate
   ( APayload
-  , Annotated (..)
+  , Annotated -- abstract: 'annotateLane' builds, 'interpret' consumes
   , Ctx (..)
   , Ev (..)
   , annotateLane
@@ -69,6 +69,7 @@ data Ev = Ev
   , evHold :: !Rational
   , evChannel :: !Int
   , evIndex :: !Int
+  , evSrcOn :: !WholeNotes -- ^ notated onset (explain's bar selector key)
   , evFinal :: !(Maybe Int)
   , evWhy :: [Why] -- ^ lazy on purpose: forced only by explain
   }
@@ -211,6 +212,7 @@ interpret ip tempo ch (Annotated m0) = snd (go [] 0 m0)
       , evHold = hold
       , evChannel = ch
       , evIndex = i
+      , evSrcOn = fst (snSource sn)
       , evFinal = if or [True | Orn Arpeggio <- env]
                     then Just (snd (snSource sn)) else Nothing
       , evWhy = ws
@@ -245,12 +247,17 @@ annotateConductor tmap (Bpm base) end = line' (zip tmap nexts)
 -- 'ndur', which unlike Euterpea's 'dur' ignores Tempo scaling: a Tempo
 -- modifier maps positions to seconds later, it does not move them).
 deriveTempoMap :: Bpm -> Music APayload -> [(WholeNotes, Bpm)]
-deriveTempoMap (Bpm base) = thin . go 1 0
+deriveTempoMap (Bpm base) = ensure . thin . go 1 0
   where
     go f t m = case m of
       Modify (Tempo r) inner -> go (f * fromRational r) t inner
       Modify _ inner -> go f t inner
-      Prim (Rest _) -> [(WholeNotes t, Bpm (base * f))]
+      -- zero-length rests carry no tempo span; in particular the
+      -- conductor line's structural trailing @rest 0@ sits OUTSIDE any
+      -- Tempo modifier and would otherwise emit (end, base) — a
+      -- base-tempo reset that cancels the closing ritardando while the
+      -- final fermata is still sounding
+      Prim (Rest d) -> [(WholeNotes t, Bpm (base * f)) | d > 0]
       Prim (Note _ _) -> []
       a :+: b -> go f t a <> go f (t + ndur a) b
       a :=: b -> go f t a <> go f t b
@@ -258,6 +265,8 @@ deriveTempoMap (Bpm base) = thin . go 1 0
       | b1 == b2 = thin ((t1, b1) : more)
       | otherwise = (t1, b1) : thin ((t2, b2) : more)
     thin xs = xs
+    ensure [] = [(0, Bpm base)]
+    ensure xs = xs
 
 -- | Notated duration: like 'dur' but Tempo-blind.
 ndur :: Music a -> Rational

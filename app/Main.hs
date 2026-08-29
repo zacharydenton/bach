@@ -81,8 +81,13 @@ compileCmd =
           <> help "also write the temperament as .scl (Surge native tuning)"))
     <*> optional (strOption (long "emit-json" <> metavar "OUT.json"
           <> help "also write PerformanceIR as JSON (the renderer seam)"))
-    <*> strOption (long "target" <> metavar "surge|hardware" <> value "surge"
-          <> help "hardware remaps lanes onto the rig (A4 x4, Model D, BS2) with capabilities enforced")
+    <*> option (eitherReader targetR)
+          (long "target" <> metavar "surge|hardware" <> value "surge"
+             <> help "hardware remaps lanes onto the rig (A4 x4, Model D, BS2) with capabilities enforced")
+  where
+    targetR t
+      | t `elem` ["surge", "hardware"] = Right t
+      | otherwise = Left ("unknown target '" <> t <> "' (surge|hardware)")
 
 explainCmd :: Parser Cmd
 explainCmd =
@@ -154,10 +159,21 @@ main = do
     Ground bass nvar tempo temp out mscl mjson ->
       runGround bass nvar tempo temp out mscl mjson
 
+-- | Every tempo that enters the pipeline — CLI or per-piece config
+-- override — passes through here; a non-finite or non-positive BPM
+-- would emit a nonsense FF 51 tempo meta (or divide by zero).
+badBpm :: Double -> Maybe String
+badBpm b
+  | isNaN b || isInfinite b || b <= 0 =
+      Just ("tempo must be a finite number > 0, got " <> show b)
+  | otherwise = Nothing
+
+checkBpm :: String -> Double -> IO ()
+checkBpm ctx b = mapM_ (die . ((ctx <> ": ") <>)) (badBpm b)
+
 load :: Common -> IO (String, Score, Performance, TuningTable, Bool)
 load com = do
-  when (isNaN (cTempo com) || isInfinite (cTempo com) || cTempo com <= 0)
-    (die "--tempo must be a finite number > 0")
+  checkBpm "--tempo" (cTempo com)
   src <- TIO.readFile (cInput com)
   score0 <- either (die . ("parse: " <>)) pure
               (parseKern (Bpm (cTempo com)) src)
@@ -170,7 +186,9 @@ load com = do
   let piece = T.pack (takeBaseName (cInput com))
       score = maybe score0 (\bpm -> score0 {scTempo = Bpm bpm})
                 (pieceTempo cfg piece)
-      interp = Interp
+  mapM_ (checkBpm ("config tempo for " <> T.unpack piece))
+    (pieceTempo cfg piece)
+  let interp = Interp
         { iArt = artParamsFor cfg piece
         , iAgogics = agogicsFor cfg piece defaultAgogicParams
         , iPhrasing = phrasingFor cfg piece defaultPhraseParams
@@ -220,13 +238,29 @@ runExplain :: Common -> Maybe Int -> Maybe (Int, Int) -> IO ()
 runExplain com mbar mnote = do
   (piece, score, p, _, _) <- load com
   let whys = perfWhys p
-      notes = sortOn pnOnset (concat (perfTracks p))
-      barLen = case scMeter score of
-        ((_, (n, d)) : _) -> WholeNotes (fromIntegral n / fromIntegral d)
-        [] -> 1
+      notes = sortOn pnSrcOn (concat (perfTracks p))
+      -- bar N's notated span, walked through the FULL meter map (meter
+      -- changes shift every later barline); selection is by pnSrcOn —
+      -- melody lead and jitter move pnOnset across barlines
+      barSpan b = walk 1 0 (case scMeter score of
+                              [] -> [(0, (4, 4))]
+                              ms -> ms)
+        where
+          walk k t ((_, (n, d)) : more@((next, _) : _)) =
+            let bl = WholeNotes (fromIntegral n / fromIntegral d)
+                WholeNotes spanR = next - t
+                WholeNotes blR = bl
+                barsHere = max 0 (floor (spanR / blR)) :: Int
+             in if b < k + barsHere
+                  then let lo = t + fromIntegral (b - k) * bl in (lo, lo + bl)
+                  else walk (k + barsHere) next more
+          walk k t [(_, (n, d))] =
+            let bl = WholeNotes (fromIntegral n / fromIntegral d)
+                lo = t + fromIntegral (b - k) * bl
+             in (lo, lo + bl)
+          walk _ _ [] = (0, 0)
       inBar b n =
-        let lo = fromIntegral (b - 1) * barLen
-         in lo <= pnOnset n && pnOnset n < lo + barLen
+        let (lo, hi) = barSpan b in lo <= pnSrcOn n && pnSrcOn n < hi
       selected = case (mbar, mnote) of
         (Just b, _) -> filter (inBar b) notes
         (_, Just (ch, i)) ->
@@ -283,6 +317,7 @@ mkInterp cfg table piece0 =
 
 runAlbum :: FilePath -> FilePath -> FilePath -> Double -> String -> IO ()
 runAlbum corpus outDir cfgPath tempo temp = do
+  checkBpm "--tempo" tempo
   cfg <- loadCfg cfgPath
   table <- resolveTemperament temp
   files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
@@ -295,6 +330,8 @@ runAlbum corpus outDir cfgPath tempo temp = do
               s0 <- parseKern (Bpm tempo) src
               let s = maybe s0 (\b -> s0 {scTempo = Bpm b})
                         (pieceTempo cfg (T.pack piece))
+              mapM_ (Left . ("config tempo: " <>))
+                (badBpm . (\(Bpm b) -> b) . scTempo $ s)
               p <- perform (mkInterp cfg table piece) s
               pure ( force (renderSmf p)
                    , force (renderJson piece p) )
@@ -306,7 +343,14 @@ runAlbum corpus outDir cfgPath tempo temp = do
       BL.writeFile (outDir </> piece <> ".mid") smf
       writeFile (outDir </> piece <> ".json") json
   TIO.writeFile (outDir </> "w3.scl") (renderScl (T.pack temp) table)
-  putStrLn (show (length results) <> " pieces -> " <> outDir)
+  let failed = length [() | (_, Left _) <- results]
+      ok = length results - failed
+  putStrLn (show ok <> " pieces -> " <> outDir
+              <> (if failed > 0 then " | " <> show failed <> " FAILED"
+                    else ""))
+  when (failed > 0)
+    (die (show failed <> " of " <> show (length results)
+            <> " pieces failed; artifacts above are incomplete"))
 
 runStats :: FilePath -> FilePath -> Double -> IO ()
 runStats corpus cfgPath tempo = do
@@ -350,6 +394,7 @@ runGround
   :: String -> Int -> Double -> String
   -> FilePath -> Maybe FilePath -> Maybe FilePath -> IO ()
 runGround bass nvar tempo temp out mscl mjson = do
+  checkBpm "--tempo" tempo
   table <- resolveTemperament temp
   s <- either die pure (generateScore bass nvar (Bpm tempo))
   let piece = "ground-" <> bass
