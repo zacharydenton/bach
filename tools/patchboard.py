@@ -611,6 +611,7 @@ def serve(engine, cats, port):
                      "-f", "f32le", "-ar", str(engine.sr), "-ac", "2",
                      "-i", "pipe:0", "-c:a", "libopus", "-b:a", "256k",
                      "-application", "audio", "-frame_duration", "60", "-f", "ogg",
+                     "-page_duration", "100000",  # 100 ms pages, not the 1 s default
                      "-flush_packets", "1", "pipe:1"],
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
@@ -623,8 +624,12 @@ def serve(engine, cats, port):
                         pass
                 threading.Thread(target=feed, daemon=True).start()
                 try:
+                    fd = proc.stdout.fileno()
                     while True:
-                        data = proc.stdout.read(4096)
+                        # os.read returns whatever is available — a blocking
+                        # read(4096) would sit ~190 ms waiting to fill at
+                        # opus bitrates, adding lump latency on top of pages
+                        data = os.read(fd, 65536)
                         if not data:
                             break
                         self.wfile.write(
