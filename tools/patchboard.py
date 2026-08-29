@@ -63,14 +63,18 @@ def patch_dirs():
 
 
 def scan_patches():
+    # a system install and a surge-src checkout carry the same factory
+    # bank; first tree wins per (category, name) so nothing lists twice
     cats = {}
+    seen = set()
     for root in patch_dirs():
         for cat in sorted(os.listdir(root)):
             catdir = os.path.join(root, cat)
             if not os.path.isdir(catdir) or cat in ("Tutorials", "Templates"):
                 continue
             for f in sorted(os.listdir(catdir)):
-                if f.endswith(".fxp"):
+                if f.endswith(".fxp") and (cat, f) not in seen:
+                    seen.add((cat, f))
                     cats.setdefault(cat, []).append(
                         (f[:-4], os.path.join(catdir, f)))
     return cats
@@ -89,6 +93,7 @@ class Engine:
         self.sr = sr
         self.playlist = playlist  # [(name, perf)]
         self.casting_dir = casting_dir
+        self._default_cast_done = False
         self.scl_active = bool(scl)
         self.playing = True
         self.pending = queue.Queue()  # (part_idx, path)
@@ -166,8 +171,23 @@ class Engine:
         for s in self.instances.values():
             s.allNotesOff()
         # a piece with its own casting file re-casts; otherwise the
-        # channels keep whatever patches are loaded (auditioning continuity)
+        # channels keep whatever patches are loaded (auditioning
+        # continuity) — except on the very first load, where
+        # casting/default.json seeds the standing rig so a restart
+        # never comes up on <init> patches
         if self.casting_dir:
+            if not self._default_cast_done:
+                # seed the standing rig per CHANNEL (instances persist
+                # across pieces; the first piece may present few parts)
+                self._default_cast_done = True
+                dflt = os.path.join(self.casting_dir, "default.json")
+                if os.path.isfile(dflt):
+                    with open(dflt) as f:
+                        casting = json.load(f)
+                    for ch, path in casting.items():
+                        if (ch.isdigit() and int(ch) in self.instances
+                                and os.path.isfile(path)):
+                            self.request_patch_ch(int(ch), path)
             cand = os.path.join(self.casting_dir, name + ".json")
             if os.path.isfile(cand):
                 with open(cand) as f:
@@ -178,15 +198,22 @@ class Engine:
                         self.request_patch(pi, path)
 
     def request_patch(self, part_idx, path):
-        self.pending.put((part_idx, path))
+        self.pending.put(("part", part_idx, path))
+
+    def request_patch_ch(self, ch, path):
+        self.pending.put(("ch", ch, path))
 
     def _apply_pending(self):
         try:
             while True:
-                pi, path = self.pending.get_nowait()
-                if pi >= len(self.parts):
+                kind, key, path = self.pending.get_nowait()
+                if kind == "ch":
+                    chans = [key] if key in self.instances else []
+                elif key >= len(self.parts):
                     continue
-                for ch in self.parts[pi]["channels"]:
+                else:
+                    chans = self.parts[key]["channels"]
+                for ch in chans:
                     s = self.instances[ch]
                     s.allNotesOff()
                     if path != "(init)":

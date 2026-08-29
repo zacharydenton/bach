@@ -27,6 +27,7 @@ module OTB.Interp.Ornament
   ( OrnamentParams (..)
   , defaultOrnamentParams
   , realizeLane
+  , realizeNote
   ) where
 
 import OTB.Kern.Token (Mark (..))
@@ -48,7 +49,12 @@ stepWn op (Bpm bpm) =
   WholeNotes (toRational (bpm / 240 / opTrillRate op))
 
 realizeLane :: OrnamentParams -> Bpm -> [ScoreNote] -> [ScoreNote]
-realizeLane op bpm = concatMap realize
+realizeLane op bpm = concatMap (realizeNote op bpm)
+
+-- | One note: identity when unornamented, subnotes when marked. The
+-- interpreter's entry point once ornaments became annotations.
+realizeNote :: OrnamentParams -> Bpm -> ScoreNote -> [ScoreNote]
+realizeNote op bpm = realize
   where
     step = stepWn op bpm
     realize sn = case ornamentOf sn of

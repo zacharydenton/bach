@@ -8,7 +8,7 @@
 module Main (main) where
 
 import Control.Monad (forM, forM_)
-import Data.List (isSuffixOf, nub, sort)
+import Data.List (isInfixOf, isSuffixOf, nub, sort, sortOn)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import OTB.Analysis.Counterpoint (parallelPerfects)
@@ -23,10 +23,11 @@ import OTB.Interp.Dynamics
 import OTB.Interp.Express
 import OTB.Interp.Ornament
 import OTB.Interp.Phrasing
+import OTB.Explain (renderWhys)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..), scoreNote)
 import OTB.Tuning
-import OTB.Units (Bpm (..), Cents (..), Seconds (..), secondsAt)
+import OTB.Units (Bpm (..), Cents (..), Seconds (..), WholeNotes (..), secondsAt)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
@@ -34,6 +35,12 @@ import System.Process (readProcessWithExitCode)
 import System.FilePath ((</>))
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck
+import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as BL
+import EuterpeaLite.IO.MIDI.ToMidi (writeMidi)
+import EuterpeaLite.Music qualified as E
+import SMFReader
 
 corpusDir :: FilePath
 corpusDir = "corpus/bach-wtc/kern"
@@ -41,7 +48,7 @@ corpusDir = "corpus/bach-wtc/kern"
 main :: IO ()
 main = do
   sweep <- corpusSweep
-  defaultMain $ testGroup "all" [units, sweep]
+  defaultMain $ testGroup "all" [units, laws, sweep, oracle]
 
 -- | Parse every WTC file; assert full coverage and the known-baseline
 -- number of tie leftovers (encoding lapses in the corpus itself — see
@@ -447,6 +454,23 @@ units = testGroup "otb"
           let l = [scoreNote 0 (1/4) 66 []]
           length (dynamicsLane defaultDynParams [] [False] l) @?= 1
       ]
+  , testGroup "explain"
+      [ testCase "provenance reaches the Performance with citations" $ do
+          present <- doesDirectoryExist corpusDir
+          if not present then pure () else do
+           src <- TIO.readFile (corpusDir </> "wtc1f01.krn")
+           s <- either (assertFailure . ("parse: " <>)) pure
+                  (parseKern (Bpm 72) src)
+           p <- either (assertFailure . ("perform: " <>)) pure
+                  (perform defaultInterp s)
+           let ws = concat [w | ((_, _), w) <- perfWhys p]
+               rendered = renderWhys (take 200 ws)
+           assertBool "articulation cited"
+             ("articulation" `isInfixOf` rendered)
+           assertBool "CPE Bach cited" ("CPE Bach" `isInfixOf` rendered)
+           assertBool "Quantz cited" ("Quantz" `isInfixOf` rendered)
+           assertBool "Sloboda cited" ("Sloboda 1983" `isInfixOf` rendered)
+      ]
   , testGroup "config"
       [ testCase "junk and out-of-range values are rejected" $ do
           let bad = ["[agogics]\ntempo_step = 0", "[ornaments]\ntrill_rate = -1"
@@ -484,3 +508,134 @@ units = testGroup "otb"
     nt pit = scoreNote 0 (1 / 4) pit [] -- quarter notes, onset irrelevant to rules
     with n ms = n {snMarks = ms, snSegs = [(snDur n, ms)]}
     gates = map snd . articulateLane p
+
+-- ---------------------------------------------------------------------
+-- W4: metamorphic laws (the algebra respects structure)
+
+genLane :: Gen [ScoreNote]
+genLane = do
+  n <- chooseInt (1, 12)
+  durs <- vectorOf n (elements [1/16, 1/8, 3/16, 1/4, 1/2])
+  gaps <- vectorOf n (elements [0, 0, 0, 1/8, 1/4]) -- mostly contiguous
+  pitches <- vectorOf n (chooseInt (36, 84))
+  let onsets = scanl (\t (d, g) -> t + d + g) 0 (zip durs gaps)
+  pure [scoreNote t d p [] | (t, d, p) <- zip3 onsets durs pitches]
+
+genScore :: Gen Score
+genScore = do
+  nv <- chooseInt (1, 3)
+  vs <- vectorOf nv genLane
+  pure (Score (Bpm 96) [Voice i l | (i, l) <- zip [0 ..] vs]
+          0 0 [(0, (4, 4))] 0)
+
+transposeScore :: Int -> Score -> Score
+transposeScore n s =
+  s { scVoices = [ v { vNotes = [ sn { snPitch = snPitch sn + n
+                                     , snSource =
+                                         (fst (snSource sn),
+                                          snd (snSource sn) + n) }
+                                | sn <- vNotes v ] }
+                 | v <- scVoices s ] }
+
+pitchesTimes :: Performance -> [(Rational, Rational, Int)]
+pitchesTimes p =
+  sort [ (toRational (pnOnset n), toRational (pnDur n), pnPitch n)
+       | tr <- perfTracks p, n <- tr ]
+  where
+    toRational = realToFrac
+
+laws :: TestTree
+laws = testGroup "laws (metamorphic)"
+  [ testProperty "equal temperament: transposition commutes with performance" $
+      forAll genScore $ \s -> forAll (chooseInt (-11, 11)) $ \n ->
+        let ip = defaultInterp {iTuning = equalTable}
+            a = perform ip (transposeScore n s)
+            b = perform ip s
+         in case (a, b) of
+              (Right pa, Right pb) ->
+                [ (t, d, p - n) | (t, d, p) <- pitchesTimes pa ]
+                  === pitchesTimes pb
+              _ -> property False
+  , testProperty "Werckmeister does NOT commute: some bend must move" $
+      forAll (genScore `suchThat` (not . null . concatMap vNotes . scVoices)) $ \s ->
+        let ip = defaultInterp
+            notes q = [n | tr <- perfTracks q, n <- tr]
+         in case (perform ip (transposeScore 1 s), perform ip s) of
+              (Right pa, Right pb) ->
+                -- perform is structurally parallel across a transposition,
+                -- so compare note-for-note: a semitone shift permutes the
+                -- Werckmeister offsets and no two adjacent offsets in the
+                -- table are equal, so some note's bend must move — the
+                -- asymmetry IS what well-temperament exists to have.
+                -- (Multiset comparison is too weak: distinct pitch sets
+                -- can shift onto each other's offsets and it flakes.)
+                property (any (\(x, y) -> pnBend x /= pnBend y)
+                            (zip (notes pa) (notes pb)))
+              _ -> property False
+  , testProperty "inegales preserve lane duration sum" $
+      forAll genLane $ \l ->
+        sum (map snDur (inegalLane 0.33 l)) === sum (map snDur l)
+  , testProperty "ornament realisation preserves duration sum" $
+      forAll genLane $ \l ->
+        let l' = [sn {snMarks = [Trill 2]} | sn <- l]
+         in sum (map snDur (realizeLane defaultOrnamentParams (Bpm 96) l'))
+              === sum (map snDur l')
+  , testProperty "overhold never overlaps the lane successor" $
+      forAll genLane $ \l ->
+        let held = overholdLane 1.0 l
+            ok = and [ snOnset a + snDur a <= snOnset b
+                     | (a, b) <- zip held (drop 1 held) ]
+         in property ok
+  , testProperty "performance is channel-monophonic" $
+      forAll genScore $ \s ->
+        case perform defaultInterp s of
+          Left _ -> property True -- cardinality refusal is legal
+          Right p ->
+            let byCh = [ sortOn pnOnset [n | tr <- perfTracks p, n <- tr
+                                           , pnChannel n == c]
+                       | c <- [0 .. 15] ]
+                ok ns = and [ pnOnset a + pnDur a <= pnOnset b
+                            | (a, b) <- zip ns (drop 1 ns) ]
+             in property (all ok byCh)
+  ]
+
+
+-- ---------------------------------------------------------------------
+-- W5: Euterpea's ToMidi as third oracle
+
+oracle :: TestTree
+oracle = testCase "ToMidi oracle: Euterpea's writer and ours agree" $ do
+  present <- doesDirectoryExist corpusDir
+  if not present then pure () else do
+    src <- TIO.readFile (corpusDir </> "wtc1p01.krn")
+    s <- either (assertFailure . ("parse: " <>)) pure (parseKern (Bpm 72) src)
+    p <- either (assertFailure . ("perform: " <>)) pure
+           (perform defaultInterp s)
+    let ch0 = sortOn pnOnset
+                [n | tr <- perfTracks p, n <- tr, pnChannel n == 0]
+        m1 = go 0 ch0
+        go _ [] = E.rest 0
+        go t (n : more) =
+          let WholeNotes o = pnOnset n
+              WholeNotes d = pnDur n
+              gap = o - t
+           in E.rest gap E.:+: E.note d (E.pitch (pnPitch n),
+                                          [E.Volume (pnVel n)])
+                E.:+: go (o + d) more
+        tmpF = ".otb-oracle-tmp.mid"
+    writeMidi tmpF (m1 :: E.Music1)
+    theirsBytes <- BS.readFile tmpF
+    theirs <- either assertFailure pure (readSmf theirsBytes)
+    ours0 <- either assertFailure pure
+               (readSmf (BL.toStrict (renderSmf p)))
+    let ours = sortOn smfOnQ [x | x <- ours0, smfChannel x == 0]
+        them = sortOn smfOnQ theirs
+    assertEqual "note counts" (length ours) (length them)
+    let tol = 1 / 24 -- Euterpea's coarser division rounds; ours is 480
+        close a b =
+          smfPitch a == smfPitch b
+            && smfVel a == smfVel b
+            && abs (smfOnQ a - smfOnQ b) <= tol
+            && abs (smfDurQ a - smfDurQ b) <= 2 * tol
+        bad = [(a, b) | (a, b) <- zip ours them, not (close a b)]
+    assertBool ("disagreements: " <> show (take 3 bad)) (null bad)

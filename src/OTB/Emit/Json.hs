@@ -19,7 +19,7 @@ import OTB.Player (PerfNote (..), Performance (..))
 import OTB.Units (Bpm (..), Seconds (..), WholeNotes (..), secondsAt)
 
 renderJson :: String -> Performance -> String
-renderJson piece (Performance tmap tracks) =
+renderJson piece (Performance tmap tracks _) =
   obj
     [ ("piece", show piece)
     , ("tempoMap", arr (map tempoJson tmap))

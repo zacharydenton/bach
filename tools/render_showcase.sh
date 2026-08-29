@@ -21,10 +21,8 @@ FP=/usr/share/surge-xt/patches_factory
 PY="$VENV/bin/python"
 
 mkdir -p "$OUT"
-stack run -- corpus/bach-wtc/kern/wtc1p01.krn -o "$OUT/wtc1p01.mid" \
-  --emit-json "$OUT/wtc1p01.json" --emit-scl "$OUT/w3.scl"
-stack run -- corpus/bach-wtc/kern/wtc1f01.krn -o "$OUT/wtc1f01.mid" \
-  --emit-json "$OUT/wtc1f01.json"
+# One process, all cores: otb album emits every .mid/.json plus w3.scl.
+stack run -- album corpus/bach-wtc/kern "$OUT"
 
 # Prelude: one texture, all five lanes on the same warm pluck.
 PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1p01.json" \

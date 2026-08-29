@@ -35,6 +35,11 @@ library
         OTB.Kern.Parser
         OTB.Score
         OTB.Config
+        OTB.Explain
+        OTB.Interp
+        OTB.Annotate
+        OTB.Generate
+        OTB.Instrument
         OTB.Tuning
         OTB.Interp.Agogics
         OTB.Interp.Articulation
@@ -48,6 +53,8 @@ library
         OTB.Analysis.Counterpoint
     build-depends:
         base >=4.17 && <5,
+        deepseq,
+        parallel,
         EuterpeaLite,
         text >=2.0,
         bytestring,
@@ -57,6 +64,26 @@ executable otb
     import:           warnings
     hs-source-dirs:   app
     main-is:          Main.hs
+    ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+    default-language: GHC2021
+    default-extensions: OverloadedStrings LambdaCase DerivingStrategies
+    build-depends:
+        base,
+        otb,
+        text,
+        bytestring,
+        deepseq,
+        directory,
+        filepath,
+        optparse-applicative,
+        parallel
+
+test-suite otb-test
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    other-modules:    SMFReader
     default-language: GHC2021
     default-extensions: OverloadedStrings LambdaCase DerivingStrategies
     build-depends:
@@ -66,21 +93,8 @@ executable otb
         bytestring,
         directory,
         filepath,
-        optparse-applicative
-
-test-suite otb-test
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    hs-source-dirs:   test
-    main-is:          Main.hs
-    default-language: GHC2021
-    default-extensions: OverloadedStrings LambdaCase DerivingStrategies
-    build-depends:
-        base,
-        otb,
-        text,
-        directory,
-        filepath,
         process,
+        EuterpeaLite,
         tasty,
-        tasty-hunit
+        tasty-hunit,
+        tasty-quickcheck

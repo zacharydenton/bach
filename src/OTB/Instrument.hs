@@ -1,0 +1,108 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
+
+-- | The rig, in types. M6's software half: instrument capabilities as
+-- class constraints, so a velocity lane aimed at the Model D is a
+-- compile error rather than a silent no-op at the take.
+--
+-- The rig (voice-assignment doctrine, see the Vault doc): the Moog takes
+-- CV, everything else takes CC. Six hardware channels:
+--
+--   ch 0-3  A4 tracks 1-4   velocity+CC+NRPN
+--   ch 4    Model D         nothing but notes (its dynamics are CV+hands)
+--   ch 5    BS2             velocity+aftertouch+CC
+--
+-- 'velocityFor' is the only way to read a velocity for emission, and it
+-- demands 'HasVelocity'. There is deliberately no such instance for
+-- 'ModelD:
+--
+-- @
+--   velocityFor \@'ModelD n   -- rejected: No instance HasVelocity 'ModelD
+-- @
+--
+-- License: GPL-2.0-or-later.
+module OTB.Instrument
+  ( Target (..)
+  , HasVelocity
+  , HasCC
+  , HasCV
+  , velocityFor
+  , fixedVelocity
+  , hardwareChannel
+  , hardwareTracks
+  ) where
+
+import Data.List (sortOn)
+import OTB.Player (PerfNote (..), Performance (..))
+
+data Target = A4Track | ModelD | BS2
+
+-- | Receives velocity meaningfully.
+class HasVelocity (t :: Target)
+instance HasVelocity 'A4Track
+instance HasVelocity 'BS2
+
+-- | Panel addressable over CC/NRPN (the timbre lane's gate).
+class HasCC (t :: Target)
+instance HasCC 'A4Track
+instance HasCC 'BS2
+
+-- | Analog control inputs (the A4 CV track's destination).
+class HasCV (t :: Target)
+instance HasCV 'ModelD
+
+-- | The only velocity accessor the hardware emitters may use.
+velocityFor :: forall t. HasVelocity t => PerfNote -> Int
+velocityFor = pnVel
+
+-- | What a velocity-blind instrument gets instead: the fixed stroke.
+fixedVelocity :: PerfNote -> Int
+fixedVelocity _ = 96
+
+-- | The rig's seat plan, voice-order: four A4 soloists, the Moog, the
+-- BS2. (Kern orders voices bass-first, so voice 0 — the bass — lands on
+-- A4 track 1, per the casting practice.)
+hardwareChannel :: Int -> Either String (Int, String)
+hardwareChannel voice = case voice of
+  0 -> Right (0, "A4 track 1")
+  1 -> Right (1, "A4 track 2")
+  2 -> Right (2, "A4 track 3")
+  3 -> Right (3, "A4 track 4")
+  4 -> Right (4, "Model D")
+  5 -> Right (5, "BS2")
+  _ -> Left ("hardware rig has 6 seats; voice " <> show voice
+               <> " has nowhere to sit")
+
+-- | Arrange a Performance onto the rig: one hardware channel per VOICE
+-- (tracks are per voice already), with each instrument's capabilities
+-- enforced through the typed accessors. A voice whose sub-spines were
+-- polyphonic is reduced to monophony — the decision a human arranger
+-- makes when a fugue voice goes to one mono synth — and the number of
+-- clipped overlaps is reported, never silent. More voices than seats is
+-- an error.
+hardwareTracks :: Performance -> Either String (Performance, Int)
+hardwareTracks (Performance tmap tracks whys) = do
+  seated <- sequence
+    [ (\(hw, _) -> map (remap hw) tr) <$> hardwareChannel vi
+    | (vi, tr) <- zip [0 ..] tracks ]
+  let reduced = map monoReduce seated
+      clipped = sum (zipWith countClips seated reduced)
+  pure (Performance tmap reduced whys, clipped)
+  where
+    remap hw n =
+      let vel = case hw of
+            4 -> fixedVelocity n -- Model D: no HasVelocity instance
+            5 -> velocityFor @'BS2 n
+            _ -> velocityFor @'A4Track n
+       in n {pnChannel = hw, pnVel = vel}
+    -- mono reduction: within the voice's single channel, a note ends
+    -- where its successor begins (keep the moving line, clip the held)
+    monoReduce tr =
+      let srt = sortOn pnOnset tr
+       in zipWith clip srt (map Just (drop 1 srt) <> [Nothing])
+    clip n (Just nx)
+      | pnOnset n + pnDur n > pnOnset nx =
+          n {pnDur = max 0 (pnOnset nx - pnOnset n)}
+    clip n _ = n
+    countClips a b =
+      length [() | (x, y) <- zip a b, pnDur x /= pnDur y]
