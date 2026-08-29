@@ -29,7 +29,10 @@ data PSt = PSt
   { psSpines :: SpineState
   , psTempo :: Maybe Bpm
   , psDone :: Map Int [ScoreNote] -- ^ per voice, reverse order
-  , psTies :: Map (Int, Int) ScoreNote -- ^ open ties by (voice, pitch)
+  , psTies :: Map (Int, Int) [ScoreNote]
+    -- ^ open ties by (voice, pitch) — a FIFO, because two sub-spines of one
+    -- voice can hold overlapping ties on the same pitch (wtc2p02 has
+    -- simultaneous C5 ties in two lanes); close pops the earliest open
   }
 
 parseKern :: Bpm -> Text -> Either ParseError Score
@@ -47,15 +50,22 @@ parseKern defaultTempo src = do
     _ -> Left "no **kern exclusive interpretation record found"
   st0 <- initFromHeader header
   final <- foldM step (PSt st0 Nothing Map.empty Map.empty) body
-  case Map.keys (psTies final) of
-    [] -> pure ()
-    ks -> Left ("unclosed ties at EOF: " <> show ks)
-  let voices =
+  -- flush unclosed ties as sounding notes: they *were* heard for their
+  -- accumulated duration (usually an enharmonic respelling at the close, or
+  -- an editorial quirk); the count is surfaced, not fatal
+  let leftovers =
+        [ (v, sn) | ((v, _), sns) <- Map.toList (psTies final), sn <- sns ]
+      flushed =
+        foldl
+          (\m (v, sn) -> Map.insertWith (<>) v [sn] m)
+          (psDone final)
+          leftovers
+      voices =
         [ Voice i (sortOn snOnset (reverse ns))
-        | (i, ns) <- Map.toAscList (psDone final)
+        | (i, ns) <- Map.toAscList flushed
         , not (null ns)
         ]
-  Right (Score (fromMaybe defaultTempo (psTempo final)) voices)
+  Right (Score (fromMaybe defaultTempo (psTempo final)) voices (length leftovers))
   where
     foldM f z = foldl (\acc x -> acc >>= \s -> f s x) (Right z)
 
@@ -117,19 +127,28 @@ noteTok _ _ st (NoteTok _ Nothing _ _) = st -- rest: clock already advanced
 noteTok voice onset st (NoteTok d (Just pit) tie marks) =
   case tie of
     TieNone -> emit (ScoreNote onset d pit marks)
-    TieOpen -> st {psTies = Map.insert key (ScoreNote onset d pit marks) (psTies st)}
-    TieContinue -> extend
+    TieOpen ->
+      st {psTies = Map.insertWith (flip (<>)) key [ScoreNote onset d pit marks] (psTies st)}
+    TieContinue -> extendEarliest
     TieClose ->
       case Map.lookup key (psTies st) of
-        Nothing -> emit (ScoreNote onset d pit marks) -- stray close: keep the sound
-        Just open ->
-          (emit open {snDur = snDur open + d}) {psTies = Map.delete key (psTies st)}
+        Just (open : rest') ->
+          (emit open {snDur = snDur open + d})
+            {psTies = if null rest' then Map.delete key (psTies st)
+                      else Map.insert key rest' (psTies st)}
+        -- no open on this key: a stray close. The corpus really contains
+        -- these — e.g. wtc2p02 opens [8cc whose continuation is a chord
+        -- subtoken without the closing ] — so keep the sound and move on;
+        -- the opposite half (opens never closed) is flushed at EOF and
+        -- counted in scTieLeftovers.
+        _ -> emit (ScoreNote onset d pit marks)
   where
     key = (voice, pit)
     emit sn = st {psDone = Map.insertWith (<>) voice [sn] (psDone st)}
-    extend = case Map.lookup key (psTies st) of
-      Nothing -> st
-      Just open -> st {psTies = Map.insert key open {snDur = snDur open + d} (psTies st)}
+    extendEarliest = case Map.lookup key (psTies st) of
+      Just (open : rest') ->
+        st {psTies = Map.insert key (open {snDur = snDur open + d} : rest') (psTies st)}
+      _ -> st
 
 mapLeft :: (a -> a') -> Either a b -> Either a' b
 mapLeft f = either (Left . f) Right

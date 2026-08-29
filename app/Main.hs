@@ -7,7 +7,7 @@ module Main (main) where
 
 import Data.Text.IO qualified as TIO
 import OTB.Kern.Parser (parseKern)
-import OTB.Player (Performance (..), perform)
+import OTB.Player (perform)
 import OTB.Emit.Midi (writeSmf)
 import OTB.Score (Score (..), Voice (..))
 import OTB.Units (Bpm (..))
@@ -44,4 +44,7 @@ main = do
     "voices " <> show (length (scVoices score))
       <> " | notes " <> show (sum (map (length . vNotes) (scVoices score)))
       <> " | tempo " <> show bpm
+      <> (if scTieLeftovers score > 0
+            then " | WARN tie-leftovers " <> show (scTieLeftovers score)
+            else "")
       <> " | -> " <> optOutput o

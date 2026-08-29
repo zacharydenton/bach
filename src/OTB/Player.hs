@@ -84,7 +84,7 @@ durOf = \case
 
 -- | M0 interpretation: fixed gate, fixed velocity, channel = voice order.
 perform :: Rational -> Score -> Performance
-perform gate (Score tempo voices) =
+perform gate (Score tempo voices _) =
   Performance tempo
     [ sortOn pnOnset
         [ PerfNote (fromRational t) (fromRational (d * gate)) p 96 ch

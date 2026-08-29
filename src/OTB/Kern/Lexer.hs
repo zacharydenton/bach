@@ -23,7 +23,11 @@ import OTB.Kern.Token
 import OTB.Units (Bpm (..), WholeNotes (..))
 
 lexRecord :: Int -> Text -> Record
-lexRecord n line = Record n (map lexField (T.splitOn "\t" line))
+lexRecord n line
+  -- a leading "!!" makes the whole line a global comment — it is not
+  -- tab-fielded and may legally contain tabs (wtc1f19 line 297)
+  | T.isPrefixOf "!!" line = Record n [FComment]
+  | otherwise = Record n (map lexField (T.splitOn "\t" line))
 
 lexField :: Text -> Field
 lexField t

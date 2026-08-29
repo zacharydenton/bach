@@ -32,5 +32,8 @@ data Voice = Voice
 data Score = Score
   { scTempo :: !Bpm -- ^ from @*MM@, or the CLI default
   , scVoices :: [Voice]
+  , scTieLeftovers :: !Int
+    -- ^ ties still open at EOF, flushed as sounding notes; nonzero usually
+    -- means an enharmonic respelling at the close. Diagnostic, not fatal.
   }
   deriving (Show)
