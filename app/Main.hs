@@ -21,6 +21,7 @@ import OTB.Config
 import OTB.Emit.Json (renderJson)
 import OTB.Emit.Midi (writeSmf)
 import OTB.Explain (renderWhys)
+import OTB.Instrument (hardwareTracks)
 import OTB.Interp.Agogics (defaultAgogicParams)
 import OTB.Interp.Dynamics (defaultDynParams)
 import OTB.Interp.Express (defaultExpressParams)
@@ -44,7 +45,7 @@ data Common = Common
   }
 
 data Cmd
-  = Compile Common FilePath (Maybe FilePath) (Maybe FilePath)
+  = Compile Common FilePath (Maybe FilePath) (Maybe FilePath) String
   | Explain Common (Maybe Int) (Maybe (Int, Int))
 
 common :: Parser Common
@@ -70,6 +71,8 @@ compileCmd =
           <> help "also write the temperament as .scl (Surge native tuning)"))
     <*> optional (strOption (long "emit-json" <> metavar "OUT.json"
           <> help "also write PerformanceIR as JSON (the renderer seam)"))
+    <*> strOption (long "target" <> metavar "surge|hardware" <> value "surge"
+          <> help "hardware remaps lanes onto the rig (A4 x4, Model D, BS2) with capabilities enforced")
 
 explainCmd :: Parser Cmd
 explainCmd =
@@ -97,7 +100,7 @@ main = do
   c <- execParser (info (cmdP <**> helper)
         (fullDesc <> progDesc "One-Take Bach interpretation compiler"))
   case c of
-    Compile com out mscl mjson -> runCompile com out mscl mjson
+    Compile com out mscl mjson tgt -> runCompile com out mscl mjson tgt
     Explain com mbar mnote -> runExplain com mbar mnote
 
 load :: Common -> IO (String, Score, Performance, TuningTable, Bool)
@@ -130,9 +133,12 @@ load com = do
   p <- either (die . ("perform: " <>)) pure (perform interp score)
   pure (T.unpack piece, score, p, table, haveCfg)
 
-runCompile :: Common -> FilePath -> Maybe FilePath -> Maybe FilePath -> IO ()
-runCompile com out mscl mjson = do
-  (piece, score, p, table, haveCfg) <- load com
+runCompile :: Common -> FilePath -> Maybe FilePath -> Maybe FilePath -> String -> IO ()
+runCompile com out mscl mjson tgt = do
+  (piece, score, p0, table, haveCfg) <- load com
+  (p, hwClips) <- case tgt of
+    "hardware" -> either die pure (hardwareTracks p0)
+    _ -> pure (p0, 0)
   writeSmf out p
   mapM_ (\sp -> TIO.writeFile sp
            (renderScl (T.pack (cTemperament com)) table)) mscl
@@ -152,6 +158,9 @@ runCompile com out mscl mjson = do
             else "")
       <> (if scGraceDropped score > 0
             then " | WARN grace-notes-dropped " <> show (scGraceDropped score)
+            else "")
+      <> (if hwClips > 0
+            then " | hardware mono-reduction clipped " <> show hwClips
             else "")
       <> " | " <> cTemperament com
       <> " | -> " <> out
