@@ -61,5 +61,8 @@ data Score = Score
   , scMeter :: ![(WholeNotes, (Int, Int))]
     -- ^ meter map: each @*M@ record as (onset, (numerator, denominator)),
     -- onset-ascending; metrical dynamics degrade gracefully when empty
+  , scGraceDropped :: !Int
+    -- ^ zero-duration (grace) tokens the parser skipped. Not realised yet;
+    -- counted so the loss is visible rather than silent.
   }
   deriving (Show)

@@ -62,7 +62,7 @@ the patchboard outputs to the browser anyway. What the Mac needs is a
 surgepy build:
 
 ```sh
-# once: xcode-select --install ; brew install cmake ninja ; uv python install 3.11
+# once: xcode-select --install ; brew install cmake ninja ffmpeg ; uv python install 3.11
 git clone https://github.com/surge-synthesizer/surge && cd surge   # or copy surge-src
 git submodule update --init --recursive
 uv venv --python 3.11 ~/.venv-audition && uv pip install --python ~/.venv-audition/bin/python numpy
@@ -87,11 +87,15 @@ Patch library discovery: installed Surge XT locations are searched
 automatically; a bare checkout works too, or set `SURGE_PATCHES=/path/to/patches_factory`.
 Vendored pybind11 caps the venv at Python 3.11. AudioWorklet needs a
 secure context: open via localhost, or put tailscale serve in front as
-on Linux.
+on Linux. Remote Opus listening uses ffmpeg and is capped at four concurrent
+listeners; the LAN button keeps using the uncompressed browser path.
 
 ## Status
 
-M0 (spine to sound). Roadmap and full design:
-`~/Documents/Vault/The One-Take Bach (2026-08-28).md`.
+M0–M5 land (spine to sound, articulation, temperament, agogics, ornaments,
+dynamics, the expressive layer) plus the M6a/b audition path. Still open:
+M6 proper (instrument capability classes, the hardware rig) and grace-note
+realisation (the parser counts what it drops). The design document lives
+outside this repo.
 
 License: GPL-2.0-or-later.

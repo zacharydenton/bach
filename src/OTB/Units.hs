@@ -18,8 +18,6 @@ module OTB.Units
   , secondsAt
   ) where
 
-import Data.Ratio ()
-
 -- | Notated duration/onset, in whole notes (kern's and Euterpea's native unit:
 -- a kern @4c@ is 1/4 whole note).
 newtype WholeNotes = WholeNotes Rational

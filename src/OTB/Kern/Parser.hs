@@ -31,6 +31,7 @@ data PSt = PSt
   , psTempo :: Maybe Bpm
   , psMeter :: [(WholeNotes, (Int, Int))] -- ^ reverse order
   , psDrifts :: !Int
+  , psGrace :: !Int -- ^ grace tokens skipped (see 'noteTok')
   , psDone :: Map Int [ScoreNote] -- ^ per voice, reverse order
   , psTies :: Map (Int, Int) [ScoreNote]
     -- ^ open ties by (voice, pitch) — a FIFO, because two sub-spines of one
@@ -52,7 +53,7 @@ parseKern defaultTempo src = do
       | any isExclusive fs -> Right (h, rest)
     _ -> Left "no **kern exclusive interpretation record found"
   st0 <- initFromHeader header
-  final <- foldM step (PSt st0 Nothing [] 0 Map.empty Map.empty) body
+  final <- foldM step (PSt st0 Nothing [] 0 0 Map.empty Map.empty) body
   -- flush unclosed ties as sounding notes: they *were* heard for their
   -- accumulated duration (usually an enharmonic respelling at the close, or
   -- an editorial quirk); the count is surfaced, not fatal
@@ -70,7 +71,8 @@ parseKern defaultTempo src = do
         ]
   Right
     (Score (fromMaybe defaultTempo (psTempo final)) voices
-       (length leftovers) (psDrifts final) (reverse (psMeter final)))
+       (length leftovers) (psDrifts final) (reverse (psMeter final))
+       (psGrace final))
   where
     foldM f z = foldl (\acc x -> acc >>= \s -> f s x) (Right z)
 
@@ -145,7 +147,8 @@ dataField st (p, FData toks)
 dataField st _ = st
 
 noteTok :: Int -> Int -> WholeNotes -> PSt -> NoteTok -> PSt
-noteTok _ _ _ st (NoteTok d _ _ _) | d <= 0 = st -- grace notes: skipped for now
+-- grace notes (zero duration): not realised yet — dropped, but counted
+noteTok _ _ _ st (NoteTok d _ _ _) | d <= 0 = st {psGrace = psGrace st + 1}
 noteTok _ _ _ st (NoteTok _ Nothing _ _) = st -- rest: clock already advanced
 noteTok voice lane onset st (NoteTok d (Just pit) tie marks) =
   case tie of

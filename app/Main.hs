@@ -109,6 +109,9 @@ main = do
       <> (if scMergeDrifts score > 0
             then " | WARN merge-drifts " <> show (scMergeDrifts score)
             else "")
+      <> (if scGraceDropped score > 0
+            then " | WARN grace-notes-dropped " <> show (scGraceDropped score)
+            else "")
       <> " | " <> optTemperament o
       <> " | -> " <> optOutput o
 

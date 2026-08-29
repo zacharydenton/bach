@@ -10,18 +10,18 @@ and hear the casting in context. The casting readout emits the exact
 
 **Audio goes to the browser.** The engine renders wall-clock-paced blocks
 and broadcasts raw PCM (f32le stereo) over chunked HTTP at /pcm; the page
-pulls it with fetch streaming into an AudioWorklet ring buffer. Phone on
-the tailnet, laptop, several listeners at once — anything with a modern
-browser is a monitor, ~200 ms behind live. No local audio device is
-touched unless --local is passed (sounddevice/PortAudio: JACK/PipeWire on
-Linux, CoreAudio on macOS).
+pulls it with fetch streaming into an AudioWorklet ring buffer. A bounded
+remote path transcodes to Ogg Opus through ffmpeg. Phone on the tailnet,
+laptop, several listeners at once — anything with a modern browser is a
+monitor. No local audio device is touched unless --local is passed
+(sounddevice/PortAudio: JACK/PipeWire on Linux, CoreAudio on macOS).
 
     PYTHONPATH=<surgepy dir> .venv-audition/bin/python tools/patchboard.py \
         perf.json --scl w3.scl [--port 8766] [--host 0.0.0.0] [--local]
 
 Patch loads happen in the render thread and may click — an auditioning
-tool, not a performance instrument. Deps: surgepy, numpy; sounddevice
-only for --local. License: GPL-2.0-or-later.
+tool, not a performance instrument. Deps: surgepy, numpy; ffmpeg for remote
+Opus; sounddevice only for --local. License: GPL-2.0-or-later.
 """
 
 import argparse
@@ -29,6 +29,7 @@ import json
 import os
 import collections
 import queue
+import shutil
 import subprocess
 import sys
 import threading
@@ -44,6 +45,7 @@ except ImportError:  # the HTTP layer is testable without the synth
 
 BLOCK = 32
 CHUNK_FRAMES = 4096  # ~85 ms at 48k: the broadcast unit
+MAX_OPUS_CLIENTS = 4
 
 
 def patch_dirs():
@@ -302,8 +304,8 @@ class Engine:
                                         dtype=np.float32)[None, :]
             applied = g
             data = mix.T.reshape(-1).astype("<f4").tobytes()  # interleaved
-            self.history.append(data)
             with self.sublock:
+                self.history.append(data)
                 subs = list(self.subscribers)
             for q in subs:
                 try:
@@ -441,8 +443,8 @@ const START_S = 1.5; // browsers cap paused-media readahead (~2.3 s
 // server's 5 s history burst builds the real cushion during playback.
 function listenRemote(){
   // Opus 256k over ffmpeg (~32 kB/s instead of 384): transparent for
-  // music, and the <audio> element buffers. We hold playback until
-  // BUFFER_S seconds are banked, and rebank after any stall.
+  // music, and the <audio> element buffers. Start once START_S seconds
+  // are banked, then let the history burst build a larger cushion.
   if (audioOn) return;
   audioOn = true;
   const a = new Audio('opus');
@@ -588,6 +590,8 @@ def serve(engine, cats, host, port):
     # gets a path, and the browser must not be able to point it anywhere.
     allowed = {path for entries in cats.values() for _, path in entries}
     allowed.add("(init)")
+    ffmpeg_path = shutil.which("ffmpeg")
+    opus_slots = threading.BoundedSemaphore(MAX_OPUS_CLIENTS)
 
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -608,6 +612,10 @@ def serve(engine, cats, host, port):
             host_hdr = self.headers.get("Host", "")
             return origin.rstrip("/") in (
                 f"http://{host_hdr}", f"https://{host_hdr}")
+
+        def _stream_allowed(self):
+            return (self._same_origin()
+                    and self.headers.get("Sec-Fetch-Site") != "cross-site")
 
         def _body(self):
             n = int(self.headers.get("Content-Length", 0))
@@ -647,33 +655,63 @@ def serve(engine, cats, host, port):
             elif self.path == "/pieces":
                 self._json([n for n, _ in engine.playlist])
             elif self.path == "/opus":
-                # remote path: Opus at ~160 kbps through ffmpeg, streamed
+                # remote path: Opus at 256 kbps through ffmpeg, streamed
                 # as Ogg — the <audio> element's own jitter buffering
                 # absorbs WAN stalls that starve the raw PCM path
-                self.send_response(200)
-                self.send_header("Content-Type", "audio/ogg")
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Transfer-Encoding", "chunked")
-                self.end_headers()
-                q = engine.subscribe(prefill=True)
-                proc = subprocess.Popen(
-                    ["ffmpeg", "-loglevel", "quiet",
-                     "-f", "f32le", "-ar", str(engine.sr), "-ac", "2",
-                     "-i", "pipe:0", "-c:a", "libopus", "-b:a", "256k",
-                     "-application", "audio", "-frame_duration", "60", "-f", "ogg",
-                     "-page_duration", "100000",  # 100 ms pages, not the 1 s default
-                     "-flush_packets", "1", "pipe:1"],
-                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                if not self._stream_allowed():
+                    self._json({"err": "cross-origin stream refused"}, 403)
+                    return
+                if ffmpeg_path is None:
+                    self._json({"err": "remote audio needs ffmpeg"}, 503)
+                    return
+                if not opus_slots.acquire(blocking=False):
+                    self._json({"err": "remote listener limit reached"}, 503)
+                    return
 
-                def feed():
-                    try:
-                        while True:
-                            proc.stdin.write(q.get())
-                            proc.stdin.flush()
-                    except (BrokenPipeError, OSError):
-                        pass
-                threading.Thread(target=feed, daemon=True).start()
+                proc = None
+                q = None
+                feeder = None
+                stop = threading.Event()
                 try:
+                    try:
+                        proc = subprocess.Popen(
+                            [ffmpeg_path, "-loglevel", "quiet",
+                             "-f", "f32le", "-ar", str(engine.sr),
+                             "-ac", "2", "-i", "pipe:0", "-c:a",
+                             "libopus", "-b:a", "256k", "-application",
+                             "audio", "-frame_duration", "60", "-f", "ogg",
+                             "-page_duration", "100000",
+                             "-flush_packets", "1", "pipe:1"],
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL)
+                    except OSError:
+                        self._json({"err": "ffmpeg failed to start"}, 503)
+                        return
+
+                    q = engine.subscribe(prefill=True)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "audio/ogg")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Transfer-Encoding", "chunked")
+                    self.end_headers()
+
+                    def feed():
+                        try:
+                            while not stop.is_set():
+                                try:
+                                    data = q.get(timeout=0.25)
+                                except queue.Empty:
+                                    continue
+                                if stop.is_set():
+                                    break
+                                proc.stdin.write(data)
+                                proc.stdin.flush()
+                        except (BrokenPipeError, OSError, ValueError):
+                            pass
+
+                    feeder = threading.Thread(
+                        target=feed, name="opus-feed", daemon=True)
+                    feeder.start()
                     fd = proc.stdout.fileno()
                     while True:
                         # os.read returns whatever is available — a blocking
@@ -688,8 +726,30 @@ def serve(engine, cats, host, port):
                 except (BrokenPipeError, ConnectionResetError, OSError):
                     pass
                 finally:
-                    engine.unsubscribe(q)
-                    proc.kill()
+                    self.close_connection = True
+                    stop.set()
+                    try:
+                        if q is not None:
+                            engine.unsubscribe(q)
+                        if proc is not None:
+                            if proc.poll() is None:
+                                proc.terminate()
+                            try:
+                                proc.wait(timeout=1)
+                            except subprocess.TimeoutExpired:
+                                proc.kill()
+                                proc.wait()
+                        if feeder is not None:
+                            feeder.join(timeout=1)
+                        if proc is not None:
+                            for stream in (proc.stdin, proc.stdout):
+                                if stream is not None:
+                                    try:
+                                        stream.close()
+                                    except (BrokenPipeError, OSError, ValueError):
+                                        pass
+                    finally:
+                        opus_slots.release()
             elif self.path == "/pcm":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
@@ -807,6 +867,9 @@ def main():
     engine = Engine(playlist, args.sr, args.scl, casting_dir=casting_dir)
     print(f"album: {len(playlist)} pieces, starting {playlist[0][0]}",
           flush=True)
+    if shutil.which("ffmpeg") is None:
+        print("WARN ffmpeg not found: remote Opus listening is disabled",
+              file=sys.stderr, flush=True)
 
     serve(engine, cats, args.host, args.port)
     print(f"patchboard: http://{args.host}:{args.port}/  "

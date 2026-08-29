@@ -26,7 +26,7 @@ import OTB.Interp.Phrasing
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..), scoreNote)
 import OTB.Tuning
-import OTB.Units (Bpm (..), Cents (..))
+import OTB.Units (Bpm (..), Cents (..), Seconds (..), secondsAt)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
@@ -128,7 +128,7 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score (Bpm t) vs 0 _ _) -> do
+            Right (Score (Bpm t) vs 0 _ _ _) -> do
               t @?= 96
               map (length . vNotes) vs @?= [2, 2]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -141,14 +141,14 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ [n]] 0 _ _) ->
+            Right (Score _ [Voice _ [n]] 0 _ _ _) ->
               snDur n @?= (1 / 2)
             Right s -> assertFailure ("unexpected shape: " <> show s)
       , testCase "fermata on a tied close holds only the close" $ do
           let src = T.unlines ["**kern", "[2c", "4c;]", "*-"]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ [n]] 0 _ _) -> do
+            Right (Score _ [Voice _ [n]] 0 _ _ _) -> do
               snDur n @?= (3 / 4)
               snMarks n @?= [Fermata]
               snSegs n @?= [(1 / 2, []), (1 / 4, [Fermata])]
@@ -170,7 +170,7 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ ns] 0 _ _) ->
+            Right (Score _ [Voice _ ns] 0 _ _ _) ->
               sort [(snLane n, snPitch n) | n <- ns]
                 @?= [(0, 60), (0, 60), (0, 60), (1, 64), (1, 67)]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -180,7 +180,7 @@ units = testGroup "otb"
           let src = T.unlines ["**kern", "[2c", "4cT]", "*-"]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ ns] 0 _ _) ->
+            Right (Score _ [Voice _ ns] 0 _ _ _) ->
               [(snOnset n, snDur n, snMarks n) | n <- ns]
                 @?= [(0, 1 / 2, []), (1 / 2, 1 / 4, [Trill 2])]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -363,6 +363,45 @@ units = testGroup "otb"
           assertBool "no roll" (take 1 (trill (run 12)) > [bass (run 12)])
           steps (trill (run 12)) @?= steps (trill (run 0))
           assertBool "trill intact" (all (> 0) (steps (trill (run 12))))
+      , testCase "monophonic gap is 1.5 ms at local tempo" $ do
+          let interp = defaultInterp
+                { iArt = defaultArtParams {apBase = 1, apCantabile = 1}
+                , iAgogics = defaultAgogicParams {agRitSpan = 0}
+                , iExpress = defaultExpressParams
+                    {exExpression = 0, exEnsemble = 0}
+                }
+              score bpm = Score (Bpm bpm)
+                [Voice 0 [scoreNote 0 (1/4) 60 [],
+                          scoreNote (1/4) (1/4) 62 []]] 0 0 [(0, (4, 4))] 0
+              gapMs bpm = case perform interp (score bpm) of
+                Left e -> error e
+                Right pf -> case perfTracks pf of
+                  [[a, b]] ->
+                    let Seconds off = secondsAt (perfTempoMap pf)
+                                        (pnOnset a + pnDur a)
+                        Seconds on = secondsAt (perfTempoMap pf) (pnOnset b)
+                     in (on - off) * 1000
+                  tracks -> error ("unexpected tracks: " <> show tracks)
+          forM_ [60, 120] $ \bpm ->
+            assertBool ("gap at " <> show bpm <> " bpm: " <> show (gapMs bpm))
+              (abs (gapMs bpm - 1.5) < 0.01)
+      , testCase "close onsets remain strictly monophonic" $ do
+          let d = 1 / 4096
+              interp = defaultInterp
+                { iArt = defaultArtParams {apBase = 1}
+                , iAgogics = defaultAgogicParams {agRitSpan = 0}
+                , iExpress = defaultExpressParams
+                    {exExpression = 0, exEnsemble = 0}
+                }
+              score = Score (Bpm 120)
+                [Voice 0 [scoreNote 0 (d/4) 60 [], scoreNote d d 67 []]]
+                0 0 [(0, (4, 4))] 0
+          case perform interp score of
+            Left e -> assertFailure e
+            Right pf | [[a, b]] <- perfTracks pf -> do
+              pnDur a @?= d / 4
+              assertBool "channel overlap" (pnOnset a + pnDur a < pnOnset b)
+            Right pf -> assertFailure ("unexpected tracks: " <> show (perfTracks pf))
       ]
   , testGroup "tools"
       [ testCase "patchboard HTTP boundary (python3 -m unittest)" $ do
