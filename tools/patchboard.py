@@ -27,6 +27,7 @@ only for --local. License: GPL-2.0-or-later.
 import argparse
 import json
 import os
+import collections
 import queue
 import subprocess
 import sys
@@ -88,6 +89,10 @@ class Engine:
         self.jump = None  # requested piece index
         self.subscribers = set()
         self.sublock = threading.Lock()
+        # rolling history: new /opus listeners get this as a burst so
+        # their buffer fills at network speed instead of 1 s per second
+        self.history = collections.deque(
+            maxlen=int(5 * sr / CHUNK_FRAMES) + 1)
 
         maxch = max(n["ch"] for _, p in playlist
                     for tr in p["tracks"] for n in tr) + 1
@@ -251,9 +256,12 @@ class Engine:
             done += span
         return out
 
-    def subscribe(self):
-        q = queue.Queue(maxsize=16)
+    def subscribe(self, prefill=False):
+        q = queue.Queue(maxsize=256)
         with self.sublock:
+            if prefill:
+                for d in self.history:
+                    q.put_nowait(d)
             self.subscribers.add(q)
         return q
 
@@ -284,6 +292,7 @@ class Engine:
                                         dtype=np.float32)[None, :]
             applied = g
             data = mix.T.reshape(-1).astype("<f4").tobytes()  # interleaved
+            self.history.append(data)
             with self.sublock:
                 subs = list(self.subscribers)
             for q in subs:
@@ -596,7 +605,7 @@ def serve(engine, cats, port):
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
-                q = engine.subscribe()
+                q = engine.subscribe(prefill=True)
                 proc = subprocess.Popen(
                     ["ffmpeg", "-loglevel", "quiet",
                      "-f", "f32le", "-ar", str(engine.sr), "-ac", "2",
