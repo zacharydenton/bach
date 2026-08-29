@@ -54,12 +54,13 @@ defaultAgogicParams = AgogicParams
 -- the Friberg–Sundberg closing rit. Pairs are (onset, tempo-from-here);
 -- the whole curve is discretised at agTempoStep.
 --
--- archPiece/archGroup are fractional depths (0.03 = ±3%); groupBars
--- converts through the meter's bar length (whole notes per bar).
-tempoMap :: AgogicParams -> Double -> Double -> WholeNotes -> Bpm -> WholeNotes
-         -> [(WholeNotes, Bpm)]
-tempoMap ag archPiece archGroup groupLen (Bpm base) end
-  | end <= 0 = [(0, Bpm base)]
+-- archPiece/archGroup are fractional depths (0.03 = ±3%); groups are a
+-- map (from-onset, group length in whole notes) — one entry per meter
+-- change, so a 4/4 → 3/8 piece re-lays its groups at the change.
+tempoMap :: AgogicParams -> Double -> Double -> [(WholeNotes, WholeNotes)]
+         -> Bpm -> WholeNotes -> [(WholeNotes, Bpm)]
+tempoMap ag archPiece archGroup groups (Bpm base) end
+  | end <= 0 || agTempoStep ag <= 0 = [(0, Bpm base)]
   | otherwise = thin [(t, Bpm (base * factor t)) | t <- gridPts]
   where
     gridPts = takeWhile (< end) (iterate (+ agTempoStep ag) 0)
@@ -70,13 +71,15 @@ tempoMap ag archPiece archGroup groupLen (Bpm base) end
           let x = realToFrac ((t - a) / (b - a)) :: Double
            in 1 + depth * (4 * x * (1 - x) * 2 - 1) -- ±depth, peak centre
     groupArch t
-      | archGroup <= 0 || groupLen <= 0 = 1
-      | otherwise =
-          let WholeNotes tw = t
-              WholeNotes gw = groupLen
-              a = fromRational (gw * fromIntegral (floor (tw / gw) :: Integer))
-           in arch archGroup (WholeNotes (toRational a))
-                (WholeNotes (toRational a) + groupLen) t
+      | archGroup <= 0 = 1
+      | otherwise = case takeWhile ((<= t) . fst) groups of
+          [] -> 1
+          gs ->
+            let (WholeNotes from, groupLen@(WholeNotes gw)) = last gs
+                WholeNotes tw = t
+                a = from + gw * fromIntegral (floor ((tw - from) / gw) :: Integer)
+             in if gw <= 0 then 1
+                else arch archGroup (WholeNotes a) (WholeNotes a + groupLen) t
     ritF t
       | agRitSpan ag <= 0 || end <= agRitSpan ag || t < start = 1
       | otherwise =
@@ -92,8 +95,15 @@ tempoMap ag archPiece archGroup groupLen (Bpm base) end
       | otherwise = (t1, b1) : thin ((t2, b2) : rest)
     thin xs = xs
 
--- | Duration multiplier for a note's marks.
+-- | Duration multiplier for a note's marks. A fermata holds the tie
+-- segment that carries it — on a tied close, only the close — so the
+-- factor is the held duration over the notated one.
 fermataFactor :: AgogicParams -> ScoreNote -> Rational
 fermataFactor ag sn
-  | Fermata `elem` snMarks sn = agFermataHold ag
-  | otherwise = 1
+  | Fermata `notElem` snMarks sn = 1
+  | snDur sn <= 0 = agFermataHold ag
+  | otherwise =
+      let held = sum [ d * (if Fermata `elem` ms then agFermataHold ag else 1)
+                     | (WholeNotes d, ms) <- snSegs sn ]
+          WholeNotes total = snDur sn
+       in held / total

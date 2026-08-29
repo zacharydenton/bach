@@ -5,9 +5,18 @@
 -- retained unrealised — realisation is interpretation and lives in the
 -- Player. This is the \"Music Raw\" stage of the plan.
 --
+-- A tied note keeps its *segments* (one per tied token, each with the marks
+-- that token carried) so that a fermata on the closing token holds only the
+-- close, not the whole chain. 'snMarks' is the union, for rules that do not
+-- care where in the note a mark sat.
+--
+-- Every note also remembers the spine path (lane) it was read from, so the
+-- Player never has to guess which of a voice's sub-spines a note belongs to.
+--
 -- License: GPL-2.0-or-later.
 module OTB.Score
   ( ScoreNote (..)
+  , scoreNote
   , Voice (..)
   , Score (..)
   ) where
@@ -19,9 +28,20 @@ data ScoreNote = ScoreNote
   { snOnset :: !WholeNotes
   , snDur :: !WholeNotes
   , snPitch :: !Int -- ^ MIDI note number
-  , snMarks :: ![Mark]
+  , snMarks :: ![Mark] -- ^ union over 'snSegs'
+  , snLane :: !Int -- ^ spine path within the voice (stable across rests)
+  , snSegs :: ![(WholeNotes, [Mark])]
+    -- ^ tie chain: (segment duration, that token's marks); sums to 'snDur'
+  , snSource :: !(WholeNotes, Int)
+    -- ^ notated (onset, pitch) of the score note this came from. Ornament
+    -- realisation keeps it on every subnote, so a rule that asks "which
+    -- notes were struck together?" (the final-chord roll) can still tell.
   }
   deriving (Eq, Show)
+
+-- | An untied note on lane 0: one segment carrying all the marks.
+scoreNote :: WholeNotes -> WholeNotes -> Int -> [Mark] -> ScoreNote
+scoreNote t d p ms = ScoreNote t d p ms 0 [(d, ms)] (t, p)
 
 data Voice = Voice
   { vIndex :: !Int -- ^ original top-level spine index
@@ -35,8 +55,11 @@ data Score = Score
   , scTieLeftovers :: !Int
     -- ^ ties still open at EOF, flushed as sounding notes; nonzero usually
     -- means an enharmonic respelling at the close. Diagnostic, not fatal.
-  , scMeter :: !(Maybe (Int, Int))
-    -- ^ first @*M@ record (numerator, denominator); metrical dynamics
-    -- degrade gracefully without one
+  , scMergeDrifts :: !Int
+    -- ^ @*v@ merges whose sub-spine clocks disagreed (the later one wins);
+    -- a sub-spine short by a rest in the encoding. Diagnostic, not fatal.
+  , scMeter :: ![(WholeNotes, (Int, Int))]
+    -- ^ meter map: each @*M@ record as (onset, (numerator, denominator)),
+    -- onset-ascending; metrical dynamics degrade gracefully when empty
   }
   deriving (Show)

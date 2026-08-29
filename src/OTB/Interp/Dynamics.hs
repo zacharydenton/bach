@@ -55,8 +55,8 @@ defaultDynParams = DynParams
 
 -- | Velocities for a chronological (post-ornament) lane. Boundary flags
 -- come from the phrasing detector so arches and breaths agree.
-dynamicsLane :: DynParams -> Maybe (Int, Int) -> [Bool] -> [ScoreNote] -> [Int]
-dynamicsLane dp meter bounds ns =
+dynamicsLane :: DynParams -> [(WholeNotes, (Int, Int))] -> [Bool] -> [ScoreNote] -> [Int]
+dynamicsLane dp meters bounds ns =
   zipWith3 vel ns (archPositions bounds ns) ns
   where
     vel n x _ =
@@ -68,12 +68,15 @@ dynamicsLane dp meter bounds ns =
           + (if Accent `elem` snMarks n then dyAccent dp else 0)
     clamp = max 1 . min 127
 
-    metrical n = case meter of
-      Nothing -> 0
-      Just (num, den) ->
-        let bar = WholeNotes (fromIntegral num / fromIntegral den)
+    -- the meter in force at the note: last change at or before its onset,
+    -- with bar positions counted from that change
+    metrical n = case takeWhile ((<= snOnset n) . fst) meters of
+      [] -> 0
+      ms ->
+        let (start, (num, den)) = last ms
+            bar = WholeNotes (fromIntegral num / fromIntegral den)
             beat = WholeNotes (1 / fromIntegral den)
-            pos = wmod (snOnset n) bar
+            pos = wmod (snOnset n - start) bar
          in if pos == 0 then dyBar dp
             else if even num && pos == bar / 2 then dyHalfBar dp
             else if wmod pos beat == 0 then dyBeat dp

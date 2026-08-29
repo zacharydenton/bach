@@ -6,8 +6,10 @@
         [--scl w3.scl] [--patch path.fxp] [--patch-ch 3:other.fxp] [--sr 48000]
 
 One Surge instance per MIDI channel (a channel is a monophonic lane, so
-each may carry its own patch), events scheduled sample-accurately between
-processMultiBlock calls, instances summed and written as 16-bit WAV.
+each may carry its own patch). Events are delivered between
+processMultiBlock calls, i.e. quantised to Surge's block (32 samples,
+under a millisecond at 48 kHz — finer than the ms-scale rules, but not
+sample-accurate). Instances are summed and written as 16-bit WAV.
 
 Temperament: prefer --scl (Surge's native microtuning — the ground-truth
 path); without it the JSON's per-note pitch-bend values are sent instead,

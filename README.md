@@ -45,8 +45,8 @@ stack (it brings its own GHC — see the comments in `stack.yaml`):
 
 ```sh
 stack build
-stack test
 git clone --depth 1 https://github.com/humdrum-tools/bach-wtc corpus/bach-wtc
+stack test   # the corpus sweep is part of the suite; OTB_NO_CORPUS=1 runs units only
 stack run -- corpus/bach-wtc/kern/wtc1p01.krn -o bwv846.mid
 ```
 
@@ -78,6 +78,10 @@ Then, with `examples/` shipped in this repo (no Haskell toolchain needed):
 PYTHONPATH=<dir with surgepy*.so> ~/.venv-audition/bin/python \
   tools/patchboard.py examples/bwv846f.json --scl examples/w3.scl
 ```
+
+The page binds to loopback (`http://127.0.0.1:8766/`). It has no login, so
+only pass `--host 0.0.0.0` on a network you trust; cross-site POSTs are
+refused by an Origin check either way.
 
 Patch library discovery: installed Surge XT locations are searched
 automatically; a bare checkout works too, or set `SURGE_PATCHES=/path/to/patches_factory`.

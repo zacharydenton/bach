@@ -9,6 +9,15 @@ description:        Compiles **kern scores (Humdrum) into performed MIDI:
 license:            GPL-2.0-or-later
 author:             Zach
 build-type:         Simple
+extra-doc-files:    README.md
+extra-source-files:
+    config/*.toml
+    config/casting/*.json
+    examples/*.json
+    examples/*.scl
+    tools/*.py
+    tools/*.sh
+    stack.yaml
 
 common warnings
     ghc-options: -Wall -Wincomplete-record-updates -Wincomplete-uni-patterns
@@ -72,5 +81,6 @@ test-suite otb-test
         text,
         directory,
         filepath,
+        process,
         tasty,
         tasty-hunit

@@ -21,7 +21,7 @@ module OTB.Player
   , perform
   ) where
 
-import Data.List (sortOn)
+import Data.List (findIndex, nub, sort, sortOn)
 import Data.Ratio (approxRational)
 import EuterpeaLite.Music (Music (..), Primitive (..), note, rest)
 import OTB.Config (ArtParams, defaultArtParams)
@@ -73,19 +73,28 @@ data Performance = Performance
   }
   deriving (Show)
 
--- | One voice's notes into monophonic lanes, greedily: a note goes to the
--- first lane free at its onset. Because the notes came from monophonic
--- spine paths, greedy assignment reconstructs them faithfully.
+-- | One voice's notes into monophonic lanes. The parser recorded which
+-- spine path each note came from, so a note goes to *its own* lane — a
+-- line keeps its identity across rests instead of being re-guessed. Only
+-- a chord token makes a path polyphonic; its extra notes go to *overflow*
+-- lanes (reused when free, created when not) — never to another spine's
+-- lane, which would hand a chord tone to a line it was not part of.
 lanes :: [ScoreNote] -> [[ScoreNote]]
-lanes = map reverse . foldl place [] . sortOn snOnset
+lanes ns =
+  map (reverse . snd) (foldl place seed (sortOn snOnset ns))
   where
-    place ls sn = go ls
+    seed = [(Just l, []) | l <- sort (nub (map snLane ns))]
+    place ls sn
+      | Just i <- findIndex (\(l, xs) -> l == Just (snLane sn) && free xs) ls
+          = push i
+      | Just i <- findIndex (\(l, xs) -> l == Nothing && free xs) ls = push i
+      | otherwise = ls <> [(Nothing, [sn])]
       where
-        go [] = [[sn]]
-        go (l : rest') =
-          case l of
-            (prev : _) | snOnset prev + snDur prev <= snOnset sn -> (sn : l) : rest'
-            _ -> l : go rest'
+        free xs = case xs of
+          (prev : _) -> snOnset prev + snDur prev <= snOnset sn
+          [] -> True
+        push i = [ if j == i then (l, sn : xs) else (l, xs)
+                 | (j, (l, xs)) <- zip [0 :: Int ..] ls ]
 
 -- | An articulated lane as a Music line: rests for the gaps, payload
 -- (pitch, gate). Durations are already whole notes — Euterpea's Dur —
@@ -125,7 +134,7 @@ durOf = \case
 -- asynchrony family: melody lead, final-chord roll, seeded jitter.
 perform :: Interp -> Score -> Either String Performance
 perform (Interp ap ag pp orn dyn ex piece table bendRange)
-        (Score tempo voices _ meter) =
+        (Score tempo voices _ _ meter) =
   let prepLane =
         realizeLane orn tempo
           . overholdLane (exOverhold ex)
@@ -136,12 +145,16 @@ perform (Interp ap ag pp orn dyn ex piece table bendRange)
         [ (snOnset n, snDur n, snPitch n)
         | (_, ls) <- voiceLanes, l <- ls, n <- l ]
       end = maximum (0 : [o + d | (o, d, _) <- allSounding])
-      barLen =
-        maybe 1 (\(n, d) -> WholeNotes (fromIntegral n / fromIntegral d)) meter
+      -- group arches span arch_bars bars of whichever meter is in force
+      groups = case meter of
+        [] -> [(0, fromIntegral (exArchBars ex))]
+        ms -> [ (t, WholeNotes (fromIntegral n / fromIntegral d)
+                      * fromIntegral (exArchBars ex))
+              | (t, (n, d)) <- ms ]
       exN = exExpression ex
       tmap =
         tempoMap ag (exN * exArchPiece ex) (exN * exArchGroup ex)
-          (barLen * fromIntegral (exArchBars ex)) tempo end
+          groups tempo end
       -- highest mean pitch is the melody, which leads (Palmer 1996)
       meanPitch v =
         let ps = map snPitch (vNotes v)
@@ -149,26 +162,45 @@ perform (Interp ap ag pp orn dyn ex piece table bendRange)
       melodyVi =
         fst (last (sortOn snd
           [(vi, meanPitch v) | (vi, (v, _)) <- zip [0 :: Int ..] voiceLanes]))
-      Bpm bpmD = tempo
-      msToWn ms = WholeNotes (approxRational (ms / 1000 * bpmD / 240) 1e-6)
+      -- ms rules are converted at the *local* tempo, so a 20 ms lead
+      -- stays 20 ms inside the closing ritardando instead of stretching
+      -- with it.
+      bpmAt t = case takeWhile ((<= t) . fst) tmap of
+        [] -> tempo
+        xs -> snd (last xs)
+      msToWnAt t ms =
+        let Bpm bpmD = bpmAt t
+         in WholeNotes (approxRational (ms / 1000 * bpmD / 240) 1e-6)
+      -- the final chord is whatever was *notated* at the last onset —
+      -- decided from the score, before ornaments subdivide it and before
+      -- lead/jitter perturb it; each event carries its source note so a
+      -- trilled final chord tone rolls as one note
+      finalOnset = maximum (0 : [snOnset n | v <- voices, n <- vNotes v])
+      finalTag sn
+        | fst (snSource sn) == finalOnset = Just (snd (snSource sn))
+        | otherwise = Nothing
       seed = seedOf piece
       clampV = max 1 . min 127
       usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
 
       voiceTrack (chans, acc) (vi, (_, ls)) =
         let (mine, rest') = splitAt (length ls) chans
-            lead = if vi == melodyVi
-                     then msToWn (exEnsemble ex * exLeadMs ex) else 0
             evs = concat
-              [ [ PerfNote (max 0 (fromRational t - lead + jit))
-                    (fromRational (d * gate' * fermataFactor ag sn))
-                    p v' bend ch
+              [ [ ( finalTag sn
+                  , PerfNote (max 0 (fromRational t - lead + jit))
+                      (fromRational (d * gate' * fermataFactor ag sn))
+                      p v' bend ch )
                 | (i, ((sn, gate), charge, (t, d, (p, _)))) <-
                     zip [0 :: Int ..]
                       (zip3 arts charges (musicEvents 0 (laneMusic arts)))
                 , let gate' = leanGate ex charge gate
-                      jit = msToWn (exEnsemble ex * exJitterMs ex
-                              * seededJitter seed (i * 13 + ch * 7 + 1))
+                      lead = if vi == melodyVi
+                               then msToWnAt (fromRational t)
+                                      (exEnsemble ex * exLeadMs ex)
+                               else 0
+                      jit = msToWnAt (fromRational t)
+                              (exEnsemble ex * exJitterMs ex
+                                 * seededJitter seed (i * 13 + ch * 7 + 1))
                       v' = clampV (vels !! min i (length vels - 1)
                              + round (exN * exDisVel ex * charge
                                  + exEnsemble ex * exJitterVel ex
@@ -182,25 +214,25 @@ perform (Interp ap ag pp orn dyn ex piece table bendRange)
                     vels = dynamicsLane dyn meter bounds l'
                     charges = chargesForLane allSounding l'
               ]
-         in (rest', acc <> [sortOn pnOnset evs])
+         in (rest', acc <> [sortOn (pnOnset . snd) evs])
 
-      -- final chord rolled bass-upward (universal keyboard practice)
+      -- final chord rolled bass-upward (universal keyboard practice).
+      -- Membership was decided from notated onsets, so jitter and lead
+      -- cannot break the chord into singletons.
       rollFinal tracks
-        | rollStep <= 0 = tracks
+        | exEnsemble ex * exRollMs ex <= 0 = map (map snd) tracks
         | otherwise =
-            let lastOn = maximum (0 : [pnOnset n | tr <- tracks, n <- tr])
-                finals =
-                  sortOn snd [ (pnPitch n, pnPitch n)
-                             | tr <- tracks, n <- tr, pnOnset n == lastOn ]
-                rankOf p = length (takeWhile ((< p) . fst) finals)
-                shift n
-                  | pnOnset n == lastOn =
-                      let dt = rollStep * fromIntegral (rankOf (pnPitch n))
-                       in n { pnOnset = pnOnset n + dt
-                            , pnDur = max (pnDur n - dt) (msToWn 30) }
-                  | otherwise = n
+            let finals = sort (nub [ p | tr <- tracks, (Just p, _) <- tr ])
+                rankOf p = length (takeWhile (< p) finals)
+                rollStep = msToWnAt finalOnset (exEnsemble ex * exRollMs ex)
+                shift (tag, n) = case tag of
+                  Just p ->
+                    let dt = rollStep * fromIntegral (rankOf p)
+                     in n { pnOnset = pnOnset n + dt
+                          , pnDur = max (pnDur n - dt)
+                                        (msToWnAt finalOnset 30) }
+                  Nothing -> n
              in map (map shift) tracks
-        where rollStep = msToWn (exEnsemble ex * exRollMs ex)
    in if totalLanes > length usableChannels
         then Left ("score needs " <> show totalLanes
                      <> " monophonic lanes; only "

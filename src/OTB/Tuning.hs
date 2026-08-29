@@ -77,31 +77,36 @@ parseScl src = do
   case content of
     (_desc : countLine : rest) -> do
       n <- case TR.decimal countLine of
-        Right (v, _) -> Right (v :: Int)
-        Left e -> Left ("bad note count: " <> e)
+        Right (v, rest') | T.null (T.strip rest') -> Right (v :: Int)
+        _ -> Left ("bad note count: " <> T.unpack countLine)
       if n /= 12
         then Left ("only 12-tone scales supported, got " <> show n)
         else do
           vals <- traverse parseInterval (take 12 (filter (not . T.null) rest))
           case vals of
-            degrees | length degrees == 12 ->
-              -- degrees are intervals to pitch classes 1..12 (last = octave,
-              -- which folds to pitch class 0 and must be ~1200)
-              let pcCents = 0 : take 11 degrees
-               in mkTuningTable (zipWith (\c e -> Cents (c - e)) pcCents [0, 100 ..])
-            _ -> Left "fewer than 12 interval lines"
+            degrees
+              | length degrees /= 12 -> Left "fewer than 12 interval lines"
+              -- the last degree is the period; it folds to pitch class 0,
+              -- which only works if it is an octave
+              | abs (last degrees - 1200) > 0.01 ->
+                  Left ("non-octave scale: period is "
+                          <> show (last degrees) <> " cents, not 1200")
+              | otherwise ->
+                  let pcCents = 0 : take 11 degrees
+                   in mkTuningTable
+                        (zipWith (\c e -> Cents (c - e)) pcCents [0, 100 ..])
     _ -> Left "truncated .scl"
   where
     parseInterval t
       | T.any (== '/') t
       , (a, b) <- T.breakOn "/" t
-      , Right (num, _) <- TR.decimal a
-      , Right (den, _) <- TR.decimal (T.drop 1 b)
-      , (den :: Integer) > 0 =
-          Right (1200 * logBase 2 (fromIntegral (num :: Integer) / fromIntegral den))
+      , Right (num, "") <- TR.decimal (T.strip a)
+      , Right (den, "") <- TR.decimal (T.strip (T.drop 1 b))
+      , (den :: Integer) > 0, (num :: Integer) > 0 =
+          Right (1200 * logBase 2 (fromIntegral num / fromIntegral den))
       | otherwise = case TR.double t of
-          Right (v, _) -> Right v
-          Left e -> Left ("bad interval " <> T.unpack t <> ": " <> e)
+          Right (v, rest') | T.null (T.strip rest'), not (isNaN v) -> Right v
+          _ -> Left ("bad interval: " <> T.unpack t)
 
 -- | Render for Surge (and anything else Scala-literate).
 renderScl :: Text -> TuningTable -> Text

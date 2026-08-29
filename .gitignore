@@ -4,3 +4,4 @@ cabal.project.local
 *.mid
 *.wav
 corpus/
+__pycache__/

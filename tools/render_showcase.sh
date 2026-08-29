@@ -20,10 +20,11 @@ VENV=${VENV:-.venv-audition}
 FP=/usr/share/surge-xt/patches_factory
 PY="$VENV/bin/python"
 
+mkdir -p "$OUT"
 stack run -- corpus/bach-wtc/kern/wtc1p01.krn -o "$OUT/wtc1p01.mid" \
-  --emit-json "$OUT/wtc1p01.json" --emit-scl "$OUT/w3.scl" | grep -v '^Stack' || true
+  --emit-json "$OUT/wtc1p01.json" --emit-scl "$OUT/w3.scl"
 stack run -- corpus/bach-wtc/kern/wtc1f01.krn -o "$OUT/wtc1f01.mid" \
-  --emit-json "$OUT/wtc1f01.json" | grep -v '^Stack' || true
+  --emit-json "$OUT/wtc1f01.json"
 
 # Prelude: one texture, all five lanes on the same warm pluck.
 PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1p01.json" \
@@ -32,9 +33,14 @@ PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1p01.json" \
 
 # Fugue: the canonical voicing lives in config/casting/wtc1f01.json —
 # the same file the patchboard preloads. One source, two consumers.
-CAST_ARGS=$("$PY" -c "
+CAST_ARGS=()
+while IFS= read -r line; do
+  CAST_ARGS+=(--patch-ch "$line")
+done < <("$PY" -c "
 import json
 c = json.load(open('config/casting/wtc1f01.json'))
-print(' '.join(f'--patch-ch \"{k}:{v}\"' for k, v in sorted(c.items()) if k.isdigit()))")
-eval PYTHONPATH=\"$SURGEPY_DIR\" \"$PY\" tools/audition.py \"$OUT/wtc1f01.json\" \
-  --scl \"$OUT/w3.scl\" -o \"$OUT/wtc1f01_surge_cast.wav\" $CAST_ARGS
+for k, v in sorted(c.items()):
+    if k.isdigit():
+        print(f'{k}:{v}')")
+PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1f01.json" \
+  --scl "$OUT/w3.scl" -o "$OUT/wtc1f01_surge_cast.wav" "${CAST_ARGS[@]}"

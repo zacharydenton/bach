@@ -11,7 +11,7 @@ module Main (main) where
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import OTB.Config
-  ( agogicsFor, artParamsFor, dynamicsFor, expressFor, loadConfig
+  ( agogicsFor, artParamsFor, dynamicsFor, expressFor, emptyConfig, loadConfig
   , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
 import OTB.Interp.Express (defaultExpressParams)
 import OTB.Emit.Json (renderJson)
@@ -27,6 +27,7 @@ import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
 import OTB.Units (Bpm (..))
 import Options.Applicative
 import System.Directory (doesFileExist)
+import Control.Monad (when)
 import System.Exit (die)
 import System.FilePath (takeBaseName)
 
@@ -64,8 +65,12 @@ main = do
   src <- TIO.readFile (optInput o)
   score0 <- either (die . ("parse: " <>)) pure (parseKern (Bpm (optTempo o)) src)
   haveCfg <- doesFileExist (optConfig o)
-  cfg <- if haveCfg then loadConfig <$> TIO.readFile (optConfig o)
-         else pure (loadConfig "")
+  cfg <- if haveCfg
+           then either (die . (("config " <> optConfig o <> ": ") <>)) pure
+                  . loadConfig =<< TIO.readFile (optConfig o)
+           else pure emptyConfig
+  when (isNaN (optTempo o) || isInfinite (optTempo o) || optTempo o <= 0)
+    (die "--tempo must be a finite number > 0")
   table <- resolveTemperament (optTemperament o)
   let piece = T.pack (takeBaseName (optInput o))
       score = maybe score0 (\bpm -> score0 {scTempo = Bpm bpm})
@@ -100,6 +105,9 @@ main = do
       <> (if haveCfg then "" else " | WARN no config file, defaults only")
       <> (if scTieLeftovers score > 0
             then " | WARN tie-leftovers " <> show (scTieLeftovers score)
+            else "")
+      <> (if scMergeDrifts score > 0
+            then " | WARN merge-drifts " <> show (scMergeDrifts score)
             else "")
       <> " | " <> optTemperament o
       <> " | -> " <> optOutput o

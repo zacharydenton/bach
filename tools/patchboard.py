@@ -17,7 +17,7 @@ touched unless --local is passed (sounddevice/PortAudio: JACK/PipeWire on
 Linux, CoreAudio on macOS).
 
     PYTHONPATH=<surgepy dir> .venv-audition/bin/python tools/patchboard.py \
-        perf.json --scl w3.scl [--port 8766] [--local]
+        perf.json --scl w3.scl [--port 8766] [--host 0.0.0.0] [--local]
 
 Patch loads happen in the render thread and may click — an auditioning
 tool, not a performance instrument. Deps: surgepy, numpy; sounddevice
@@ -35,8 +35,12 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import numpy as np
-import surgepy
+try:
+    import numpy as np
+    import surgepy
+except ImportError:  # the HTTP layer is testable without the synth
+    np = None
+    surgepy = None
 
 BLOCK = 32
 CHUNK_FRAMES = 4096  # ~85 ms at 48k: the broadcast unit
@@ -220,6 +224,12 @@ class Engine:
                         s.setTempo(bpm)
                 self.tempo_i += 1
             span = min(frames - done, self.loop_len - self.sample)
+            # stop at the next tempo change so it lands on its block, not
+            # at the start of the next broadcast chunk
+            if self.tempo_i < len(self.tempo_evs):
+                nxt = self.tempo_evs[self.tempo_i][0] - self.sample
+                if 0 < nxt < span:
+                    span = -(-nxt // BLOCK) * BLOCK
             span -= span % BLOCK
             nblocks = span // BLOCK
             for ch in self.events:
@@ -570,12 +580,49 @@ init();
 </script>"""
 
 
-def serve(engine, cats, port):
+MAX_BODY = 4096  # a control POST is a few dozen bytes
+
+
+def serve(engine, cats, host, port):
+    # Only patches the scanner found may be loaded: Surge's native loader
+    # gets a path, and the browser must not be able to point it anywhere.
+    allowed = {path for entries in cats.values() for _, path in entries}
+    allowed.add("(init)")
+
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
         def log_message(self, *a):
             pass
+
+        def _same_origin(self):
+            """Reject cross-site requests (a web page CSRF-ing localhost).
+
+            Browsers always send Origin on POST; require it to match the
+            Host we were reached at. Non-browser clients (curl) send no
+            Origin and are let through — they can already reach the port.
+            """
+            origin = self.headers.get("Origin")
+            if origin is None:
+                return True
+            host_hdr = self.headers.get("Host", "")
+            return origin.rstrip("/") in (
+                f"http://{host_hdr}", f"https://{host_hdr}")
+
+        def _body(self):
+            n = int(self.headers.get("Content-Length", 0))
+            if n < 0 or n > MAX_BODY:
+                raise ValueError("body too large")
+            body = json.loads(self.rfile.read(n) or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError("body must be an object")
+            return body
+
+        def _part(self, body):
+            pi = body.get("part")
+            if not isinstance(pi, int) or not 0 <= pi < len(engine.parts):
+                raise ValueError("bad part index")
+            return pi
 
         def _json(self, obj, code=200):
             b = json.dumps(obj).encode()
@@ -664,25 +711,45 @@ def serve(engine, cats, port):
                 self._json({"err": "not found"}, 404)
 
         def do_POST(self):
-            n = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(n) or b"{}")
-            if self.path == "/patch":
-                engine.request_patch(body["part"], body["path"])
-            elif self.path == "/mute":
-                chans = engine.parts[body["part"]]["channels"]
-                v = not engine.ch_mute[chans[0]]
-                for ch in chans:
-                    engine.ch_mute[ch] = v
-            elif self.path == "/gain":
-                for ch in engine.parts[body["part"]]["channels"]:
-                    engine.ch_gain[ch] = float(body["gain"])
-            elif self.path == "/piece":
-                engine.jump = int(body["index"])
-            elif self.path == "/toggle":
-                engine.playing = not engine.playing
+            if not self._same_origin():
+                self._json({"err": "cross-origin request refused"}, 403)
+                return
+            try:
+                body = self._body()
+                if self.path == "/patch":
+                    pi = self._part(body)
+                    path = body.get("path")
+                    if path not in allowed:
+                        raise ValueError("patch not in library")
+                    engine.request_patch(pi, path)
+                elif self.path == "/mute":
+                    chans = engine.parts[self._part(body)]["channels"]
+                    v = not engine.ch_mute[chans[0]]
+                    for ch in chans:
+                        engine.ch_mute[ch] = v
+                elif self.path == "/gain":
+                    g = body.get("gain")
+                    if not isinstance(g, (int, float)) or not 0 <= g <= 4:
+                        raise ValueError("gain must be in [0, 4]")
+                    for ch in engine.parts[self._part(body)]["channels"]:
+                        engine.ch_gain[ch] = float(g)
+                elif self.path == "/piece":
+                    idx = body.get("index")
+                    if (not isinstance(idx, int)
+                            or not 0 <= idx < len(engine.playlist)):
+                        raise ValueError("bad piece index")
+                    engine.jump = idx
+                elif self.path == "/toggle":
+                    engine.playing = not engine.playing
+                else:
+                    self._json({"err": "not found"}, 404)
+                    return
+            except (ValueError, TypeError) as e:
+                self._json({"err": str(e)}, 400)
+                return
             self._json({"ok": True})
 
-    srv = ThreadingHTTPServer(("0.0.0.0", port), H)
+    srv = ThreadingHTTPServer((host, port), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 
@@ -695,12 +762,17 @@ def main():
     ap.add_argument("--scl")
     ap.add_argument("--sr", type=int, default=48000)
     ap.add_argument("--port", type=int, default=8766)
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="bind address (default loopback; 0.0.0.0 exposes "
+                         "the unauthenticated control page to the LAN)")
     ap.add_argument("--local", action="store_true",
                     help="also play on the local audio device (sounddevice)")
     ap.add_argument("--casting", metavar="DIR",
                     help="directory of <piece>.json channel->patch maps "
                          "(default: config/casting/)")
     args = ap.parse_args()
+    if np is None or surgepy is None:
+        sys.exit("patchboard needs numpy and surgepy (see README: macOS)")
 
     # expand dirs, order like the book: prelude then fugue per key number
     paths = []
@@ -736,8 +808,8 @@ def main():
     print(f"album: {len(playlist)} pieces, starting {playlist[0][0]}",
           flush=True)
 
-    serve(engine, cats, args.port)
-    print(f"patchboard: http://0.0.0.0:{args.port}/  "
+    serve(engine, cats, args.host, args.port)
+    print(f"patchboard: http://{args.host}:{args.port}/  "
           f"({len(engine.instances)} lanes, {len(engine.parts)} parts, "
           f"loop {engine.loop_len/args.sr:.0f}s) — press ▶ listen in the page",
           flush=True)

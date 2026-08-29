@@ -12,6 +12,7 @@ module OTB.Config
   , Config
   , defaultArtParams
   , loadConfig
+  , emptyConfig
   , artParamsFor
   , agogicsFor
   , phrasingFor
@@ -60,22 +61,65 @@ defaultArtParams = ArtParams
 
 type Config = Map Text (Map Text Double)
 
+-- | No file: every rule at its built-in default.
+emptyConfig :: Config
+emptyConfig = Map.empty
+
 -- | Parse the TOML subset. Unknown keys are carried, not rejected — the
--- config is allowed to know about future rules before the code does.
-loadConfig :: Text -> Config
-loadConfig = snd . foldl step ("", Map.empty) . map clean . T.lines
+-- config is allowed to know about future rules before the code does — but
+-- a line that is neither blank, a section, nor @key = number@ is an error
+-- (a typo must not silently fall back to the default), and known keys are
+-- range-checked so a bad value fails here rather than hanging the tempo
+-- grid or emitting an invalid event.
+loadConfig :: Text -> Either String Config
+loadConfig src = do
+  cfg <- snd <$> foldM step ("", Map.empty) (zip [1 :: Int ..] (T.lines src))
+  case [ msg | (sect, kvs) <- Map.toList cfg, (k, v) <- Map.toList kvs
+             , Just msg <- [checkValue sect k v] ] of
+    [] -> Right cfg
+    (msg : _) -> Left msg
   where
+    foldM f z = foldl (\acc x -> acc >>= \s -> f s x) (Right z)
     clean = T.strip . fst . T.breakOn "#"
-    step (sect, m) line
-      | T.null line = (sect, m)
+    step (sect, m) (n, raw)
+      | T.null line = Right (sect, m)
       | T.isPrefixOf "[" line
       , T.isSuffixOf "]" line =
-          (T.strip (T.dropEnd 1 (T.drop 1 line)), m)
+          Right (T.strip (T.dropEnd 1 (T.drop 1 line)), m)
       | (k, rest) <- T.breakOn "=" line
       , not (T.null rest)
-      , Right (v, _) <- TR.double (T.strip (T.drop 1 rest)) =
-          (sect, Map.insertWith Map.union sect (Map.singleton (T.strip k) v) m)
-      | otherwise = (sect, m)
+      , not (T.null (T.strip k)) =
+          case TR.double (T.strip (T.drop 1 rest)) of
+            Right (v, junk) | T.null junk ->
+              Right (sect, Map.insertWith Map.union sect
+                             (Map.singleton (T.strip k) v) m)
+            _ -> Left ("line " <> show n <> ": " <> T.unpack (T.strip k)
+                         <> " must be a plain number, got "
+                         <> T.unpack (T.strip (T.drop 1 rest)))
+      | otherwise = Left ("line " <> show n <> ": cannot parse: " <> T.unpack line)
+      where line = clean raw
+    checkValue sect k v
+      | isNaN v || isInfinite v = bad "a finite number"
+      | k `elem` positive, v <= 0 = bad "> 0"
+      | k `elem` nonNegative, v < 0 = bad ">= 0"
+      | k `elem` gates, v <= 0 || v > 1 = bad "in (0, 1]"
+      | k `elem` fractions, v < 0 || v >= 1 = bad "in [0, 1)"
+      | k == "overhold", v < 0 || v > 1 = bad "in [0, 1]"
+      | k == "fermata_hold", v < 1 = bad ">= 1"
+      | k == "vel_base", v < 1 || v > 127 = bad "in [1, 127]"
+      | k == "arch_bars", v < 1 = bad ">= 1 (rounded to whole bars)"
+      | otherwise = Nothing
+      where
+        bad want = Just ("[" <> T.unpack sect <> "] " <> T.unpack k <> " = "
+                           <> show v <> ": must be " <> want)
+    positive = ["tempo_step", "trill_rate", "bend_range", "tempo"]
+    nonNegative =
+      [ "rit_span", "rit_curve", "expression", "ensemble", "lead_ms", "roll_ms"
+      , "jitter_ms", "jitter_vel", "dis_vel", "dis_lean", "arch_piece"
+      , "arch_group", "breath_threshold", "w_gap", "w_dur", "w_leap" ]
+    gates = ["base", "staccato", "tenuto", "legato", "repeated", "cantabile"
+            , "min_gate", "rit_floor"]
+    fractions = ["breath", "inegal"]
 
 -- | Agogic parameters from @[agogics]@ overlaid with @[piece.<name>]@.
 agogicsFor :: Config -> Text -> AgogicParams -> AgogicParams

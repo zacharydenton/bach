@@ -53,6 +53,7 @@ realizeLane op bpm = concatMap realize
     step = stepWn op bpm
     realize sn = case ornamentOf sn of
       Nothing -> [sn]
+      Just _ | step <= 0 -> [sn] -- unrealisable rate: leave the note plain
       Just orn -> expand orn sn {snMarks = filter (not . isOrnament) (snMarks sn)}
 
     ornamentOf sn =
@@ -68,10 +69,12 @@ realizeLane op bpm = concatMap realize
     -- subdivide sn into (pitch, dur) subnotes: legato marks stripped from
     -- all but the last, which keeps the parent's residual marks
     subdivide sn pairs =
-      [ ScoreNote t d p (if lastOne then snMarks sn else [])
+      [ sn { snOnset = t, snDur = d, snPitch = p
+           , snMarks = ms, snSegs = [(d, ms)] }
       | ((p, d), t, lastOne) <-
           zip3 pairs (scanl (+) (snOnset sn) (map snd pairs))
             (map (const False) (drop 1 pairs) <> [True])
+      , let ms = if lastOne then snMarks sn else []
       ]
 
     expand orn sn =

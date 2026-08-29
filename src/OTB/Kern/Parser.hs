@@ -29,7 +29,8 @@ type ParseError = String
 data PSt = PSt
   { psSpines :: SpineState
   , psTempo :: Maybe Bpm
-  , psMeter :: Maybe (Int, Int)
+  , psMeter :: [(WholeNotes, (Int, Int))] -- ^ reverse order
+  , psDrifts :: !Int
   , psDone :: Map Int [ScoreNote] -- ^ per voice, reverse order
   , psTies :: Map (Int, Int) [ScoreNote]
     -- ^ open ties by (voice, pitch) — a FIFO, because two sub-spines of one
@@ -51,7 +52,7 @@ parseKern defaultTempo src = do
       | any isExclusive fs -> Right (h, rest)
     _ -> Left "no **kern exclusive interpretation record found"
   st0 <- initFromHeader header
-  final <- foldM step (PSt st0 Nothing Nothing Map.empty Map.empty) body
+  final <- foldM step (PSt st0 Nothing [] 0 Map.empty Map.empty) body
   -- flush unclosed ties as sounding notes: they *were* heard for their
   -- accumulated duration (usually an enharmonic respelling at the close, or
   -- an editorial quirk); the count is surfaced, not fatal
@@ -69,7 +70,7 @@ parseKern defaultTempo src = do
         ]
   Right
     (Score (fromMaybe defaultTempo (psTempo final)) voices
-       (length leftovers) (psMeter final))
+       (length leftovers) (psDrifts final) (reverse (psMeter final)))
   where
     foldM f z = foldl (\acc x -> acc >>= \s -> f s x) (Right z)
 
@@ -98,9 +99,12 @@ step st (Record n fs)
       changed <-
         mapLeft (("line " <> show n <> ": ") <>) (applyInterps is (psSpines st))
       Right st
-        { psSpines = fromMaybe (psSpines st) changed
+        { psSpines = maybe (psSpines st) fst changed
+        , psDrifts = psDrifts st + maybe 0 snd changed
         , psTempo = case psTempo st of Nothing -> tempo'; t -> t
-        , psMeter = case psMeter st of Nothing -> firstMeter is; m -> m
+        , psMeter = case firstMeter is of
+            Nothing -> psMeter st
+            Just m -> (now, m) : dropWhile ((== now) . fst) (psMeter st)
         }
   | otherwise = do
       pairs <-
@@ -112,6 +116,11 @@ step st (Record n fs)
     isBarOrNull f = case f of FBar _ -> True; FNull -> True; FComment -> True; _ -> False
     asInterp (FInterp i) = Right i
     asInterp f = Left ("line " <> show n <> ": mixed interpretation record: " <> show f)
+    -- an interpretation record sits at one instant; all live kern paths
+    -- agree on it (the corpus sweep would surface a drift as a merge error)
+    now = case [pClock p | p <- psSpines st, pKern p] of
+      (c : _) -> c
+      [] -> 0
     firstTempo is = case [b | ITempo b <- is] of (b : _) -> Just b; [] -> Nothing
     firstMeter is = case [m | IMeter txt <- is, Just m <- [readMeter txt]] of
       (m : _) -> Just m; [] -> Nothing
@@ -132,37 +141,71 @@ step st (Record n fs)
 -- caller advances clocks separately via 'advance'.
 dataField :: PSt -> (Path, Field) -> PSt
 dataField st (p, FData toks)
-  | pKern p = foldl (noteTok (pVoice p) (pClock p)) st toks
+  | pKern p = foldl (noteTok (pVoice p) (pLane p) (pClock p)) st toks
 dataField st _ = st
 
-noteTok :: Int -> WholeNotes -> PSt -> NoteTok -> PSt
-noteTok _ _ st (NoteTok d _ _ _) | d <= 0 = st -- grace notes: skipped for now
-noteTok _ _ st (NoteTok _ Nothing _ _) = st -- rest: clock already advanced
-noteTok voice onset st (NoteTok d (Just pit) tie marks) =
+noteTok :: Int -> Int -> WholeNotes -> PSt -> NoteTok -> PSt
+noteTok _ _ _ st (NoteTok d _ _ _) | d <= 0 = st -- grace notes: skipped for now
+noteTok _ _ _ st (NoteTok _ Nothing _ _) = st -- rest: clock already advanced
+noteTok voice lane onset st (NoteTok d (Just pit) tie marks) =
   case tie of
-    TieNone -> emit (ScoreNote onset d pit marks)
+    TieNone -> emit fresh
     TieOpen ->
-      st {psTies = Map.insertWith (flip (<>)) key [ScoreNote onset d pit marks] (psTies st)}
-    TieContinue -> extendEarliest
-    TieClose ->
-      case Map.lookup key (psTies st) of
-        Just (open : rest') ->
-          (emit open {snDur = snDur open + d})
-            {psTies = if null rest' then Map.delete key (psTies st)
-                      else Map.insert key rest' (psTies st)}
-        -- no open on this key: a stray close. The corpus really contains
-        -- these — e.g. wtc2p02 opens [8cc whose continuation is a chord
-        -- subtoken without the closing ] — so keep the sound and move on;
-        -- the opposite half (opens never closed) is flushed at EOF and
-        -- counted in scTieLeftovers.
-        _ -> emit (ScoreNote onset d pit marks)
+      st {psTies = Map.insertWith (flip (<>)) key [fresh] (psTies st)}
+    -- an ornament on a continuation/close cannot be "unioned" into the
+    -- note: a trill that starts mid-way through a held pitch is a fresh
+    -- attack from the upper auxiliary. So the held part lands as it is and
+    -- the ornamented token starts a new note (which may itself tie on).
+    TieContinue
+      | ornamented ->
+          restruck {psTies = Map.insertWith (flip (<>)) key [fresh] (psTies restruck)}
+      | otherwise -> extendEarliest
+    TieClose
+      | ornamented -> emitIn restruck fresh
+      | otherwise ->
+          case popOpen st of
+            (Just open, st') -> emitIn st' (extend open)
+            -- no open on this key: a stray close. The corpus really contains
+            -- these — e.g. wtc2p02 opens [8cc whose continuation is a chord
+            -- subtoken without the closing ] — so keep the sound and move on;
+            -- the opposite half (opens never closed) is flushed at EOF and
+            -- counted in scTieLeftovers.
+            (Nothing, _) -> emit fresh
   where
     key = (voice, pit)
-    emit sn = st {psDone = Map.insertWith (<>) voice [sn] (psDone st)}
+    fresh = ScoreNote onset d pit marks lane [(d, marks)] (onset, pit)
+    ornamented = any isOrnamentMark marks
+    -- a continuation/close token adds a segment with *its own* marks; the
+    -- union in snMarks is for marks that describe the whole note (slurs,
+    -- accents) — segment-local ones are read from snSegs (fermata) or
+    -- split off here (ornaments)
+    extend open =
+      open { snDur = snDur open + d
+           , snMarks = snMarks open <> filter (`notElem` snMarks open) marks
+           , snSegs = snSegs open <> [(d, marks)] }
+    emitIn s sn = s {psDone = Map.insertWith (<>) voice [sn] (psDone s)}
+    emit = emitIn st
+    -- pop the earliest open tie on this key
+    popOpen s = case Map.lookup key (psTies s) of
+      Just (open : rest') ->
+        ( Just open
+        , s {psTies = if null rest' then Map.delete key (psTies s)
+                      else Map.insert key rest' (psTies s)} )
+      _ -> (Nothing, s)
+    -- the held note so far, closed early because this token restrikes
+    restruck = case popOpen st of
+      (Just open, s) -> emitIn s open
+      (Nothing, s) -> s
     extendEarliest = case Map.lookup key (psTies st) of
       Just (open : rest') ->
-        st {psTies = Map.insert key (open {snDur = snDur open + d} : rest') (psTies st)}
+        st {psTies = Map.insert key (extend open : rest') (psTies st)}
       _ -> st
+
+isOrnamentMark :: Mark -> Bool
+isOrnamentMark m = case m of
+  Trill _ -> True; Mordent _ -> True; InvMordent _ -> True
+  Turn -> True; InvTurn -> True
+  _ -> False
 
 mapLeft :: (a -> a') -> Either a b -> Either a' b
 mapLeft f = either (Left . f) Right
