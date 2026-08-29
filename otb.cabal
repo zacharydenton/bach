@@ -52,6 +52,8 @@ library
         OTB.Analysis.Counterpoint
     build-depends:
         base >=4.17 && <5,
+        deepseq,
+        parallel,
         EuterpeaLite,
         text >=2.0,
         bytestring,
@@ -61,6 +63,7 @@ executable otb
     import:           warnings
     hs-source-dirs:   app
     main-is:          Main.hs
+    ghc-options:      -threaded -rtsopts -with-rtsopts=-N
     default-language: GHC2021
     default-extensions: OverloadedStrings LambdaCase DerivingStrategies
     build-depends:
@@ -68,9 +71,11 @@ executable otb
         otb,
         text,
         bytestring,
+        deepseq,
         directory,
         filepath,
-        optparse-applicative
+        optparse-applicative,
+        parallel
 
 test-suite otb-test
     import:           warnings

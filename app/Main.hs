@@ -10,14 +10,21 @@
 -- License: GPL-2.0-or-later.
 module Main (main) where
 
-import Control.Monad (when)
-import Data.List (sortOn)
+import Control.DeepSeq (force)
+import Control.Monad (forM_, when)
+import Control.Parallel.Strategies (parMap, rdeepseq)
+import Data.ByteString.Lazy qualified as BL
+import Data.List (isSuffixOf, sort, sortOn)
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import OTB.Config
   ( agogicsFor, artParamsFor, dynamicsFor, expressFor, emptyConfig, loadConfig
   , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
+import OTB.Config qualified
+import OTB.Emit.Midi (renderSmf)
+import OTB.Interp.Express (chargesForLane)
+import OTB.Kern.Token (Mark (..))
 import OTB.Emit.Json (renderJson)
 import OTB.Emit.Midi (writeSmf)
 import OTB.Explain (renderWhys)
@@ -29,13 +36,13 @@ import OTB.Interp.Ornament (defaultOrnamentParams)
 import OTB.Interp.Phrasing (defaultPhraseParams)
 import OTB.Kern.Parser (parseKern)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), perform)
-import OTB.Score (Score (..), Voice (..))
+import OTB.Score (Score (..), ScoreNote (..), Voice (..))
 import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
 import OTB.Units (Bpm (..), WholeNotes (..))
 import Options.Applicative
-import System.Directory (doesFileExist)
+import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory)
 import System.Exit (die)
-import System.FilePath (takeBaseName)
+import System.FilePath (takeBaseName, (</>))
 
 data Common = Common
   { cInput :: FilePath
@@ -47,6 +54,8 @@ data Common = Common
 data Cmd
   = Compile Common FilePath (Maybe FilePath) (Maybe FilePath) String
   | Explain Common (Maybe Int) (Maybe (Int, Int))
+  | Album FilePath FilePath FilePath Double String
+  | Stats FilePath FilePath Double
 
 common :: Parser Common
 common =
@@ -84,6 +93,22 @@ explainCmd =
           ((,) <$> option auto (long "ch" <> metavar "C")
                <*> option auto (long "note" <> metavar "I"))
 
+albumCmd :: Parser Cmd
+albumCmd =
+  Album
+    <$> argument str (metavar "CORPUS_DIR")
+    <*> argument str (metavar "OUT_DIR")
+    <*> strOption (long "config" <> value "config/default.toml")
+    <*> option auto (long "tempo" <> value 72)
+    <*> strOption (long "temperament" <> value "werckmeister3")
+
+statsCmd :: Parser Cmd
+statsCmd =
+  Stats
+    <$> argument str (metavar "CORPUS_DIR")
+    <*> strOption (long "config" <> value "config/default.toml")
+    <*> option auto (long "tempo" <> value 72)
+
 cmdP :: Parser Cmd
 cmdP =
   hsubparser
@@ -92,6 +117,12 @@ cmdP =
         <> command "explain"
              (info explainCmd
                 (progDesc "per-note rule traces with citations"))
+        <> command "album"
+             (info albumCmd
+                (progDesc "compile a corpus directory in parallel"))
+        <> command "stats"
+             (info statsCmd
+                (progDesc "whole-corpus interpretation statistics"))
     )
     <|> compileCmd -- bare invocation = compile
 
@@ -102,6 +133,8 @@ main = do
   case c of
     Compile com out mscl mjson tgt -> runCompile com out mscl mjson tgt
     Explain com mbar mnote -> runExplain com mbar mnote
+    Album corpus outDir cfgPath tempo temp -> runAlbum corpus outDir cfgPath tempo temp
+    Stats corpus cfgPath tempo -> runStats corpus cfgPath tempo
 
 load :: Common -> IO (String, Score, Performance, TuningTable, Bool)
 load com = do
@@ -203,3 +236,91 @@ resolveTemperament name = case name of
   path -> do
     src <- TIO.readFile path
     either (die . (("scl " <> path <> ": ") <>)) pure (parseScl src)
+
+-- ---------------------------------------------------------------------
+-- W6: the album, in parallel; the corpus, in numbers
+
+loadCfg :: FilePath -> IO OTB.Config.Config
+loadCfg cfgPath = do
+  haveCfg <- doesFileExist cfgPath
+  if haveCfg
+    then either (die . (("config " <> cfgPath <> ": ") <>)) pure
+           . loadConfig =<< TIO.readFile cfgPath
+    else pure emptyConfig
+
+mkInterp :: OTB.Config.Config -> TuningTable -> String -> Interp
+mkInterp cfg table piece0 =
+  let piece = T.pack piece0
+   in Interp
+        { iArt = artParamsFor cfg piece
+        , iAgogics = agogicsFor cfg piece defaultAgogicParams
+        , iPhrasing = phrasingFor cfg piece defaultPhraseParams
+        , iOrnaments = ornamentsFor cfg piece defaultOrnamentParams
+        , iDynamics = dynamicsFor cfg piece defaultDynParams
+        , iExpress = expressFor cfg piece defaultExpressParams
+        , iPiece = piece0
+        , iTuning = table
+        , iBendRange = tuningBendRange cfg
+        }
+
+runAlbum :: FilePath -> FilePath -> FilePath -> Double -> String -> IO ()
+runAlbum corpus outDir cfgPath tempo temp = do
+  cfg <- loadCfg cfgPath
+  table <- resolveTemperament temp
+  files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
+  srcs <- mapM (\f -> (,) f <$> TIO.readFile (corpus </> f)) (sort files)
+  createDirectoryIfMissing True outDir
+  -- the pure pipeline fans out across cores; IO stays sequential
+  let one (f, src) =
+        let piece = takeBaseName f
+            r = do
+              s0 <- parseKern (Bpm tempo) src
+              let s = maybe s0 (\b -> s0 {scTempo = Bpm b})
+                        (pieceTempo cfg (T.pack piece))
+              p <- perform (mkInterp cfg table piece) s
+              pure ( force (renderSmf p)
+                   , force (renderJson piece p) )
+         in (piece, r)
+      results = parMap rdeepseq one srcs
+  forM_ results $ \(piece, r) -> case r of
+    Left e -> putStrLn ("FAIL " <> piece <> ": " <> e)
+    Right (smf, json) -> do
+      BL.writeFile (outDir </> piece <> ".mid") smf
+      writeFile (outDir </> piece <> ".json") json
+  TIO.writeFile (outDir </> "w3.scl") (renderScl (T.pack temp) table)
+  putStrLn (show (length results) <> " pieces -> " <> outDir)
+
+runStats :: FilePath -> FilePath -> Double -> IO ()
+runStats corpus cfgPath tempo = do
+  _cfg <- loadCfg cfgPath
+  files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
+  parsed <- mapM
+    (\f -> do
+        src <- TIO.readFile (corpus </> f)
+        pure (takeBaseName f, parseKern (Bpm tempo) src))
+    (sort files)
+  let scores = [(n, s) | (n, Right s) <- parsed]
+      allNotes s = [sn | v <- scVoices s, sn <- vNotes v]
+      sounding s = [(snOnset n, snDur n, snPitch n) | n <- allNotes s]
+      charges =
+        [ c | (_, s) <- scores
+        , v <- scVoices s
+        , c <- chargesForLane (sounding s) (vNotes v) ]
+      hist =
+        [ (lo, length [() | c <- charges, c >= lo, c < lo + 0.2])
+        | lo <- [0, 0.2, 0.4, 0.6, 0.8] ]
+      ornaments =
+        sum [ 1 :: Int | (_, s) <- scores, n <- allNotes s
+            , m <- snMarks n, isOrn m ]
+      isOrn m = case m of
+        Trill _ -> True; Mordent _ -> True; InvMordent _ -> True
+        Turn -> True; InvTurn -> True; _ -> False
+      placeholders =
+        [n | (n, s) <- scores, scTempo s == Bpm 72]
+  putStrLn ("pieces parsed: " <> show (length scores) <> "/"
+              <> show (length parsed))
+  putStrLn ("dissonance charge histogram (0.2 bins): " <> show hist)
+  putStrLn ("ornament marks: " <> show ornaments)
+  putStrLn ("suspect 72-BPM placeholder tempos ("
+              <> show (length placeholders) <> "): "
+              <> unwords placeholders)
