@@ -332,6 +332,17 @@ class Engine:
             if prefill:
                 for d in self.history:
                     q.put_nowait(d)
+                # exact timeline anchor for this listener: the engine
+                # position NOW, and how much banked history precedes it
+                # in the stream — the subtitle pane needs both. (A
+                # simultaneous second listener would overwrite this;
+                # the ms-scale race is accepted for a one-user board.)
+                self.last_anchor = {
+                    "pieceIndex": self.piece_i,
+                    "position": self.sample / self.sr,
+                    "historyS": len(self.history) * CHUNK_FRAMES / self.sr,
+                    "length": self.loop_len / self.sr,
+                }
             self.subscribers.add(q)
         return q
 
@@ -521,12 +532,11 @@ function listenRemote(){
   audioOn = true;
   const a = new Audio('opus');
   a.preload = 'auto';
-  // the stream opens with ~5 s of history, so this listener's playhead
-  // sits about that far behind the engine; remember where the engine
-  // was at connect so the why-subtitles can track OUR ears, not the
-  // engine's now (approximate: the burst may be shorter right after a
-  // piece change, and a piece change mid-listen desyncs until reconnect)
-  OPUS = { el: a, refPos: STATE ? STATE.position + (Date.now()-STATE._t)/1000 : 0 };
+  // the server records an exact anchor (engine position + true banked
+  // history) when it assembles this listener's burst; fetch it so the
+  // why-subtitles track OUR ears, not the engine's now
+  OPUS = { el: a, anchor: null };
+  fetch('anchor').then(r=>r.json()).then(x=>{ if (!x.err) OPUS.anchor = x; });
   const b = document.getElementById('listenr');
   b.classList.add('on');
   const stat = s => { b.textContent = s; };
@@ -595,15 +605,30 @@ async function init(){
 function setPiece(i){ post('piece',{index:i}); }
 let lastWhys = '';
 let OPUS = null;
-const OPUS_HISTORY_S = 5; // must match the server's history deque
 async function refreshWhys(){
   if (!STATE || !STATE.playing) return;
   // estimate the current position between 1 Hz state polls
   let at = STATE.position + (Date.now() - (STATE._t||Date.now()))/1000;
-  if (OPUS && !OPUS.el.paused && OPUS.el.currentTime > 0){
-    // remote ears lag the engine by the history burst
-    at = OPUS.refPos - OPUS_HISTORY_S + OPUS.el.currentTime;
-    if (STATE.length > 0) at = ((at % STATE.length) + STATE.length) % STATE.length;
+  if (OPUS && OPUS.anchor && !OPUS.el.paused && OPUS.el.currentTime > 0){
+    const an = OPUS.anchor;
+    at = an.position - an.historyS + OPUS.el.currentTime;
+    // transitions are gapless: when our ears cross the anchored piece's
+    // end, bake its length into the anchor and advance the piece index
+    // (length of intermediate pieces is only known once the engine's
+    // state agrees, so subtitles stay hidden until the indices match)
+    while (at >= an.length && an.pieceIndex < (STATE.pieceIndex|0)){
+      an.position -= an.length;
+      an.pieceIndex += 1;
+      an.length = (an.pieceIndex === (STATE.pieceIndex|0))
+        ? STATE.length : an.length;
+      at = an.position - an.historyS + OPUS.el.currentTime;
+    }
+    if (an.pieceIndex !== (STATE.pieceIndex|0)){
+      const d = document.getElementById('whys');
+      if (d.textContent) { d.textContent = ''; lastWhys = ''; }
+      return;
+    }
+    if (STATE.length > 0) at = Math.max(0, Math.min(at, STATE.length));
   }
   const ws = await (await fetch('whys?at='+at.toFixed(2))).json();
   const seen = new Set();
@@ -758,6 +783,9 @@ def serve(engine, cats, host, port):
                 self.wfile.write(b)
             elif self.path == "/state":
                 self._json(engine.state())
+            elif self.path == "/anchor":
+                self._json(getattr(engine, "last_anchor", None)
+                           or {"err": "no stream"})
             elif self.path.startswith("/whys"):
                 try:
                     at = float((self.path.split("=", 1) + ["0"])[1])

@@ -132,10 +132,13 @@ overholdLane o ns
 -- note gives k of its duration to the run's final note — the run rushes
 -- slightly toward its top. Lane total duration is preserved.
 uphillLane :: Double -> [ScoreNote] -> [ScoreNote]
-uphillLane k ns
+uphillLane k0 ns
   | k <= 0 = ns
   | otherwise = concatMap reshape (runs ns)
   where
+    -- clamp the EFFECTIVE quantity: expression scales this rule's k
+    -- upstream, so per-knob config validation cannot bound the product
+    k = min 0.4 k0
     runs xs = case xs of
       [] -> []
       (a : _) ->

@@ -169,8 +169,7 @@ def main():
                         buckets.setdefault(tag, {}).setdefault(
                             perf_key, []).append(r)
             for k, rs in piece_res.items():
-                if len(rs) >= 2:
-                    beat_data.append((piece, positions[k], ctxs[k], rs))
+                beat_data.append((piece, positions[k], ctxs[k], rs))
 
     # per-context effects; the t-statistic clusters by PERFORMANCE
     # (beats within a performance are serially correlated — treating
@@ -196,17 +195,83 @@ def main():
     print("\n(positive = humans faster than the compiler there; "
           "negative = humans slower;\n t is clustered by performance)")
 
-    # moments that survive the fitted context effects: subtract every
-    # applicable context's mean before judging the beat unexplained
+    # moments that survive a JOINT context model, fitted leave-one-
+    # piece-out: marginal means double-count shared effects (every beat
+    # has a metrical tag plus possible cadence/subject/boundary tags),
+    # so a design-matrix least squares is fitted over all OTHER pieces
+    # and only its residual may call a beat unexplained
+    feats = sorted(effect)  # feature order; intercept appended last
+    fi = {f: i for i, f in enumerate(feats)}
+    p_dim = len(feats) + 1
+
+    def xvec(tags):
+        x = [0.0] * p_dim
+        for tg in tags:
+            if tg in fi:
+                x[fi[tg]] = 1.0
+        x[-1] = 1.0
+        return x
+
+    def solve(a, b):
+        n = len(b)
+        a = [row[:] + [b[i]] for i, row in enumerate(a)]
+        for c in range(n):
+            piv = max(range(c, n), key=lambda r: abs(a[r][c]))
+            a[c], a[piv] = a[piv], a[c]
+            if abs(a[c][c]) < 1e-12:
+                continue
+            for r in range(n):
+                if r != c and a[r][c] != 0:
+                    f = a[r][c] / a[c][c]
+                    a[r] = [x - f * y for x, y in zip(a[r], a[c])]
+        return [a[i][-1] / a[i][i] if abs(a[i][i]) > 1e-12 else 0.0
+                for i in range(n)]
+
+    # accumulate XtX / Xty globally and per piece (ridge for stability)
+    xtx = [[0.0] * p_dim for _ in range(p_dim)]
+    xty = [0.0] * p_dim
+    per_piece = {}
+    for piece, _, tags, rs in beat_data:
+        x = xvec(tags)
+        y = sum(rs) / len(rs)
+        pp = per_piece.setdefault(
+            piece, ([[0.0] * p_dim for _ in range(p_dim)], [0.0] * p_dim))
+        for i in range(p_dim):
+            if x[i] == 0:
+                continue
+            xty[i] += x[i] * y
+            pp[1][i] += x[i] * y
+            for j in range(p_dim):
+                if x[j] != 0:
+                    xtx[i][j] += x[i] * x[j]
+                    pp[0][i][j] += x[i] * x[j]
+    for i in range(p_dim):
+        xtx[i][i] += 1e-6
+
+    beta_full = solve([row[:] for row in xtx], xty[:])
+    print("\njoint model coefficients (all pieces, vs the marginal "
+          "means above):")
+    for f in feats:
+        pct = (math.exp(beta_full[fi[f]]) - 1) * 100
+        print(f"  {f:<22} {pct:+.1f}%")
+
     moments = []
     for piece, wn, tags, rs in beat_data:
+        if len(rs) < 2:
+            continue
+        pxx, pxy = per_piece[piece]
+        a = [[xtx[i][j] - pxx[i][j] for j in range(p_dim)]
+             for i in range(p_dim)]
+        b = [xty[i] - pxy[i] for i in range(p_dim)]
+        beta = solve(a, b)
+        x = xvec(tags)
         mu = sum(rs) / len(rs)
-        adj = mu - sum(effect.get(tg, 0) for tg in tags)
+        adj = mu - sum(xi * bi for xi, bi in zip(x, beta))
         spread = max(rs) - min(rs)
         if abs(adj) > 0.15 and spread < abs(adj):
             moments.append((abs(adj), piece, wn, adj, tags))
-    print("\nunexplained moments (performer consensus AFTER removing "
-          "the modeled\ncontext effects):")
+    print("\nunexplained moments (performer consensus AFTER a joint "
+          "context model,\nfitted leave-one-piece-out):")
     for _, piece, wn, adj, tags in sorted(moments, reverse=True)[:15]:
         pct = (math.exp(adj) - 1) * 100
         print(f"  {piece} @ {wn:.2f}wn: humans {pct:+.0f}% beyond context"

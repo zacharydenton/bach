@@ -1,10 +1,7 @@
 # MiyashitaM01M, fitted from ASAP beat annotations (4 WTC pieces: wtc1f03, wtc1f09, wtc1p03, wtc1p09).
-# In-sample tempo-shape correlation: 0.760 (defaults: 0.169).
-# A performer's stance as a handful of inspectable numbers.
-# Self-contained: the base configuration is embedded below, then
-# the fitted values override — so --config MiyashitaM01M.toml
-# reproduces the reported correlation by itself.
-
+# In-sample tempo-shape correlation: 0.760 (defaults: 0.173).
+# Self-contained: the base configuration with the fitted
+# stance merged in — --config MiyashitaM01M.toml alone reproduces the number.
 # The interpretation, as data. A performance = corpus commit + this file +
 # compiler version. Per-piece sections are the exception log: every override
 # carries its why.
@@ -19,12 +16,13 @@ cantabile = 0.90  # stepwise motion at singing values leans legato
 min_gate = 0.10
 
 [agogics]
-rit_span = 1.0      # closing ritardando spans the last whole note
-rit_floor = 0.6     # ...easing to 60% of base tempo at the final barline
+rit_span = 2.0
+rit_floor = 0.4
 rit_curve = 2       # Friberg–Sundberg q: 2 = stopping-runner braking curve
 tempo_step = 0.125  # curve granularity (eighth notes): smooth, not steppy
 fermata_hold = 1.75
 
+cadence_depth = 0.0
 [phrasing]
 # KTH Punctuation via Quantz's placement rules: breathe at rests, after
 # long notes, at leaps — never mid-step. Per-lane micropauses only;
@@ -58,7 +56,7 @@ bend_range = 2    # receiver's pitch-bend range in ± semitones. 2 is the
 [interpretation]
 # The two master knobs (Director Musices architecture: rule quantities
 # scaled by family multipliers). 0 = mechanical, 1 = literature defaults.
-expression = 1.0  # dissonance emphasis, phrase arches, agogic leans
+expression = 0.4
 ensemble = 1.0    # melody lead, chord roll, seeded micro-jitter
 
 [dissonance]
@@ -66,8 +64,8 @@ dis_vel = 10      # CPE Bach 1753: dissonances louder — vel units per charge
 dis_lean = 0.10   # ...and leaned on: gate boost toward legato per charge
 
 [arches]
-arch_piece = 0.03 # Todd 1992: tempo/dynamics arch over the whole piece
-arch_group = 0.02 # ...and per bar-group
+arch_piece = 0.0
+arch_group = 0.0
 arch_bars = 4
 
 [performance]
@@ -83,17 +81,3 @@ overhold = 0.9    # finger pedal a la Czerny: the arpeggios bloom to the bar
 [piece.wtc1p05]
 inegal = 0.18     # audition: French-style D major sixteenths, gently swung
                   # (Quantz XI says yes, Neumann says not for Bach — ears decide)
-
-# --- fitted stance ---
-
-[agogics]
-cadence_depth = 0.0
-rit_floor = 0.4
-rit_span = 2.0
-
-[arches]
-arch_group = 0.0
-arch_piece = 0.0
-
-[interpretation]
-expression = 0.4

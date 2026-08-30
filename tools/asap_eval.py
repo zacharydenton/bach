@@ -211,6 +211,50 @@ def with_knobs(base_config, knobs, tmpdir):
     return path
 
 
+def merge_toml(base, knobs):
+    """Merge fitted values into the base config's existing tables.
+
+    Appending duplicate [table] headers is invalid TOML (the config
+    module promises validity); instead each fitted key is written into
+    its section in place — replacing the line if the key exists,
+    otherwise inserted at the section's end — and only truly missing
+    sections are appended.
+    """
+    by_sec = {}
+    for k, v in knobs.items():
+        by_sec.setdefault(KNOB_SECTIONS[k], {})[k] = v
+    lines = base.splitlines()
+    out = []
+    sec = None
+    done = set()
+
+    def flush_section(s):
+        for k, v in sorted(by_sec.get(s, {}).items()):
+            if (s, k) not in done:
+                out.append(f"{k} = {v}")
+                done.add((s, k))
+
+    for ln in lines:
+        stripped = ln.split("#")[0].strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            flush_section(sec)
+            sec = stripped[1:-1]
+            out.append(ln)
+            continue
+        key = stripped.split("=")[0].strip() if "=" in stripped else None
+        if sec in by_sec and key in by_sec[sec]:
+            out.append(f"{key} = {by_sec[sec][key]}")
+            done.add((sec, key))
+        else:
+            out.append(ln)
+    flush_section(sec)
+    for s in sorted(by_sec):
+        if any((s, k) not in done for k in by_sec[s]):
+            out.append(f"\n[{s}]")
+            flush_section(s)
+    return "\n".join(out) + "\n"
+
+
 def performer_pieces(asap_dir, kern_dir, performer):
     """Pieces (in our naming) this performer recorded."""
     out = []
@@ -264,28 +308,23 @@ def fit_performer(otb, args, performer, tmp):
     outdir = os.path.join(ROOT, "config", "performers")
     os.makedirs(outdir, exist_ok=True)
     path = os.path.join(outdir, performer + ".toml")
+    header = (
+        f"# {performer}, fitted from ASAP beat annotations "
+        f"({len(pieces)} WTC pieces: {', '.join(pieces)}).\n"
+        f"# In-sample tempo-shape correlation: {final_r:.3f} "
+        f"(defaults: {base_r:.3f}).\n"
+        f"# Self-contained: the base configuration with the fitted\n"
+        f"# stance merged in — --config {os.path.basename(path)} alone "
+        f"reproduces the number.\n")
+    base = open(args.config).read() if os.path.isfile(args.config) else ""
     with open(path, "w") as out:
-        out.write(
-            f"# {performer}, fitted from ASAP beat annotations "
-            f"({len(pieces)} WTC pieces: {', '.join(pieces)}).\n"
-            f"# In-sample tempo-shape correlation: {final_r:.3f} "
-            f"(defaults: {base_r:.3f}).\n"
-            f"# A performer's stance as a handful of inspectable "
-            f"numbers.\n"
-            f"# Self-contained: the base configuration is embedded "
-            f"below, then\n# the fitted values override — so --config "
-            f"{os.path.basename(path)}\n# reproduces the reported "
-            f"correlation by itself.\n\n")
-        if os.path.isfile(args.config):
-            out.write(open(args.config).read())
-            out.write("\n# --- fitted stance ---\n")
-        by_sec = {}
-        for k, v in knobs.items():
-            by_sec.setdefault(KNOB_SECTIONS[k], []).append((k, v))
-        for sec, kvs in sorted(by_sec.items()):
-            out.write(f"\n[{sec}]\n")
-            for k, v in sorted(kvs):
-                out.write(f"{k} = {v}\n")
+        out.write(header + merge_toml(base, knobs))
+    try:
+        import tomllib
+        with open(path, "rb") as f:
+            tomllib.load(f)
+    except Exception as e:  # noqa: BLE001
+        print(f"  WARNING: generated profile is not valid TOML: {e}")
     print(f"  fitted r = {final_r:.3f} (default {base_r:.3f}) -> {path}")
 
 

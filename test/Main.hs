@@ -748,6 +748,9 @@ sota = testGroup "sota"
         let entries = subjectEntries f
         assertBool "fugue entries found" (length entries >= 40)
         subjectEntries p @?= []
+  , testProperty "reshapers never produce non-positive durations, any k" $
+      forAll ((,) <$> choose (0, 3.0) <*> genLane) $ \(k, l) ->
+        all ((> 0) . snDur) (uphillLane k (doubleDurLane k l))
   , testProperty "uphill reshaper preserves lane duration sum" $
       forAll genLane $ \l ->
         sum (map snDur (uphillLane 0.05 l)) === sum (map snDur l)

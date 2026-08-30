@@ -123,11 +123,17 @@ analyzeHarmony meter notes end = Harmony
     -- Viterbi over 24 key states with a switch penalty: keys are sticky
     -- (Temperley's change penalty), so a chromatic bar does not flicker
     switchPenalty = 1.0
+    -- the initial state is CONSTRAINED to the whole-piece key (Bach
+    -- declares the tonic before modulating; a solo opening subject
+    -- reads as its dominant otherwise) — inside the optimisation, so
+    -- window two is chosen relative to the pinned tonic and pays the
+    -- switch penalty to leave it
     keyTrack = case windowScores of
       [] -> [pieceKey]
       (w0 : ws) ->
         let states = map snd w0
-            start = [(s, sc, [s]) | (sc, s) <- w0]
+            start = [ (s, if s == pieceKey then sc else sc - 1e6, [s])
+                    | (sc, s) <- w0 ]
             step acc w =
               [ let cands =
                       [ (sc0 + here + (if s0 == s then 0 else -switchPenalty), path)
@@ -156,15 +162,9 @@ analyzeHarmony meter notes end = Harmony
                 , k <- [0 .. 11] ])
       where
         bassBonus k = if Just k == finalBassPc then 0.25 else 0
-    -- WTC pieces declare their tonic before modulating; the opening
-    -- window is too thin for the profiles (a solo subject reads as its
-    -- dominant), so it is pinned to the whole-piece key
-    keyTrack' = case keyTrack of
-      (_ : more) -> pieceKey : more
-      [] -> [pieceKey]
     keyAtT t =
       let i = idxOf keyGrid t
-       in if i < length keyTrack' then keyTrack' !! i else pieceKey
+       in if i < length keyTrack then keyTrack !! i else pieceKey
 
     -- chord root per beat: Temperley-style root support, bass favoured
     rootOf a b =
