@@ -33,8 +33,9 @@ module OTB.Instrument
   ) where
 
 import Data.List (sortOn)
+import Data.Ratio (approxRational)
 import OTB.Player (PerfNote (..), Performance (..))
-import OTB.Units (toTicks)
+import OTB.Units (WholeNotes (..), toTicks)
 
 data Target = A4Track | ModelD | BS2
 
@@ -102,7 +103,17 @@ hardwareTracks (Performance tmap tracks whys) = do
             4 -> fixedVelocity n -- Model D: no HasVelocity instance
             5 -> velocityFor @'BS2 n
             _ -> velocityFor @'A4Track n
-       in n {pnChannel = hw, pnVel = vel}
+          -- the harpsichordist's move: where the instrument cannot say
+          -- an accent in loudness, say it in time — dissonance charge
+          -- becomes a fuller duration on the velocity-blind channel
+          -- (C.P.E. Bach 1753 on agogic emphasis); mono-reduction still
+          -- clips whatever would collide
+          dur = if hw == 4 && pnCharge n > 0
+                  then pnDur n
+                         * WholeNotes (approxRational
+                             (1 + 0.12 * pnCharge n) 1e-6)
+                  else pnDur n
+       in n {pnChannel = hw, pnVel = vel, pnDur = dur}
     -- mono reduction: within the voice's single channel, a note ends
     -- where its successor begins (keep the moving line, clip the held);
     -- notes whose clip does not survive tick rounding are dropped
