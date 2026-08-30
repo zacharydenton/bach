@@ -59,6 +59,7 @@ data Performance = Performance
   { perfTempoMap :: [(WholeNotes, Bpm)] -- ^ derived from the conductor line
   , perfTracks :: [[PerfNote]] -- ^ one track per voice, onset-sorted
   , perfWhys :: [((Int, Int), [Why])] -- ^ (channel, index) -> provenance; lazy
+  , perfCadences :: [WholeNotes] -- ^ V-I arrivals (harmony model), notated
   }
 
 -- ---------------------------------------------------------------------
@@ -129,7 +130,8 @@ perform ip score@(Score tempo voices _ _ meter _) =
                  <> show (length usableChannels)
                  <> " MIDI channels available")
     else Right (assemble ip tempo tmap finalOnset melodyVi
-                  (hRootAt harm, hStabilityAt harm) tracks)
+                  (hRootAt harm, hStabilityAt harm)
+                  (hCadences harm) tracks)
   where
     ex = iExpress ip
     usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
@@ -223,12 +225,13 @@ perform ip score@(Score tempo voices _ _ meter _) =
 
 assemble
   :: Interp -> Bpm -> [(WholeNotes, Bpm)] -> WholeNotes -> Int
-  -> (WholeNotes -> Maybe Int, WholeNotes -> Double)
+  -> (WholeNotes -> Maybe Int, WholeNotes -> Double) -> [WholeNotes]
   -> [[(Rational, Rational, Ev)]] -> Performance
-assemble ip tempo tmap finalOnset melodyVi (rootAt, stabAt) trs =
+assemble ip tempo tmap finalOnset melodyVi (rootAt, stabAt) cads trs =
   Performance tmap
     (map enforceMono (rollFinal perturbed))
     (concatMap (map snd) whysed)
+    cads
   where
     ex = iExpress ip
     seed = seedOf (iPiece ip)
