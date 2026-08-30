@@ -62,6 +62,20 @@ def patch_dirs():
     return [d for d in cands if d and os.path.isdir(d)]
 
 
+def resolve_patch(path):
+    """Casting files record absolute paths from whichever machine cast
+    them; the factory bank is the same everywhere, so fall back to
+    Category/Name.fxp inside any library found here."""
+    if os.path.isfile(path):
+        return path
+    tail = os.path.join(*path.replace("\\", "/").split("/")[-2:])
+    for root in patch_dirs():
+        cand = os.path.join(root, tail)
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
 def scan_patches():
     # a system install and a surge-src checkout carry the same factory
     # bank; first tree wins per (category, name) so nothing lists twice
@@ -185,8 +199,8 @@ class Engine:
                     with open(dflt) as f:
                         casting = json.load(f)
                     for ch, path in casting.items():
-                        if (ch.isdigit() and int(ch) in self.instances
-                                and os.path.isfile(path)):
+                        path = resolve_patch(path) if ch.isdigit() else None
+                        if path and int(ch) in self.instances:
                             self.request_patch_ch(int(ch), path)
             cand = os.path.join(self.casting_dir, name + ".json")
             if os.path.isfile(cand):
@@ -194,7 +208,8 @@ class Engine:
                     casting = json.load(f)
                 for pi, part in enumerate(self.parts):
                     path = casting.get(str(part["channels"][0]))
-                    if path and os.path.isfile(path):
+                    path = resolve_patch(path) if path else None
+                    if path:
                         self.request_patch(pi, path)
 
     def request_patch(self, part_idx, path):
