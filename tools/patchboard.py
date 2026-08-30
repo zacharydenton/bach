@@ -151,20 +151,28 @@ class Engine:
             (n["onS"], n["onS"] + n["durS"], n["ch"], n["whys"])
             for tr in perf["tracks"] for n in tr if n.get("whys"))
 
-        end = 0.0
         for vi, tr in enumerate(perf["tracks"]):
             chans = sorted({n["ch"] for n in tr})
             self.parts.append(
                 {"name": f"{labels[vi]} (voice {vi})", "channels": chans})
+
+        # resolve THIS piece's effective patches BEFORE building events:
+        # calibration compensation must see the patches that will play,
+        # not whatever was loaded when the previous piece ended
+        eff = self._resolve_casting(name)
+        for ch, path in eff.items():
+            if path != self.ch_patch_path.get(ch) and os.path.isfile(path):
+                self.request_patch_ch(ch, path)
+
+        end = 0.0
+        for vi, tr in enumerate(perf["tracks"]):
             for n in tr:
                 ch = n["ch"]
                 on = int(n["onS"] * self.sr)
-                # timbre-aware articulation: the channel's current patch
-                # was measured (tools/calibrate_patch.py); subtract part
-                # of its release tail so breaths stay audible on pads.
-                # Applied at piece load from the patch loaded then.
-                m = self.calibration.get(
-                    self.ch_patch_path.get(ch, ""), None)
+                # timbre-aware articulation: subtract part of the
+                # channel's measured release tail (calibrate_patch.py)
+                # so breaths stay audible on pads
+                m = self.calibration.get(eff.get(ch, ""), None)
                 comp = min(0.5 * m["releaseS"], 0.3) if m else 0.0
                 durS = max(n["durS"] * 0.5, n["durS"] - comp)
                 off = max(on + 1, int((n["onS"] + durS) * self.sr))
@@ -186,32 +194,39 @@ class Engine:
         self.loop_len = -(-int((end + 2.0) * self.sr) // BLOCK) * BLOCK
         for s in self.instances.values():
             s.allNotesOff()
-        # a piece with its own casting file re-casts; otherwise the
-        # channels keep whatever patches are loaded (auditioning
-        # continuity) — except on the very first load, where
-        # casting/default.json seeds the standing rig so a restart
-        # never comes up on <init> patches
-        if self.casting_dir:
-            if not self._default_cast_done:
-                # seed the standing rig per CHANNEL (instances persist
-                # across pieces; the first piece may present few parts)
-                self._default_cast_done = True
-                dflt = os.path.join(self.casting_dir, "default.json")
-                if os.path.isfile(dflt):
-                    with open(dflt) as f:
-                        casting = json.load(f)
-                    for ch, path in casting.items():
-                        if (ch.isdigit() and int(ch) in self.instances
-                                and os.path.isfile(path)):
-                            self.request_patch_ch(int(ch), path)
-            cand = os.path.join(self.casting_dir, name + ".json")
-            if os.path.isfile(cand):
-                with open(cand) as f:
+
+
+    def _resolve_casting(self, name):
+        """Effective patch per channel for a piece about to load.
+
+        Current patches survive (auditioning continuity); on the very
+        first load casting/default.json seeds the standing rig; a piece
+        with its own casting file overrides, its per-part entries
+        expanded to every channel of the part.
+        """
+        eff = dict(self.ch_patch_path)
+        if not self.casting_dir:
+            return eff
+        if not self._default_cast_done:
+            self._default_cast_done = True
+            dflt = os.path.join(self.casting_dir, "default.json")
+            if os.path.isfile(dflt):
+                with open(dflt) as f:
                     casting = json.load(f)
-                for pi, part in enumerate(self.parts):
-                    path = casting.get(str(part["channels"][0]))
-                    if path and os.path.isfile(path):
-                        self.request_patch(pi, path)
+                for ch, path in casting.items():
+                    if (ch.isdigit() and int(ch) in self.instances
+                            and os.path.isfile(path)):
+                        eff[int(ch)] = path
+        cand = os.path.join(self.casting_dir, name + ".json")
+        if os.path.isfile(cand):
+            with open(cand) as f:
+                casting = json.load(f)
+            for part in self.parts:
+                path = casting.get(str(part["channels"][0]))
+                if path and os.path.isfile(path):
+                    for ch in part["channels"]:
+                        eff[ch] = path
+        return eff
 
     def request_patch(self, part_idx, path):
         self.pending.put(("part", part_idx, path))
@@ -506,6 +521,12 @@ function listenRemote(){
   audioOn = true;
   const a = new Audio('opus');
   a.preload = 'auto';
+  // the stream opens with ~5 s of history, so this listener's playhead
+  // sits about that far behind the engine; remember where the engine
+  // was at connect so the why-subtitles can track OUR ears, not the
+  // engine's now (approximate: the burst may be shorter right after a
+  // piece change, and a piece change mid-listen desyncs until reconnect)
+  OPUS = { el: a, refPos: STATE ? STATE.position + (Date.now()-STATE._t)/1000 : 0 };
   const b = document.getElementById('listenr');
   b.classList.add('on');
   const stat = s => { b.textContent = s; };
@@ -573,10 +594,17 @@ async function init(){
 }
 function setPiece(i){ post('piece',{index:i}); }
 let lastWhys = '';
+let OPUS = null;
+const OPUS_HISTORY_S = 5; // must match the server's history deque
 async function refreshWhys(){
   if (!STATE || !STATE.playing) return;
   // estimate the current position between 1 Hz state polls
-  const at = STATE.position + (Date.now() - (STATE._t||Date.now()))/1000;
+  let at = STATE.position + (Date.now() - (STATE._t||Date.now()))/1000;
+  if (OPUS && !OPUS.el.paused && OPUS.el.currentTime > 0){
+    // remote ears lag the engine by the history burst
+    at = OPUS.refPos - OPUS_HISTORY_S + OPUS.el.currentTime;
+    if (STATE.length > 0) at = ((at % STATE.length) + STATE.length) % STATE.length;
+  }
   const ws = await (await fetch('whys?at='+at.toFixed(2))).json();
   const seen = new Set();
   const lines = [];

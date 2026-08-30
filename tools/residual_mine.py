@@ -58,17 +58,35 @@ def zero_mean_log(tempi):
 
 def note_whys_by_beat(ir, positions):
     """Sets of active rule names per beat, from the IR's whys."""
-    step = positions[1] - positions[0] if len(positions) > 1 else 0.25
+    import bisect
     rules = [set() for _ in positions]
     for tr in ir["tracks"]:
         for n in tr:
             if not n.get("whys"):
                 continue
-            k = int(n["onWn"] / step) if step > 0 else 0
+            # the beat containing this onset, on the ACTUAL grid —
+            # pickups and meter changes make it non-uniform
+            k = bisect.bisect_right(positions, n["onWn"] + 1e-9) - 1
             if 0 <= k < len(rules):
                 for w in n["whys"]:
                     rules[k].add(w.split(":")[0])
     return rules
+
+
+def bar_len_at(kinds, positions, k):
+    """Length of the bar containing beat k, from the annotations."""
+    lo = k
+    while lo > 0 and kinds[lo] != "db":
+        lo -= 1
+    hi = k + 1
+    while hi < len(kinds) and kinds[hi] != "db":
+        hi += 1
+    if hi < len(positions):
+        return positions[hi] - positions[lo]
+    if lo > 0:
+        return positions[lo] - positions[lo - 1] \
+            if kinds[lo - 1] == "db" else 1.0
+    return 1.0
 
 
 def contexts_for(ir, positions, kinds):
@@ -93,9 +111,10 @@ def contexts_for(ir, positions, kinds):
             tags.append("subject sounding")
         if "breath" in rules[k]:
             tags.append("breath here")
-        if end - pos <= 2.0:
+        two_bars = 2 * bar_len_at(kinds, positions, k)
+        if end - pos <= two_bars:
             tags.append("final two bars")
-        elif pos <= 2.0:
+        elif pos <= two_bars:
             tags.append("first two bars")
         out.append(tags)
     return out
@@ -115,8 +134,10 @@ def main():
         stderr=subprocess.DEVNULL, text=True).strip()
     otb = os.path.join(root, "bin", "otb")
 
-    buckets = {}  # tag -> [residuals]
-    moments = []  # (|residual|, piece, beat wn, residual, tags)
+    # collect everything first; statistics happen in a second pass so
+    # moments can be tested AGAINST the fitted context effects
+    buckets = {}  # tag -> perf_key -> [residuals]
+    beat_data = []  # (piece, beat wn, tags, [residuals across perfs])
     nperf = 0
     with tempfile.TemporaryDirectory() as tmp:
         for piece in pieces:
@@ -135,6 +156,7 @@ def main():
                 if (not f.endswith("_annotations.txt")
                         or f.startswith("midi_score")):
                     continue
+                perf_key = (piece, f)
                 human = zero_mean_log(local_tempo(
                     perf_beat_times(os.path.join(pdir, f))))
                 nperf += 1
@@ -144,37 +166,50 @@ def main():
                     r = human[k] - ours[k]
                     piece_res.setdefault(k, []).append(r)
                     for tag in ctxs[k]:
-                        buckets.setdefault(tag, []).append(r)
-            # unexplained moments: beats where every performer agrees
-            # and the residual is large — the corpus proposing a rule
+                        buckets.setdefault(tag, {}).setdefault(
+                            perf_key, []).append(r)
             for k, rs in piece_res.items():
                 if len(rs) >= 2:
-                    m = sum(rs) / len(rs)
-                    spread = max(rs) - min(rs)
-                    if abs(m) > 0.15 and spread < abs(m):
-                        moments.append(
-                            (abs(m), piece, positions[k], m, ctxs[k]))
+                    beat_data.append((piece, positions[k], ctxs[k], rs))
 
+    # per-context effects; the t-statistic clusters by PERFORMANCE
+    # (beats within a performance are serially correlated — treating
+    # them as independent overstated the evidence enormously)
+    effect = {}
     print(f"{nperf} performances, {len(pieces)} pieces\n")
-    print(f"{'context':<22} {'n':>7} {'mean effect':>12} {'t':>7}")
+    print(f"{'context':<22} {'beats':>7} {'perfs':>6} "
+          f"{'mean effect':>12} {'t':>6}")
     rows = []
-    for tag, rs in buckets.items():
-        n = len(rs)
-        m = sum(rs) / n
-        sd = math.sqrt(sum((x - m) ** 2 for x in rs) / max(1, n - 1))
-        t = m / (sd / math.sqrt(n)) if sd > 0 else 0
-        rows.append((abs(t), tag, n, m, t))
-    for _, tag, n, m, t in sorted(rows, reverse=True):
-        pct = (math.exp(m) - 1) * 100
-        print(f"{tag:<22} {n:>7} {pct:>+10.1f}% {t:>7.1f}")
-    print("\n(positive = humans faster than the compiler there;"
-          " negative = humans slower)")
+    for tag, by_perf in buckets.items():
+        per_perf = [sum(rs) / len(rs) for rs in by_perf.values()]
+        n_beats = sum(len(rs) for rs in by_perf.values())
+        np_ = len(per_perf)
+        mu = sum(per_perf) / np_
+        effect[tag] = mu
+        sd = math.sqrt(sum((x - mu) ** 2 for x in per_perf)
+                       / max(1, np_ - 1))
+        t = mu / (sd / math.sqrt(np_)) if sd > 0 and np_ > 1 else 0
+        rows.append((abs(t), tag, n_beats, np_, mu, t))
+    for _, tag, n_beats, np_, mu, t in sorted(rows, reverse=True):
+        pct = (math.exp(mu) - 1) * 100
+        print(f"{tag:<22} {n_beats:>7} {np_:>6} {pct:>+10.1f}% {t:>6.1f}")
+    print("\n(positive = humans faster than the compiler there; "
+          "negative = humans slower;\n t is clustered by performance)")
 
-    print("\nunexplained moments (all performers agree, no context"
-          " explains it):")
-    for _, piece, wn, m, tags in sorted(moments, reverse=True)[:15]:
-        pct = (math.exp(m) - 1) * 100
-        print(f"  {piece} @ {wn:.2f}wn: humans {pct:+.0f}%"
+    # moments that survive the fitted context effects: subtract every
+    # applicable context's mean before judging the beat unexplained
+    moments = []
+    for piece, wn, tags, rs in beat_data:
+        mu = sum(rs) / len(rs)
+        adj = mu - sum(effect.get(tg, 0) for tg in tags)
+        spread = max(rs) - min(rs)
+        if abs(adj) > 0.15 and spread < abs(adj):
+            moments.append((abs(adj), piece, wn, adj, tags))
+    print("\nunexplained moments (performer consensus AFTER removing "
+          "the modeled\ncontext effects):")
+    for _, piece, wn, adj, tags in sorted(moments, reverse=True)[:15]:
+        pct = (math.exp(adj) - 1) * 100
+        print(f"  {piece} @ {wn:.2f}wn: humans {pct:+.0f}% beyond context"
               f"  ctx={','.join(tags) or 'none'}")
 
 

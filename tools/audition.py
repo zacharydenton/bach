@@ -65,7 +65,8 @@ def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0,
             on = int(n["onS"] * sr)
             # timbre-aware articulation: subtract the patch's measured
             # release so perceived silence matches the written gate
-            comp = comp_for(cal, (patches or {}).get(ch))
+            p = patches or {}
+            comp = comp_for(cal, p.get(ch, p.get(None)))
             durS = max(n["durS"] * 0.5, n["durS"] - comp)
             off = int((n["onS"] + durS) * sr)
             if not scl:

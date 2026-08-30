@@ -49,48 +49,44 @@ def bwv_of(piece):
 
 
 def score_beat_positions(path):
-    """Whole-note position of every annotated beat.
+    """Whole-note position of every annotated beat, from the file's own
+    score-MIDI times.
 
-    The score annotation file marks each beat b/db, with the meter
-    stated at downbeats ("db,4/4,0"). Beats between downbeats divide
-    the bar evenly, which is how ASAP defines them.
+    ASAP's score MIDIs are deadpan constant-tempo renders, so score
+    position is PROPORTIONAL to the annotation's first time column —
+    the one mapping that survives pickups (20 of the 58 WTC files
+    open off the downbeat; their first annotated beat is not at zero)
+    and partial final bars. The whole-notes-per-second factor comes
+    from full downbeat-to-downbeat bars measured against their stated
+    meter (median across the piece; these files are constant-tempo, so
+    the spread is zero).
     """
     rows = []
+    cur_meter = None
     with open(path) as f:
         for line in f:
             parts = line.rstrip("\n").split("\t")
             if len(parts) < 3:
                 continue
-            tag = parts[2]
-            kind = tag.split(",")[0]
-            meter = None
-            bits = tag.split(",")
+            bits = parts[2].split(",")
             if len(bits) >= 2 and "/" in bits[1]:
                 n, d = bits[1].split("/")
-                meter = (int(n), int(d))
-            rows.append((kind, meter))
-    # group into bars at downbeats
-    positions = []
-    pos = 0.0
-    bar_len = None
-    i = 0
-    while i < len(rows):
-        kind, meter = rows[i]
-        if meter:
-            bar_len = meter[0] / meter[1]
-        # count beats to the next downbeat (this bar's beats)
-        j = i + 1
-        while j < len(rows) and rows[j][0] != "db":
-            j += 1
-        nbeats = j - i
-        if bar_len is None:
-            bar_len = nbeats / 4  # assume quarter beats before any meter
-        step = bar_len / nbeats
-        for k in range(nbeats):
-            positions.append(pos + k * step)
-        pos += bar_len
-        i = j
-    return positions
+                cur_meter = (int(n), int(d))
+            rows.append((float(parts[0]), bits[0], cur_meter))
+    # wn/second from each full bar (db at t1, next db at t2, meter m)
+    factors = []
+    dbs = [(t, m) for t, k, m in rows if k == "db"]
+    for (t1, m), (t2, _) in zip(dbs, dbs[1:]):
+        if m and t2 > t1:
+            factors.append((m[0] / m[1]) / (t2 - t1))
+    if not factors:
+        # single-bar oddity: fall back to beat spacing as quarters
+        ts = [t for t, _, _ in rows]
+        gaps = [b - a for a, b in zip(ts, ts[1:]) if b > a]
+        factors = [0.25 / (sorted(gaps)[len(gaps) // 2])] if gaps else [0.5]
+    factors.sort()
+    wn_per_s = factors[len(factors) // 2]
+    return [t * wn_per_s for t, _, _ in rows]
 
 
 def perf_beat_times(path):
@@ -274,8 +270,15 @@ def fit_performer(otb, args, performer, tmp):
             f"({len(pieces)} WTC pieces: {', '.join(pieces)}).\n"
             f"# In-sample tempo-shape correlation: {final_r:.3f} "
             f"(defaults: {base_r:.3f}).\n"
-            f"# A performer's stance as thirty inspectable numbers —\n"
-            f"# overlay with: otb compile --config {path}\n")
+            f"# A performer's stance as a handful of inspectable "
+            f"numbers.\n"
+            f"# Self-contained: the base configuration is embedded "
+            f"below, then\n# the fitted values override — so --config "
+            f"{os.path.basename(path)}\n# reproduces the reported "
+            f"correlation by itself.\n\n")
+        if os.path.isfile(args.config):
+            out.write(open(args.config).read())
+            out.write("\n# --- fitted stance ---\n")
         by_sec = {}
         for k, v in knobs.items():
             by_sec.setdefault(KNOB_SECTIONS[k], []).append((k, v))
