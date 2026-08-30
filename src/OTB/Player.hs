@@ -172,7 +172,7 @@ perform ip score@(Score tempo voices _ _ meter _) =
       [] -> [(0, end)]
       ms ->
         concat
-          [ [ (a, min end (a + gl))
+          [ [ (a, min (min stop end) (a + gl))
             | a <- takeWhile (< stop) (iterate (+ gl) t) ]
           | ((t, (n, d)), stop) <-
               zip ms (map fst (drop 1 ms) <> [end])
@@ -256,10 +256,10 @@ assemble ip tempo tmap finalOnset melodyVi (rootAt, stabAt) cads trs =
               isMelody = vi == melodyVi
               lead = if isMelody then msToWnAt (fromRational t) leadMs else 0
               jms = exEnsemble ex * exJitterMs ex
-                      * seededJitter1f seed (i * 13 + ch * 7 + 1)
+                      * seededJitter1f seed (ch * 2) i
               jit = msToWnAt (fromRational t) jms
               jv = exEnsemble ex * exJitterVel ex
-                     * seededJitter1f seed (i * 31 + ch * 3)
+                     * seededJitter1f seed (ch * 2 + 1) i
               vel = clampV (evVel ev + round jv)
               werck = offsetFor (iTuning ip) (evPitch ev)
               off

@@ -171,10 +171,11 @@ uphillLane k ns
 -- adjacent 2:1 pair the contrast is softened — the short note takes k
 -- of its length from the long one. Runs on raw lanes like inégales.
 doubleDurLane :: Double -> [ScoreNote] -> [ScoreNote]
-doubleDurLane k ns
+doubleDurLane k0 ns
   | k <= 0 = ns
   | otherwise = go ns
   where
+    k = min 0.45 k0 -- past that the pair inverts
     go (a : b : rest)
       | snDur a == 2 * snDur b
       , snOnset a + snDur a == snOnset b =
@@ -228,12 +229,17 @@ seededJitter seed i =
 -- | 1\/f-flavoured timing noise (Gilden, Thornton & Mallon 1995: human
 -- timing residuals are fractal, not white): three octaves of the seeded
 -- noise summed, the slower components shared across neighbouring notes.
-seededJitter1f :: Int -> Int -> Double
-seededJitter1f seed i =
-  ( seededJitter seed i
-      + 0.7 * seededJitter (seed + 101) (i `div` 4)
-      + 0.5 * seededJitter (seed + 707) (i `div` 16) )
+seededJitter1f :: Int -> Int -> Int -> Double
+seededJitter1f seed lane i =
+  -- the index must arrive UNSTRIDED: the div-4/div-16 octaves only
+  -- share slow components when consecutive notes have consecutive i.
+  -- Lane identity enters as a seed salt instead.
+  ( seededJitter s i
+      + 0.7 * seededJitter (s + 101) (i `div` 4)
+      + 0.5 * seededJitter (s + 707) (i `div` 16) )
     / 2.2
+  where
+    s = seed + lane * 7919
 
 -- | A stable small seed from a piece name.
 seedOf :: String -> Int

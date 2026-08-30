@@ -73,15 +73,24 @@ analyzeHarmony meter notes end = Harmony
     meter' = case meter of
       [] -> [(0, (4, 4))]
       ms -> ms
-    barLenAt t = case takeWhile ((<= t) . fst) meter' of
-      [] -> let (_, (n, d)) = head' meter' in wn n d
-      ms -> let (_, (n, d)) = last ms in wn n d
-    beatLenAt t = case takeWhile ((<= t) . fst) meter' of
-      [] -> let (_, (_, d)) = head' meter' in wn 1 d
-      ms -> let (_, (_, d)) = last ms in wn 1 d
     wn n d = WholeNotes (fromIntegral n / fromIntegral (d :: Int))
-    head' (x : _) = x
-    head' [] = (0, (4, 4))
+
+    -- meter segments with their stops; every grid below is laid PER
+    -- SEGMENT and re-anchored at each meter change, so a 4/4 -> 3/8
+    -- piece never has a beat straddling the barline of the new meter
+    segs = zip meter' (map fst (drop 1 meter') <> [max end 1])
+    grid stepOf =
+      [ (a, min stop (a + sl))
+      | ((t, (n, d)), stop) <- segs
+      , let sl = stepOf n d
+      , sl > 0
+      , a <- takeWhile (< stop) (iterate (+ sl) t) ]
+    beatGrid = grid (\_ d -> wn 1 d)
+    barGrid = grid wn
+    keyGrid = grid (\n d -> 2 * wn n d) -- two-bar key windows
+
+    -- index of the grid cell containing t (grids are onset-ascending)
+    idxOf g t = max 0 (length (takeWhile ((<= t) . fst) g) - 1)
 
     -- duration-weighted pitch-class vector for a window
     pcVector a b =
@@ -104,14 +113,12 @@ analyzeHarmony meter notes end = Harmony
 
     -- one key candidate score list per two-bar window (a single bar of
     -- a fugue subject alone is too thin to name a key)
-    keyWin = 2 * barLenAt 0
-    bars = takeWhile (< end) (iterate (+ keyWin) 0)
     windowScores =
       [ [ (corr v prof k, (k, isMaj))
         | (prof, isMaj) <- [(kkMajor, True), (kkMinor, False)]
         , k <- [0 .. 11] ]
-      | a <- bars
-      , let v = pcVector a (a + keyWin) ]
+      | (a, b) <- keyGrid
+      , let v = pcVector a b ]
 
     -- Viterbi over 24 key states with a switch penalty: keys are sticky
     -- (Temperley's change penalty), so a chromatic bar does not flicker
@@ -131,22 +138,35 @@ analyzeHarmony meter notes end = Harmony
               | s <- states ]
             final = maximumBy (comparing (\(_, sc, _) -> sc)) (foldl step start ws)
          in reverse (let (_, _, path) = final in path)
+    -- whole-piece K-S drifts a fifth sharp (the dominant is simply
+    -- emphasised in tonal music); the corpus supplies the corrective:
+    -- Bach ends on the tonic in the bass, so the final bass pitch
+    -- class earns its candidate a bonus. Mode still comes from the
+    -- profiles (a picardy third must not flip a minor piece major).
+    finalBassPc =
+      let sounding = [p | (o, d, p) <- notes, o + d >= end - 1 / 16]
+       in case sounding of
+            [] -> Nothing
+            ps -> Just (minimum ps `mod` 12)
     pieceKey =
       let v = pcVector 0 end
        in snd (maximumBy (comparing fst)
-                [ (corr v prof k, (k, isMaj))
+                [ (corr v prof k + bassBonus k, (k, isMaj))
                 | (prof, isMaj) <- [(kkMajor, True), (kkMinor, False)]
                 , k <- [0 .. 11] ])
+      where
+        bassBonus k = if Just k == finalBassPc then 0.25 else 0
+    -- WTC pieces declare their tonic before modulating; the opening
+    -- window is too thin for the profiles (a solo subject reads as its
+    -- dominant), so it is pinned to the whole-piece key
+    keyTrack' = case keyTrack of
+      (_ : more) -> pieceKey : more
+      [] -> [pieceKey]
     keyAtT t =
-      let WholeNotes tr = t
-          WholeNotes blr = keyWin
-          i = max 0 (floor (tr / blr)) :: Int
-       in if blr > 0 && i < length keyTrack then keyTrack !! i else pieceKey
+      let i = idxOf keyGrid t
+       in if i < length keyTrack' then keyTrack' !! i else pieceKey
 
     -- chord root per beat: Temperley-style root support, bass favoured
-    beats =
-      let step = beatLenAt 0
-       in takeWhile (< end) (iterate (+ step) 0)
     rootOf a b =
       let sounding =
             [ (p, w) | (o, d, p) <- notes
@@ -169,12 +189,9 @@ analyzeHarmony meter notes end = Harmony
                     _ -> 0.0
                in Just (fst (maximumBy (comparing snd)
                               [(r, support r) | r <- [0 .. 11]]))
-    rootTrack = [rootOf a (a + beatLenAt a) | a <- beats]
+    rootTrack = [rootOf a b | (a, b) <- beatGrid]
     rootAtT t =
-      let step = beatLenAt 0
-          WholeNotes tr = t
-          WholeNotes sr = step
-          i = max 0 (floor (tr / sr)) :: Int
+      let i = idxOf beatGrid t
        in if i < length rootTrack then rootTrack !! i else Nothing
 
     -- how many consecutive beats (up to and including this one) the
@@ -186,10 +203,7 @@ analyzeHarmony meter notes end = Harmony
           let n' = if r == prev && r /= Nothing then n + 1 else 1
            in n' : go n' r more
     stabilityAtT t =
-      let step = beatLenAt 0
-          WholeNotes tr = t
-          WholeNotes sr = step
-          i = max 0 (floor (tr / sr)) :: Int
+      let i = idxOf beatGrid t
        in if i < length heldTrack
             then min 1 ((fromIntegral (heldTrack !! i) - 1) / 2)
             else 0
@@ -204,16 +218,11 @@ analyzeHarmony meter notes end = Harmony
 
     -- cadence: beat roots (r1, r2) a falling fifth apart, r2 the tonic,
     -- arriving on a barline
+    beatStarts = map fst beatGrid
     cadences =
-      [ b2 | ((b1, Just r1), (b2, Just r2)) <-
-                zip (zip beats rootTrack) (drop 1 (zip beats rootTrack))
+      [ b2 | ((_, Just r1), (b2, Just r2)) <-
+                zip (zip beatStarts rootTrack)
+                    (drop 1 (zip beatStarts rootTrack))
       , (r1 - r2) `mod` 12 == 7
       , let (key, _) = keyAtT b2 in r2 == key
-      , onBarline b2
-      , b1 >= 0 ]
-    onBarline t =
-      let bl = barLenAt t
-          WholeNotes tr = t
-          WholeNotes blr = bl
-       in blr > 0 && denominator' (tr / blr) == 1
-    denominator' r = let n = floor r :: Integer in if fromIntegral n == r then 1 else 0 :: Integer
+      , b2 `elem` map fst barGrid ]

@@ -34,6 +34,7 @@ module OTB.Instrument
 
 import Data.List (sortOn)
 import Data.Ratio (approxRational)
+import OTB.Explain (why)
 import OTB.Player (PerfNote (..), Performance (..))
 import OTB.Units (WholeNotes (..), toTicks)
 
@@ -94,8 +95,14 @@ hardwareTracks (Performance tmap tracks whys cads) = do
     | (vi, tr) <- zip [0 ..] tracks ]
   let (reduced, counts) = unzip (map reduceTrack seated)
       whys' =
-        [ ((pnChannel n, pnIndex n), ws)
+        [ ((pnChannel n, pnIndex n), ws <> agogicWhy n)
         | tr <- reduced, (old, n) <- tr, Just ws <- [lookup old whys] ]
+      agogicWhy n =
+        [ why "agogic-accent"
+            ("duration x" <> show (1 + 0.12 * pnCharge n)
+               <> " (velocity-blind channel)")
+            "CPE Bach 1753; harpsichord practice"
+        | pnChannel n == 4, pnCharge n > 0 ]
   pure (Performance tmap (map (map snd) reduced) whys' cads, sum counts)
   where
     remap hw n =

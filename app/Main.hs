@@ -404,6 +404,9 @@ runGround
   -> FilePath -> Maybe FilePath -> Maybe FilePath -> IO ()
 runGround bass nvar tempo temp out mscl mjson = do
   checkBpm "--tempo" tempo
+  when (temp == "adaptive" && mscl /= Nothing)
+    (die ("adaptive temperament is bend-carried per chord; no static "
+            <> ".scl can express it — drop --emit-scl"))
   let adaptive = temp == "adaptive"
   table <- resolveTemperament (if adaptive then "werckmeister3" else temp)
   s <- either die pure (generateScore bass nvar (Bpm tempo))

@@ -61,6 +61,11 @@ subjectEntries s =
       (o1, v1) <- case sortOn fst entries' of
         (x : _) -> Just x
         [] -> Nothing
+      -- another voice striking WITH the first note means the opening
+      -- is chordal, not imitative: no solo statement, no subject
+      if any (\(o, v) -> vIndex v /= vIndex v1 && o == o1) entries'
+        then Nothing
+        else Just ()
       o2 <- case sortOn id [o | (o, v) <- entries'
                           , vIndex v /= vIndex v1, o > o1] of
         (x : _) -> Just x

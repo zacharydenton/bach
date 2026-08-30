@@ -108,6 +108,7 @@ loadConfig src = do
       | k == "fermata_hold", v < 1 = bad ">= 1"
       | k == "vel_base", v < 1 || v > 127 = bad "in [1, 127]"
       | k == "arch_bars", v < 1 = bad ">= 1 (rounded to whole bars)"
+      | k == "trill_accel", v < 1 = bad ">= 1 (1 = even trill)"
       | otherwise = Nothing
       where
         bad want = Just ("[" <> T.unpack sect <> "] " <> T.unpack k <> " = "
@@ -116,10 +117,15 @@ loadConfig src = do
     nonNegative =
       [ "rit_span", "rit_curve", "expression", "ensemble", "lead_ms", "roll_ms"
       , "jitter_ms", "jitter_vel", "dis_vel", "dis_lean", "arch_piece"
-      , "arch_group", "breath_threshold", "w_gap", "w_dur", "w_leap" ]
+      , "arch_group", "breath_threshold", "w_gap", "w_dur", "w_leap"
+      , "w_cadence", "cadence_span", "mel_charge", "harm_charge"
+      , "subject_vel", "leap_dur", "trill_termination" ]
     gates = ["base", "staccato", "tenuto", "legato", "repeated", "cantabile"
             , "min_gate", "rit_floor"]
-    fractions = ["breath", "inegal"]
+    -- these scale a duration or tempo multiplicatively: >= 1 would
+    -- produce zero or negative durations/BPM downstream
+    fractions = [ "breath", "inegal", "uphill", "double_dur"
+                , "dur_contrast", "leap_pause", "cadence_depth" ]
 
 -- | Agogic parameters from @[agogics]@ overlaid with @[piece.<name>]@.
 agogicsFor :: Config -> Text -> AgogicParams -> AgogicParams

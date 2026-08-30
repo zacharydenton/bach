@@ -707,6 +707,20 @@ sota = testGroup "sota"
                  h <- harmOf f
                  (hKeyAt h 0, hMajorAt h 0) @?= (k, mj))
           expect
+  , testCase "harmony: opening keys vs WTC ground truth (>= 95/96)" $ do
+      present <- doesDirectoryExist corpusDir
+      if not present then pure () else do
+        results <- mapM
+          (\(bk, nn, kind) -> do
+             let name = "wtc" <> show (bk :: Int) <> [kind]
+                          <> (if nn < 10 then '0' : show nn else show nn)
+                 expPc = [0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11]
+                           !! (nn - 1)
+             h <- harmOf name
+             pure (name, (hKeyAt h 0, hMajorAt h 0) == (expPc, odd nn)))
+          [(bk, nn, k) | bk <- [1, 2], nn <- [1 .. 24], k <- "pf"]
+        let wrong = [n | (n, False) <- results]
+        assertBool ("wrong keys: " <> show wrong) (length wrong <= 1)
   , testCase "adaptive temperament: settled major third goes just" $ do
       -- root C (Werckmeister offset 0): at full stability the E sits at
       -- the just major third, -13.7 cents — flatter than Werckmeister's
