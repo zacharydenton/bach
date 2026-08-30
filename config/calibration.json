@@ -1,0 +1,22 @@
+{
+  "/usr/share/surge-xt/patches_factory/Keys/EP 2.fxp": {
+    "attackS": 0.01,
+    "releaseS": 0.29
+  },
+  "/usr/share/surge-xt/patches_factory/Leads/Clean Shit.fxp": {
+    "attackS": 0.01,
+    "releaseS": 0.015
+  },
+  "/usr/share/surge-xt/patches_factory/Leads/Cray.fxp": {
+    "attackS": 0.005,
+    "releaseS": 0.255
+  },
+  "/usr/share/surge-xt/patches_factory/Leads/DNA Sequencer.fxp": {
+    "attackS": 0.005,
+    "releaseS": 0.015
+  },
+  "/usr/share/surge-xt/patches_factory/Plucks/Nice Pluck 2.fxp": {
+    "attackS": 0.125,
+    "releaseS": 1.54
+  }
+}

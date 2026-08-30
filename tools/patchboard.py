@@ -89,7 +89,9 @@ class Engine:
     its own config/casting/<piece>.json.
     """
 
-    def __init__(self, playlist, sr, scl, casting_dir=None):
+    def __init__(self, playlist, sr, scl, casting_dir=None,
+                 calibration=None):
+        self.calibration = calibration or {}
         self.sr = sr
         self.playlist = playlist  # [(name, perf)]
         self.casting_dir = casting_dir
@@ -157,7 +159,15 @@ class Engine:
             for n in tr:
                 ch = n["ch"]
                 on = int(n["onS"] * self.sr)
-                off = max(on + 1, int((n["onS"] + n["durS"]) * self.sr))
+                # timbre-aware articulation: the channel's current patch
+                # was measured (tools/calibrate_patch.py); subtract part
+                # of its release tail so breaths stay audible on pads.
+                # Applied at piece load from the patch loaded then.
+                m = self.calibration.get(
+                    self.ch_patch_path.get(ch, ""), None)
+                comp = min(0.5 * m["releaseS"], 0.3) if m else 0.0
+                durS = max(n["durS"] * 0.5, n["durS"] - comp)
+                off = max(on + 1, int((n["onS"] + durS) * self.sr))
                 end = max(end, n["onS"] + n["durS"])
                 evs = self.events.setdefault(ch, [])
                 if not self.scl_active:
@@ -903,6 +913,11 @@ def main():
                          "the unauthenticated control page to the LAN)")
     ap.add_argument("--local", action="store_true",
                     help="also play on the local audio device (sounddevice)")
+    ap.add_argument("--calibration", metavar="CAL.json",
+                    default=None,
+                    help="patch-envelope calibration; note ends are "
+                         "compensated for each channel's release tail "
+                         "(applied at piece load)")
     ap.add_argument("--casting", metavar="DIR",
                     help="directory of <piece>.json channel->patch maps "
                          "(default: config/casting/)")
@@ -940,7 +955,12 @@ def main():
         sys.exit("no Surge patch library found (patches_factory)")
     casting_dir = args.casting or os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "config", "casting")
-    engine = Engine(playlist, args.sr, args.scl, casting_dir=casting_dir)
+    calibration = None
+    if args.calibration and os.path.isfile(args.calibration):
+        with open(args.calibration) as f:
+            calibration = json.load(f)
+    engine = Engine(playlist, args.sr, args.scl, casting_dir=casting_dir,
+                    calibration=calibration)
     print(f"album: {len(playlist)} pieces, starting {playlist[0][0]}",
           flush=True)
     if shutil.which("ffmpeg") is None:
