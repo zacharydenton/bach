@@ -1,0 +1,16 @@
+# MiyashitaM01M, fitted from ASAP beat annotations (4 WTC pieces: wtc1f03, wtc1f09, wtc1p03, wtc1p09).
+# In-sample tempo-shape correlation: 0.775 (defaults: 0.149).
+# A performer's stance as thirty inspectable numbers —
+# overlay with: otb compile --config /home/zach/code/otb/config/performers/MiyashitaM01M.toml
+
+[agogics]
+cadence_depth = 0.0
+rit_floor = 0.4
+rit_span = 2.0
+
+[arches]
+arch_group = 0.0
+arch_piece = 0.0
+
+[interpretation]
+expression = 0.4

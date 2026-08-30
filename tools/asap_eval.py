@@ -176,13 +176,114 @@ def eval_piece(ir, asap_dir, piece):
 
 
 def with_expression(base_config, value, tmpdir):
-    path = os.path.join(tmpdir, f"expr_{value}.toml")
+    return with_knobs(base_config, {"expression": value}, tmpdir)
+
+
+KNOB_SECTIONS = {
+    "expression": "interpretation",
+    "arch_piece": "arches",
+    "arch_group": "arches",
+    "rit_floor": "agogics",
+    "rit_span": "agogics",
+    "cadence_depth": "agogics",
+}
+
+KNOB_GRIDS = {
+    "expression": [0.4, 0.6, 0.8, 1.0, 1.3],
+    "arch_piece": [0.0, 0.015, 0.03, 0.06],
+    "arch_group": [0.0, 0.01, 0.02, 0.04],
+    "rit_floor": [0.4, 0.5, 0.6, 0.75],
+    "rit_span": [0.5, 1.0, 2.0],
+    "cadence_depth": [0.0, 0.04, 0.08, 0.15],
+}
+
+
+def with_knobs(base_config, knobs, tmpdir):
+    tag = "_".join(f"{k}{v}" for k, v in sorted(knobs.items()))
+    path = os.path.join(tmpdir, f"knobs_{abs(hash(tag))}.toml")
     with open(path, "w") as out:
         if os.path.isfile(base_config):
             out.write(open(base_config).read())
             out.write("\n")
-        out.write(f"[interpretation]\nexpression = {value}\n")
+        by_sec = {}
+        for k, v in knobs.items():
+            by_sec.setdefault(KNOB_SECTIONS[k], []).append((k, v))
+        for sec, kvs in by_sec.items():
+            out.write(f"[{sec}]\n")
+            for k, v in kvs:
+                out.write(f"{k} = {v}\n")
     return path
+
+
+def performer_pieces(asap_dir, kern_dir, performer):
+    """Pieces (in our naming) this performer recorded."""
+    out = []
+    for p in sorted(f[:-4] for f in os.listdir(kern_dir)
+                    if f.endswith(".krn")):
+        pdir = os.path.join(asap_dir, "Bach", *bwv_of(p))
+        if os.path.isfile(os.path.join(
+                pdir, performer + "_annotations.txt")):
+            out.append(p)
+    return out
+
+
+def performer_objective(otb, args, performer, pieces, config, tmp):
+    rs = []
+    for piece in pieces:
+        ir = compile_ir(otb, piece, args.kern, tmp, config)
+        for who, r in eval_piece(ir, args.asap, piece):
+            if who == performer and not math.isnan(r):
+                rs.append(r)
+    return sum(rs) / len(rs) if rs else float("nan")
+
+
+def fit_performer(otb, args, performer, tmp):
+    pieces = performer_pieces(args.asap, args.kern, performer)
+    if not pieces:
+        sys.exit(f"no WTC recordings by {performer} in ASAP")
+    knobs = {}
+    base_r = performer_objective(
+        otb, args, performer, pieces, args.config, tmp)
+    print(f"{performer}: {len(pieces)} pieces "
+          f"({', '.join(pieces)}), default r = {base_r:.3f}")
+    # two sweeps of coordinate descent over the knob grids
+    for sweep in range(2):
+        for knob, grid in KNOB_GRIDS.items():
+            best_v, best_r = None, -2
+            for v in grid:
+                trial = dict(knobs)
+                trial[knob] = v
+                cfg = with_knobs(args.config, trial, tmp)
+                r = performer_objective(
+                    otb, args, performer, pieces, cfg, tmp)
+                if not math.isnan(r) and r > best_r:
+                    best_v, best_r = v, r
+            knobs[knob] = best_v
+            print(f"  sweep {sweep + 1} {knob:<14} -> {best_v}"
+                  f"   r = {best_r:.3f}")
+    final_r = performer_objective(
+        otb, args, performer, pieces,
+        with_knobs(args.config, knobs, tmp), tmp)
+    # write the performer as a config
+    outdir = os.path.join(ROOT, "config", "performers")
+    os.makedirs(outdir, exist_ok=True)
+    path = os.path.join(outdir, performer + ".toml")
+    with open(path, "w") as out:
+        out.write(
+            f"# {performer}, fitted from ASAP beat annotations "
+            f"({len(pieces)} WTC pieces: {', '.join(pieces)}).\n"
+            f"# In-sample tempo-shape correlation: {final_r:.3f} "
+            f"(defaults: {base_r:.3f}).\n"
+            f"# A performer's stance as thirty inspectable numbers —\n"
+            f"# overlay with: otb compile --config {path}\n")
+        by_sec = {}
+        for k, v in knobs.items():
+            by_sec.setdefault(KNOB_SECTIONS[k], []).append((k, v))
+        for sec, kvs in sorted(by_sec.items()):
+            out.write(f"\n[{sec}]\n")
+            for k, v in sorted(kvs):
+                out.write(f"{k} = {v}\n")
+    print(f"  fitted r = {final_r:.3f} (default {base_r:.3f}) -> {path}")
 
 
 def main():
@@ -196,6 +297,9 @@ def main():
     ap.add_argument("--otb", default=None)
     ap.add_argument("--fit", action="store_true",
                     help="grid the [interpretation] expression knob")
+    ap.add_argument("--performer-fit", metavar="NAME",
+                    help="fit the interpretation knobs to one ASAP "
+                         "performer; write config/performers/NAME.toml")
     args = ap.parse_args()
 
     otb = args.otb
@@ -217,6 +321,9 @@ def main():
         sys.exit("no overlapping pieces found (is corpus/asap present?)")
 
     with tempfile.TemporaryDirectory() as tmp:
+        if args.performer_fit:
+            fit_performer(otb, args, args.performer_fit, tmp)
+            return
         if args.fit:
             grid = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
             print(f"{'piece':<10}" + "".join(f"  x{v:<6}" for v in grid))
