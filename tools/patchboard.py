@@ -106,6 +106,15 @@ class Engine:
         # their buffer fills at network speed instead of 1 s per second
         self.history = collections.deque(
             maxlen=int(5 * sr / CHUNK_FRAMES) + 1)
+        # every piece's loop length, precomputed so a listener's anchor
+        # can name the timeline of pieces its history burst spans
+        self.piece_lengths = []
+        for _, perf in playlist:
+            pend = max((n["onS"] + n["durS"]
+                        for tr in perf["tracks"] for n in tr), default=0.0)
+            self.piece_lengths.append(
+                (-(-int((pend + 2.0) * sr) // BLOCK) * BLOCK) / sr)
+        self.anchors = collections.OrderedDict()  # token -> anchor
 
         maxch = max(n["ch"] for _, p in playlist
                     for tr in p["tracks"] for n in tr) + 1
@@ -326,23 +335,37 @@ class Engine:
             done += span
         return out
 
-    def subscribe(self, prefill=False):
+    def subscribe(self, prefill=False, token=None):
         q = queue.Queue(maxsize=256)
         with self.sublock:
             if prefill:
-                for d in self.history:
+                # segment timeline for THIS listener's stream: every
+                # piece boundary inside the history burst, so the
+                # subtitle pane maps audio.currentTime to the piece and
+                # position actually sounding (chunks are tagged at
+                # their start; a mid-chunk boundary is off <= ~85 ms)
+                segments = []
+                stream_s = 0.0
+                prev_piece = None
+                for (piece, sample), d in self.history:
+                    if piece != prev_piece:
+                        segments.append({"streamS": stream_s,
+                                         "piece": piece,
+                                         "posS": sample / self.sr})
+                        prev_piece = piece
                     q.put_nowait(d)
-                # exact timeline anchor for this listener: the engine
-                # position NOW, and how much banked history precedes it
-                # in the stream — the subtitle pane needs both. (A
-                # simultaneous second listener would overwrite this;
-                # the ms-scale race is accepted for a one-user board.)
-                self.last_anchor = {
-                    "pieceIndex": self.piece_i,
-                    "position": self.sample / self.sr,
-                    "historyS": len(self.history) * CHUNK_FRAMES / self.sr,
-                    "length": self.loop_len / self.sr,
-                }
+                    stream_s += len(d) / 8 / self.sr  # f32 stereo
+                if not segments:
+                    segments = [{"streamS": 0.0, "piece": self.piece_i,
+                                 "posS": self.sample / self.sr}]
+                anchor = {"segments": segments,
+                          "lengths": self.piece_lengths,
+                          "count": len(self.playlist)}
+                if token:
+                    self.anchors[token] = anchor
+                    while len(self.anchors) > 8:
+                        self.anchors.popitem(last=False)
+                self.last_anchor = anchor
             self.subscribers.add(q)
         return q
 
@@ -357,6 +380,7 @@ class Engine:
         limiter_gain = 1.0
         applied = 1.0
         while True:
+            chunk_tag = (self.piece_i, self.sample)
             mix = self.render(CHUNK_FRAMES)
             # peak meter (pre-limiter) + a simple riding limiter: browsers
             # hard-clip anything past 0 dBFS, which sounds like ring mod.
@@ -374,7 +398,7 @@ class Engine:
             applied = g
             data = mix.T.reshape(-1).astype("<f4").tobytes()  # interleaved
             with self.sublock:
-                self.history.append(data)
+                self.history.append((chunk_tag, data))
                 subs = list(self.subscribers)
             for q in subs:
                 try:
@@ -530,13 +554,15 @@ function listenRemote(){
   // are banked, then let the history burst build a larger cushion.
   if (audioOn) return;
   audioOn = true;
-  const a = new Audio('opus');
+  const tok = Math.random().toString(36).slice(2);
+  const a = new Audio('opus?tok=' + tok);
   a.preload = 'auto';
+  setTimeout(() => fetch('anchor?tok=' + tok).then(r=>r.json())
+    .then(x=>{ if (!x.err) OPUS.anchor = x; }), 300);
   // the server records an exact anchor (engine position + true banked
   // history) when it assembles this listener's burst; fetch it so the
   // why-subtitles track OUR ears, not the engine's now
   OPUS = { el: a, anchor: null };
-  fetch('anchor').then(r=>r.json()).then(x=>{ if (!x.err) OPUS.anchor = x; });
   const b = document.getElementById('listenr');
   b.classList.add('on');
   const stat = s => { b.textContent = s; };
@@ -610,25 +636,24 @@ async function refreshWhys(){
   // estimate the current position between 1 Hz state polls
   let at = STATE.position + (Date.now() - (STATE._t||Date.now()))/1000;
   if (OPUS && OPUS.anchor && !OPUS.el.paused && OPUS.el.currentTime > 0){
+    // exact mapping: the anchor's segment timeline says which piece and
+    // position each stream second carries; roll across gapless piece
+    // boundaries with the precomputed lengths
     const an = OPUS.anchor;
-    at = an.position - an.historyS + OPUS.el.currentTime;
-    // transitions are gapless: when our ears cross the anchored piece's
-    // end, bake its length into the anchor and advance the piece index
-    // (length of intermediate pieces is only known once the engine's
-    // state agrees, so subtitles stay hidden until the indices match)
-    while (at >= an.length && an.pieceIndex < (STATE.pieceIndex|0)){
-      an.position -= an.length;
-      an.pieceIndex += 1;
-      an.length = (an.pieceIndex === (STATE.pieceIndex|0))
-        ? STATE.length : an.length;
-      at = an.position - an.historyS + OPUS.el.currentTime;
+    const ct = OPUS.el.currentTime;
+    let seg = an.segments[0];
+    for (const s of an.segments) if (s.streamS <= ct) seg = s;
+    let piece = seg.piece;
+    at = seg.posS + (ct - seg.streamS);
+    while (at >= an.lengths[piece]){
+      at -= an.lengths[piece];
+      piece = (piece + 1) % an.count;
     }
-    if (an.pieceIndex !== (STATE.pieceIndex|0)){
+    if (piece !== (STATE.pieceIndex|0)){
       const d = document.getElementById('whys');
       if (d.textContent) { d.textContent = ''; lastWhys = ''; }
       return;
     }
-    if (STATE.length > 0) at = Math.max(0, Math.min(at, STATE.length));
   }
   const ws = await (await fetch('whys?at='+at.toFixed(2))).json();
   const seen = new Set();
@@ -783,9 +808,11 @@ def serve(engine, cats, host, port):
                 self.wfile.write(b)
             elif self.path == "/state":
                 self._json(engine.state())
-            elif self.path == "/anchor":
-                self._json(getattr(engine, "last_anchor", None)
-                           or {"err": "no stream"})
+            elif self.path.startswith("/anchor"):
+                tok = (self.path.split("tok=", 1) + [""])[1][:64]
+                anchor = (engine.anchors.get(tok) if tok
+                          else getattr(engine, "last_anchor", None))
+                self._json(anchor or {"err": "no stream"})
             elif self.path.startswith("/whys"):
                 try:
                     at = float((self.path.split("=", 1) + ["0"])[1])
@@ -796,7 +823,7 @@ def serve(engine, cats, host, port):
                 self._json(cats)
             elif self.path == "/pieces":
                 self._json([n for n, _ in engine.playlist])
-            elif self.path == "/opus":
+            elif self.path.startswith("/opus"):
                 # remote path: Opus at 256 kbps through ffmpeg, streamed
                 # as Ogg — the <audio> element's own jitter buffering
                 # absorbs WAN stalls that starve the raw PCM path
@@ -830,7 +857,8 @@ def serve(engine, cats, host, port):
                         self._json({"err": "ffmpeg failed to start"}, 503)
                         return
 
-                    q = engine.subscribe(prefill=True)
+                    tok = (self.path.split("tok=", 1) + [""])[1][:64]
+                    q = engine.subscribe(prefill=True, token=tok or None)
                     self.send_response(200)
                     self.send_header("Content-Type", "audio/ogg")
                     self.send_header("Cache-Control", "no-store")

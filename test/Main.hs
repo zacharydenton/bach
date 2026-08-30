@@ -290,6 +290,10 @@ units = testGroup "otb"
           assertBool "peak of the 4/4 bar" (at (1 / 2) > at (1 / 16))
           assertBool "a fresh trough at the change" (at 1 < at (1 / 2))
           assertBool "peak of the 3/8 group" (at (1 + 3 / 16) > at 1)
+      , testCase "hostile arch depths never take tempo non-positive" $ do
+          let ag = defaultAgogicParams {agRitSpan = 0}
+              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [2, 4] (Bpm 100) 8
+          assertBool "all positive" (all (\(_, Bpm b) -> b > 0) tm)
       , testCase "short piece: no rit, single tempo" $
           length (tempoMap defaultAgogicParams [] [] (Bpm 100) (1 / 2)) @?= 1
       , testCase "fermata holds" $ do

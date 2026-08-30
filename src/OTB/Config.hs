@@ -117,7 +117,7 @@ loadConfig src = do
     nonNegative =
       [ "rit_span", "rit_curve", "expression", "ensemble", "lead_ms", "roll_ms"
       , "jitter_ms", "jitter_vel", "dis_vel", "dis_lean", "arch_piece"
-      , "arch_group", "breath_threshold", "w_gap", "w_dur", "w_leap"
+      , "breath_threshold", "w_gap", "w_dur", "w_leap"
       , "w_cadence", "cadence_span", "mel_charge", "harm_charge"
       , "subject_vel", "leap_dur", "trill_termination" ]
     gates = ["base", "staccato", "tenuto", "legato", "repeated", "cantabile"
@@ -125,7 +125,8 @@ loadConfig src = do
     -- these scale a duration or tempo multiplicatively: >= 1 would
     -- produce zero or negative durations/BPM downstream
     fractions = [ "breath", "inegal", "uphill", "double_dur"
-                , "dur_contrast", "leap_pause", "cadence_depth" ]
+                , "dur_contrast", "leap_pause", "cadence_depth"
+                , "arch_piece", "arch_group" ]
 
 -- | Agogic parameters from @[agogics]@ overlaid with @[piece.<name>]@.
 agogicsFor :: Config -> Text -> AgogicParams -> AgogicParams

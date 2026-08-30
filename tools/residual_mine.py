@@ -73,27 +73,21 @@ def note_whys_by_beat(ir, positions):
     return rules
 
 
-def bar_len_at(kinds, positions, k):
-    """Length of the bar containing beat k, from the annotations."""
-    lo = k
-    while lo > 0 and kinds[lo] != "db":
-        lo -= 1
-    hi = k + 1
-    while hi < len(kinds) and kinds[hi] != "db":
-        hi += 1
-    if hi < len(positions):
-        return positions[hi] - positions[lo]
-    if lo > 0:
-        return positions[lo] - positions[lo - 1] \
-            if kinds[lo - 1] == "db" else 1.0
-    return 1.0
-
-
 def contexts_for(ir, positions, kinds):
     """One list of context tags per beat."""
     cadences = ir.get("cadences", [])
     rules = note_whys_by_beat(ir, positions)
-    end = positions[-1] if positions else 0
+    # bar membership by COUNTING annotated downbeats — pickups and
+    # meter changes make anything duration-based lie: "first two bars"
+    # means the pickup plus the first two full bars, "final two bars"
+    # means from the second-to-last downbeat on
+    dbs_before = []
+    n = 0
+    for kd in kinds:
+        if kd == "db":
+            n += 1
+        dbs_before.append(n)
+    total_dbs = n
     out = []
     for k, pos in enumerate(positions):
         tags = []
@@ -111,10 +105,10 @@ def contexts_for(ir, positions, kinds):
             tags.append("subject sounding")
         if "breath" in rules[k]:
             tags.append("breath here")
-        two_bars = 2 * bar_len_at(kinds, positions, k)
-        if end - pos <= two_bars:
+        db_k = dbs_before[k] if k < len(dbs_before) else total_dbs
+        if db_k >= total_dbs - 1:
             tags.append("final two bars")
-        elif pos <= two_bars:
+        elif db_k <= 2:
             tags.append("first two bars")
         out.append(tags)
     return out
@@ -200,7 +194,12 @@ def main():
     # has a metrical tag plus possible cadence/subject/boundary tags),
     # so a design-matrix least squares is fitted over all OTHER pieces
     # and only its residual may call a beat unexplained
-    feats = sorted(effect)  # feature order; intercept appended last
+    # mid-bar beat is the REFERENCE category: the three metrical
+    # indicators are exhaustive, so keeping all of them alongside an
+    # intercept is unidentifiable (their columns sum to the intercept
+    # and ridge splits the effect arbitrarily); coefficients read
+    # "relative to a mid-bar beat"
+    feats = sorted(f for f in effect if f != "mid-bar beat")
     fi = {f: i for i, f in enumerate(feats)}
     p_dim = len(feats) + 1
 
@@ -249,8 +248,8 @@ def main():
         xtx[i][i] += 1e-6
 
     beta_full = solve([row[:] for row in xtx], xty[:])
-    print("\njoint model coefficients (all pieces, vs the marginal "
-          "means above):")
+    print("\njoint model coefficients (all pieces; reference category "
+          "= mid-bar beat):")
     for f in feats:
         pct = (math.exp(beta_full[fi[f]]) - 1) * 100
         print(f"  {f:<22} {pct:+.1f}%")
