@@ -62,6 +62,20 @@ def patch_dirs():
     return [d for d in cands if d and os.path.isdir(d)]
 
 
+def resolve_patch(path):
+    """Casting files record absolute paths from whichever machine cast
+    them; the factory bank is the same everywhere, so fall back to
+    Category/Name.fxp inside any library found here."""
+    if os.path.isfile(path):
+        return path
+    tail = os.path.join(*path.replace("\\", "/").split("/")[-2:])
+    for root in patch_dirs():
+        cand = os.path.join(root, tail)
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
 def scan_patches():
     # a system install and a surge-src checkout carry the same factory
     # bank; first tree wins per (category, name) so nothing lists twice
@@ -181,7 +195,7 @@ class Engine:
                 # timbre-aware articulation: subtract part of the
                 # channel's measured release tail (calibrate_patch.py)
                 # so breaths stay audible on pads
-                m = self.calibration.get(eff.get(ch, ""), None)
+                m = self._cal_for(eff.get(ch, ""))
                 comp = min(0.5 * m["releaseS"], 0.3) if m else 0.0
                 durS = max(n["durS"] * 0.5, n["durS"] - comp)
                 off = max(on + 1, int((n["onS"] + durS) * self.sr))
@@ -205,13 +219,29 @@ class Engine:
             s.allNotesOff()
 
 
+    def _cal_for(self, path):
+        """Calibration entry for a patch, by path or by bank tail —
+        measurements travel with the patch, not the filesystem."""
+        if not path:
+            return None
+        m = self.calibration.get(path)
+        if m:
+            return m
+        tail = "/".join(path.replace("\\", "/").split("/")[-2:])
+        for k, v in self.calibration.items():
+            if k.replace("\\", "/").endswith("/" + tail):
+                return v
+        return None
+
     def _resolve_casting(self, name):
         """Effective patch per channel for a piece about to load.
 
         Current patches survive (auditioning continuity); on the very
         first load casting/default.json seeds the standing rig; a piece
         with its own casting file overrides, its per-part entries
-        expanded to every channel of the part.
+        expanded to every channel of the part. Entries resolve through
+        resolve_patch, so a casting is a statement about the factory
+        bank rather than one machine's filesystem.
         """
         eff = dict(self.ch_patch_path)
         if not self.casting_dir:
@@ -223,8 +253,8 @@ class Engine:
                 with open(dflt) as f:
                     casting = json.load(f)
                 for ch, path in casting.items():
-                    if (ch.isdigit() and int(ch) in self.instances
-                            and os.path.isfile(path)):
+                    path = resolve_patch(path) if ch.isdigit() else None
+                    if path and int(ch) in self.instances:
                         eff[int(ch)] = path
         cand = os.path.join(self.casting_dir, name + ".json")
         if os.path.isfile(cand):
@@ -232,7 +262,8 @@ class Engine:
                 casting = json.load(f)
             for part in self.parts:
                 path = casting.get(str(part["channels"][0]))
-                if path and os.path.isfile(path):
+                path = resolve_patch(path) if path else None
+                if path:
                     for ch in part["channels"]:
                         eff[ch] = path
         return eff
