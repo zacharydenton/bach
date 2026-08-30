@@ -38,7 +38,7 @@ class FakeEngine:
     def state(self):
         return {"playing": self.playing}
 
-    def subscribe(self, prefill=False):
+    def subscribe(self, prefill=False, token=None):
         listener = queue.Queue()
         self.subscribers.add(listener)
         return listener
@@ -56,7 +56,7 @@ class StreamingEngine(FakeEngine):
         self.producer = threading.Thread(target=self.produce)
         self.producer.start()
 
-    def subscribe(self, prefill=False):
+    def subscribe(self, prefill=False, token=None):
         listener = queue.Queue(maxsize=256)
         with self.lock:
             self.subscribers.add(listener)
