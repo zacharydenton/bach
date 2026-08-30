@@ -35,7 +35,8 @@ import OTB.Interp.Agogics (tempoMap)
 import OTB.Interp.Express
 import OTB.Interp.Ornament ()
 import OTB.Score
-import OTB.Tuning (bendValue, offsetFor)
+import OTB.Tuning (adaptiveCents, bendValue, offsetFor)
+import OTB.Units (Cents (..))
 import OTB.Units (Bpm (..), WholeNotes (..))
 
 data PerfNote = PerfNote
@@ -58,6 +59,7 @@ data Performance = Performance
   { perfTempoMap :: [(WholeNotes, Bpm)] -- ^ derived from the conductor line
   , perfTracks :: [[PerfNote]] -- ^ one track per voice, onset-sorted
   , perfWhys :: [((Int, Int), [Why])] -- ^ (channel, index) -> provenance; lazy
+  , perfCadences :: [WholeNotes] -- ^ V-I arrivals (harmony model), notated
   }
 
 -- ---------------------------------------------------------------------
@@ -127,7 +129,9 @@ perform ip score@(Score tempo voices _ _ meter _) =
                  <> " monophonic lanes; only "
                  <> show (length usableChannels)
                  <> " MIDI channels available")
-    else Right (assemble ip tempo tmap finalOnset melodyVi tracks)
+    else Right (assemble ip tempo tmap finalOnset melodyVi
+                  (hRootAt harm, hStabilityAt harm)
+                  (hCadences harm) tracks)
   where
     ex = iExpress ip
     usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
@@ -168,7 +172,7 @@ perform ip score@(Score tempo voices _ _ meter _) =
       [] -> [(0, end)]
       ms ->
         concat
-          [ [ (a, min end (a + gl))
+          [ [ (a, min (min stop end) (a + gl))
             | a <- takeWhile (< stop) (iterate (+ gl) t) ]
           | ((t, (n, d)), stop) <-
               zip ms (map fst (drop 1 ms) <> [end])
@@ -221,11 +225,13 @@ perform ip score@(Score tempo voices _ _ meter _) =
 
 assemble
   :: Interp -> Bpm -> [(WholeNotes, Bpm)] -> WholeNotes -> Int
+  -> (WholeNotes -> Maybe Int, WholeNotes -> Double) -> [WholeNotes]
   -> [[(Rational, Rational, Ev)]] -> Performance
-assemble ip tempo tmap finalOnset melodyVi trs =
+assemble ip tempo tmap finalOnset melodyVi (rootAt, stabAt) cads trs =
   Performance tmap
     (map enforceMono (rollFinal perturbed))
     (concatMap (map snd) whysed)
+    cads
   where
     ex = iExpress ip
     seed = seedOf (iPiece ip)
@@ -250,14 +256,26 @@ assemble ip tempo tmap finalOnset melodyVi trs =
               isMelody = vi == melodyVi
               lead = if isMelody then msToWnAt (fromRational t) leadMs else 0
               jms = exEnsemble ex * exJitterMs ex
-                      * seededJitter1f seed (i * 13 + ch * 7 + 1)
+                      * seededJitter1f seed (ch * 2) i
               jit = msToWnAt (fromRational t) jms
               jv = exEnsemble ex * exJitterVel ex
-                     * seededJitter1f seed (i * 31 + ch * 3)
+                     * seededJitter1f seed (ch * 2 + 1) i
               vel = clampV (evVel ev + round jv)
-              bend = bendValue (iBendRange ip)
-                       (offsetFor (iTuning ip) (evPitch ev))
+              werck = offsetFor (iTuning ip) (evPitch ev)
+              off
+                | iAdaptive ip
+                , Just r <- rootAt (evSrcOn ev) =
+                    adaptiveCents (iTuning ip) r
+                      (stabAt (evSrcOn ev)) (evPitch ev)
+                | otherwise = werck
+              bend = bendValue (iBendRange ip) off
+              adaptDelta = let Cents a = off; Cents w = werck in a - w
               ws = evWhy ev
+                <> [ why "adaptive-tuning"
+                       (showD adaptDelta
+                          <> " cents toward just (root settled)")
+                       "Duffin; 5-limit just intonation over Werckmeister"
+                   | iAdaptive ip, abs adaptDelta > 0.5 ]
                 <> [ why "melody-lead"
                        ("-" <> show (round leadMs :: Int) <> " ms (leads)")
                        "Palmer 1996; Rasch 1979 (asynchrony aids voice streaming)"

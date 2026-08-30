@@ -72,18 +72,25 @@ tempoMap ag arches cadences (Bpm base) end
   | otherwise = thin [(t, Bpm (base * factor t)) | t <- gridPts]
   where
     gridPts = takeWhile (< end) (iterate (+ agTempoStep ag) 0)
-    factor t = product [arch depth a b t | (a, b, depth) <- arches]
-                 * cadF t * ritF t
-    arch depth a b t
+    -- the total factor is floored: however hostile the (validated-per-
+    -- knob but unbounded-in-product) configuration, tempo stays positive
+    factor t = max 0.1 (product [arch d a b t | (a, b, d) <- arches]
+                          * cadF t * ritF t)
+    arch depth0 a b t
       | depth <= 0 || b <= a || t < a || t > b = 1
       | otherwise =
           let x = realToFrac ((t - a) / (b - a)) :: Double
            in 1 + depth * (4 * x * (1 - x) * 2 - 1) -- ±depth, peak centre
+      where
+        -- effective depth is expression x arch_*: clamp the PRODUCT
+        -- here, where it exists (per-knob validation cannot bound it)
+        depth = min 0.9 depth0
+    cadDepth = min 0.9 (agCadenceDepth ag)
     cadF t
-      | agCadenceDepth ag <= 0 || agCadenceSpan ag <= 0 = 1
+      | cadDepth <= 0 || agCadenceSpan ag <= 0 = 1
       | otherwise =
           product
-            [ 1 - agCadenceDepth ag * ramp
+            [ 1 - cadDepth * ramp
             | c <- cadences
             , t >= c - agCadenceSpan ag, t < c
             , let WholeNotes pr = (t - (c - agCadenceSpan ag))
@@ -94,7 +101,7 @@ tempoMap ag arches cadences (Bpm base) end
       | otherwise =
           let WholeNotes progress = (t - start) / agRitSpan ag
               x = min 1 (realToFrac progress) :: Double
-              w = agRitFloor ag
+              w = max 0.05 (agRitFloor ag)
               q = max 1 (agRitCurve ag)
            in (1 + (w ** q - 1) * x) ** (1 / q)
     start = end - agRitSpan ag

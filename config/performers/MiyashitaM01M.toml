@@ -1,0 +1,83 @@
+# MiyashitaM01M, fitted from ASAP beat annotations (4 WTC pieces: wtc1f03, wtc1f09, wtc1p03, wtc1p09).
+# In-sample tempo-shape correlation: 0.760 (defaults: 0.173).
+# Self-contained: the base configuration with the fitted
+# stance merged in — --config MiyashitaM01M.toml alone reproduces the number.
+# The interpretation, as data. A performance = corpus commit + this file +
+# compiler version. Per-piece sections are the exception log: every override
+# carries its why.
+
+[articulation]
+base = 0.78       # détaché: the default speech of a baroque line
+staccato = 0.40
+tenuto = 0.95
+legato = 1.00
+repeated = 0.60   # repeated notes need separation to speak
+cantabile = 0.90  # stepwise motion at singing values leans legato
+min_gate = 0.10
+
+[agogics]
+rit_span = 2.0
+rit_floor = 0.4
+rit_curve = 2       # Friberg–Sundberg q: 2 = stopping-runner braking curve
+tempo_step = 0.125  # curve granularity (eighth notes): smooth, not steppy
+fermata_hold = 1.75
+
+cadence_depth = 0.0
+[phrasing]
+# KTH Punctuation via Quantz's placement rules: breathe at rests, after
+# long notes, at leaps — never mid-step. Per-lane micropauses only;
+# tempo stays global (Harnoncourt: polyphony breathes per voice).
+breath_threshold = 1.0
+breath = 0.25       # fraction of the note's sounding length given to air
+w_gap = 1.2         # written rest after the note (strongest signal)
+w_dur = 0.7         # long note arriving after shorter ones
+w_leap = 0.5        # leap away from the note
+
+[dynamics]
+vel_base = 84       # centre velocity
+vel_bar = 12        # Sloboda: the barline is marked loudest...
+vel_halfbar = 6     # ...mid-bar next (even meters)...
+vel_beat = 3        # ...beats next; subdivisions get nothing
+vel_arch = 8        # Todd: loudness arches to the phrase middle
+vel_highloud = 0.25 # KTH: per semitone — melodic peaks carry
+vel_accent = 14     # kern ^ marks: the score's own emphasis
+# NB: velocity lands on the A4 and BS2; the Model D ignores it (CV + hands)
+
+[ornaments]
+trill_rate = 12   # trill subnotes per second — C.P.E. Bach ties rate to
+                  # tempo and affect; 10–14 covers keyboard practice
+
+[tuning]
+bend_range = 2    # receiver's pitch-bend range in ± semitones. 2 is the
+                  # power-on default nearly everywhere; MUST match what the
+                  # A4 / Model D / BS2 are configured for, or the
+                  # temperament lands scaled wrong.
+
+[interpretation]
+# The two master knobs (Director Musices architecture: rule quantities
+# scaled by family multipliers). 0 = mechanical, 1 = literature defaults.
+expression = 0.4
+ensemble = 1.0    # melody lead, chord roll, seeded micro-jitter
+
+[dissonance]
+dis_vel = 10      # CPE Bach 1753: dissonances louder — vel units per charge
+dis_lean = 0.10   # ...and leaned on: gate boost toward legato per charge
+
+[arches]
+arch_piece = 0.0
+arch_group = 0.0
+arch_bars = 4
+
+[performance]
+lead_ms = 20      # Palmer 1996: the melody anticipates by 20-30 ms
+roll_ms = 12      # final chord rolled bass-upward, per note
+jitter_ms = 3     # KTH noise rules — seeded by piece name: deterministic
+jitter_vel = 2
+
+[piece.wtc1p01]
+base = 0.85       # pure arpeggiated figuration: let it ring toward pedal
+overhold = 0.9    # finger pedal a la Czerny: the arpeggios bloom to the bar
+
+[piece.wtc1p05]
+inegal = 0.18     # audition: French-style D major sixteenths, gently swung
+                  # (Quantz XI says yes, Neumann says not for Bach — ears decide)

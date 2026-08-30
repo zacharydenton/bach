@@ -6,8 +6,11 @@
 -- Consumers: tools/audition.py (surgepy offline render), and one day a
 -- Rust live player beside Vass.
 --
--- Hand-rolled emission: the payload is purely numeric, so JSON here is
--- string concatenation with no escaping problem — no aeson needed.
+-- Hand-rolled emission: the numeric payload needs no escaping; the why
+-- strings (rules, deltas, citations) go through a minimal escaper. The
+-- whys make the IR self-describing — the patchboard's live subtitles
+-- and any future reader get the interpretation's reasons with its
+-- notes, which is what an executable edition owes its audience.
 --
 -- License: GPL-2.0-or-later.
 module OTB.Emit.Json
@@ -15,13 +18,16 @@ module OTB.Emit.Json
   ) where
 
 import Data.List (intercalate)
+import Data.Map.Strict qualified as Map
+import OTB.Explain (Why (..))
 import OTB.Player (PerfNote (..), Performance (..))
 import OTB.Units (Bpm (..), Seconds (..), WholeNotes (..), secondsAt)
 
 renderJson :: String -> Performance -> String
-renderJson piece (Performance tmap tracks _) =
+renderJson piece (Performance tmap tracks whys cads) =
   obj
     [ ("piece", show piece)
+    , ("cadences", arr [num (fromRational c) | WholeNotes c <- cads])
     , ("tempoMap", arr (map tempoJson tmap))
     , ("tracks", arr (map trackJson tracks))
     ]
@@ -44,7 +50,18 @@ renderJson piece (Performance tmap tracks _) =
             , ("vel", show (pnVel pn))
             , ("bend", show (pnBend pn))
             , ("ch", show (pnChannel pn))
+            , ("whys", arr (map (str . oneWhy) (whysOf pn)))
             ]
+    whyMap = Map.fromList whys
+    whysOf pn = Map.findWithDefault [] (pnChannel pn, pnIndex pn) whyMap
+    oneWhy w = whyRule w <> ": " <> whyDelta w
+      <> (if null (whyCite w) then "" else "  [" <> whyCite w <> "]")
+    str t = '"' : concatMap esc t <> "\""
+      where
+        esc '"' = "\\\""
+        esc '\\' = "\\\\"
+        esc c | c < ' ' = " " -- control chars cannot occur in whys
+              | otherwise = [c]
     obj kvs = "{" <> intercalate "," [show k <> ":" <> v | (k, v) <- kvs] <> "}"
     arr xs = "[" <> intercalate "," xs <> "]"
     num :: Double -> String

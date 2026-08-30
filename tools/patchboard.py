@@ -89,7 +89,9 @@ class Engine:
     its own config/casting/<piece>.json.
     """
 
-    def __init__(self, playlist, sr, scl, casting_dir=None):
+    def __init__(self, playlist, sr, scl, casting_dir=None,
+                 calibration=None):
+        self.calibration = calibration or {}
         self.sr = sr
         self.playlist = playlist  # [(name, perf)]
         self.casting_dir = casting_dir
@@ -104,6 +106,15 @@ class Engine:
         # their buffer fills at network speed instead of 1 s per second
         self.history = collections.deque(
             maxlen=int(5 * sr / CHUNK_FRAMES) + 1)
+        # every piece's loop length, precomputed so a listener's anchor
+        # can name the timeline of pieces its history burst spans
+        self.piece_lengths = []
+        for _, perf in playlist:
+            pend = max((n["onS"] + n["durS"]
+                        for tr in perf["tracks"] for n in tr), default=0.0)
+            self.piece_lengths.append(
+                (-(-int((pend + 2.0) * sr) // BLOCK) * BLOCK) / sr)
+        self.anchors = collections.OrderedDict()  # token -> anchor
 
         maxch = max(n["ch"] for _, p in playlist
                     for tr in p["tracks"] for n in tr) + 1
@@ -143,15 +154,37 @@ class Engine:
         labels = {vi: (names[rank] if names else f"voice {vi}")
                   for rank, vi in enumerate(order)}
 
-        end = 0.0
+        # the executable edition's subtitle track: every note's rule
+        # citations, indexed by sounding time
+        self.why_index = sorted(
+            (n["onS"], n["onS"] + n["durS"], n["ch"], n["whys"])
+            for tr in perf["tracks"] for n in tr if n.get("whys"))
+
         for vi, tr in enumerate(perf["tracks"]):
             chans = sorted({n["ch"] for n in tr})
             self.parts.append(
                 {"name": f"{labels[vi]} (voice {vi})", "channels": chans})
+
+        # resolve THIS piece's effective patches BEFORE building events:
+        # calibration compensation must see the patches that will play,
+        # not whatever was loaded when the previous piece ended
+        eff = self._resolve_casting(name)
+        for ch, path in eff.items():
+            if path != self.ch_patch_path.get(ch) and os.path.isfile(path):
+                self.request_patch_ch(ch, path)
+
+        end = 0.0
+        for vi, tr in enumerate(perf["tracks"]):
             for n in tr:
                 ch = n["ch"]
                 on = int(n["onS"] * self.sr)
-                off = max(on + 1, int((n["onS"] + n["durS"]) * self.sr))
+                # timbre-aware articulation: subtract part of the
+                # channel's measured release tail (calibrate_patch.py)
+                # so breaths stay audible on pads
+                m = self.calibration.get(eff.get(ch, ""), None)
+                comp = min(0.5 * m["releaseS"], 0.3) if m else 0.0
+                durS = max(n["durS"] * 0.5, n["durS"] - comp)
+                off = max(on + 1, int((n["onS"] + durS) * self.sr))
                 end = max(end, n["onS"] + n["durS"])
                 evs = self.events.setdefault(ch, [])
                 if not self.scl_active:
@@ -170,32 +203,39 @@ class Engine:
         self.loop_len = -(-int((end + 2.0) * self.sr) // BLOCK) * BLOCK
         for s in self.instances.values():
             s.allNotesOff()
-        # a piece with its own casting file re-casts; otherwise the
-        # channels keep whatever patches are loaded (auditioning
-        # continuity) — except on the very first load, where
-        # casting/default.json seeds the standing rig so a restart
-        # never comes up on <init> patches
-        if self.casting_dir:
-            if not self._default_cast_done:
-                # seed the standing rig per CHANNEL (instances persist
-                # across pieces; the first piece may present few parts)
-                self._default_cast_done = True
-                dflt = os.path.join(self.casting_dir, "default.json")
-                if os.path.isfile(dflt):
-                    with open(dflt) as f:
-                        casting = json.load(f)
-                    for ch, path in casting.items():
-                        if (ch.isdigit() and int(ch) in self.instances
-                                and os.path.isfile(path)):
-                            self.request_patch_ch(int(ch), path)
-            cand = os.path.join(self.casting_dir, name + ".json")
-            if os.path.isfile(cand):
-                with open(cand) as f:
+
+
+    def _resolve_casting(self, name):
+        """Effective patch per channel for a piece about to load.
+
+        Current patches survive (auditioning continuity); on the very
+        first load casting/default.json seeds the standing rig; a piece
+        with its own casting file overrides, its per-part entries
+        expanded to every channel of the part.
+        """
+        eff = dict(self.ch_patch_path)
+        if not self.casting_dir:
+            return eff
+        if not self._default_cast_done:
+            self._default_cast_done = True
+            dflt = os.path.join(self.casting_dir, "default.json")
+            if os.path.isfile(dflt):
+                with open(dflt) as f:
                     casting = json.load(f)
-                for pi, part in enumerate(self.parts):
-                    path = casting.get(str(part["channels"][0]))
-                    if path and os.path.isfile(path):
-                        self.request_patch(pi, path)
+                for ch, path in casting.items():
+                    if (ch.isdigit() and int(ch) in self.instances
+                            and os.path.isfile(path)):
+                        eff[int(ch)] = path
+        cand = os.path.join(self.casting_dir, name + ".json")
+        if os.path.isfile(cand):
+            with open(cand) as f:
+                casting = json.load(f)
+            for part in self.parts:
+                path = casting.get(str(part["channels"][0]))
+                if path and os.path.isfile(path):
+                    for ch in part["channels"]:
+                        eff[ch] = path
+        return eff
 
     def request_patch(self, part_idx, path):
         self.pending.put(("part", part_idx, path))
@@ -295,12 +335,37 @@ class Engine:
             done += span
         return out
 
-    def subscribe(self, prefill=False):
+    def subscribe(self, prefill=False, token=None):
         q = queue.Queue(maxsize=256)
         with self.sublock:
             if prefill:
-                for d in self.history:
+                # segment timeline for THIS listener's stream: every
+                # piece boundary inside the history burst, so the
+                # subtitle pane maps audio.currentTime to the piece and
+                # position actually sounding (chunks are tagged at
+                # their start; a mid-chunk boundary is off <= ~85 ms)
+                segments = []
+                stream_s = 0.0
+                prev_piece = None
+                for (piece, sample), d in self.history:
+                    if piece != prev_piece:
+                        segments.append({"streamS": stream_s,
+                                         "piece": piece,
+                                         "posS": sample / self.sr})
+                        prev_piece = piece
                     q.put_nowait(d)
+                    stream_s += len(d) / 8 / self.sr  # f32 stereo
+                if not segments:
+                    segments = [{"streamS": 0.0, "piece": self.piece_i,
+                                 "posS": self.sample / self.sr}]
+                anchor = {"segments": segments,
+                          "lengths": self.piece_lengths,
+                          "count": len(self.playlist)}
+                if token:
+                    self.anchors[token] = anchor
+                    while len(self.anchors) > 8:
+                        self.anchors.popitem(last=False)
+                self.last_anchor = anchor
             self.subscribers.add(q)
         return q
 
@@ -315,6 +380,7 @@ class Engine:
         limiter_gain = 1.0
         applied = 1.0
         while True:
+            chunk_tag = (self.piece_i, self.sample)
             mix = self.render(CHUNK_FRAMES)
             # peak meter (pre-limiter) + a simple riding limiter: browsers
             # hard-clip anything past 0 dBFS, which sounds like ring mod.
@@ -332,7 +398,7 @@ class Engine:
             applied = g
             data = mix.T.reshape(-1).astype("<f4").tobytes()  # interleaved
             with self.sublock:
-                self.history.append(data)
+                self.history.append((chunk_tag, data))
                 subs = list(self.subscribers)
             for q in subs:
                 try:
@@ -349,6 +415,17 @@ class Engine:
                 time.sleep(delay)
             else:  # render fell behind: resync rather than spiral
                 deadline = time.monotonic()
+
+    def whys_at(self, t):
+        """Rule citations for everything sounding at loop-time t."""
+        out = []
+        for on, off, ch, ws in self.why_index:
+            if on > t:
+                break
+            if t < off:
+                for w in ws:
+                    out.append({"ch": ch, "why": w})
+        return out[:16]
 
     def state(self):
         return {
@@ -406,6 +483,9 @@ h1{font-size:1.2rem} .patch{color:#9c9} .pos{color:#777;font-size:.85rem}
  <button onclick=pieceStep(1)>⏭</button>
 </div>
 <div id=parts></div>
+<div id=whys style="min-height:5.5em;margin:8px 0;padding:6px 8px;
+  font-size:12px;line-height:1.45;opacity:.85;border-left:3px solid #888;
+  font-family:monospace;white-space:pre-wrap"></div>
 <h3>casting (paste into render_showcase / audition.py)</h3>
 <div id=cast></div>
 <script>
@@ -474,8 +554,15 @@ function listenRemote(){
   // are banked, then let the history burst build a larger cushion.
   if (audioOn) return;
   audioOn = true;
-  const a = new Audio('opus');
+  const tok = Math.random().toString(36).slice(2);
+  const a = new Audio('opus?tok=' + tok);
   a.preload = 'auto';
+  setTimeout(() => fetch('anchor?tok=' + tok).then(r=>r.json())
+    .then(x=>{ if (!x.err) OPUS.anchor = x; }), 300);
+  // the server records an exact anchor (engine position + true banked
+  // history) when it assembles this listener's burst; fetch it so the
+  // why-subtitles track OUR ears, not the engine's now
+  OPUS = { el: a, anchor: null };
   const b = document.getElementById('listenr');
   b.classList.add('on');
   const stat = s => { b.textContent = s; };
@@ -539,8 +626,51 @@ async function init(){
   const ps = document.getElementById('piecesel');
   ps.innerHTML = PIECES.map((n,i)=>`<option>${n}</option>`).join('');
   await refresh(); setInterval(refresh, 1000);
+  setInterval(refreshWhys, 400); // the interpretation, explaining itself
 }
 function setPiece(i){ post('piece',{index:i}); }
+let lastWhys = '';
+let OPUS = null;
+async function refreshWhys(){
+  if (!STATE || !STATE.playing) return;
+  // estimate the current position between 1 Hz state polls
+  let at = STATE.position + (Date.now() - (STATE._t||Date.now()))/1000;
+  if (OPUS && OPUS.anchor && !OPUS.el.paused && OPUS.el.currentTime > 0){
+    // exact mapping: the anchor's segment timeline says which piece and
+    // position each stream second carries; roll across gapless piece
+    // boundaries with the precomputed lengths
+    const an = OPUS.anchor;
+    const ct = OPUS.el.currentTime;
+    let seg = an.segments[0];
+    for (const s of an.segments) if (s.streamS <= ct) seg = s;
+    let piece = seg.piece;
+    at = seg.posS + (ct - seg.streamS);
+    while (at >= an.lengths[piece]){
+      at -= an.lengths[piece];
+      piece = (piece + 1) % an.count;
+    }
+    if (piece !== (STATE.pieceIndex|0)){
+      const d = document.getElementById('whys');
+      if (d.textContent) { d.textContent = ''; lastWhys = ''; }
+      return;
+    }
+  }
+  const ws = await (await fetch('whys?at='+at.toFixed(2))).json();
+  const seen = new Set();
+  const lines = [];
+  for (const w of ws){
+    const key = w.why.split(':')[0] + w.ch;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push('ch'+w.ch+'  '+w.why);
+    if (lines.length >= 7) break;
+  }
+  const txt = lines.join('\n');
+  if (txt !== lastWhys){
+    lastWhys = txt;
+    document.getElementById('whys').textContent = txt;
+  }
+}
 function pieceStep(d){
   if (!STATE) return;
   setPiece((STATE.pieceIndex + d + PIECES.length) % PIECES.length);
@@ -557,6 +687,7 @@ function opts(){
 }
 async function refresh(){
   STATE = await (await fetch('state')).json();
+  STATE._t = Date.now();
   document.getElementById('play').textContent = STATE.playing?'pause':'play';
   document.getElementById('pos').textContent =
     STATE.piece+' ('+(STATE.pieceIndex+1)+'/'+STATE.pieceCount+') · '+
@@ -677,11 +808,22 @@ def serve(engine, cats, host, port):
                 self.wfile.write(b)
             elif self.path == "/state":
                 self._json(engine.state())
+            elif self.path.startswith("/anchor"):
+                tok = (self.path.split("tok=", 1) + [""])[1][:64]
+                anchor = (engine.anchors.get(tok) if tok
+                          else getattr(engine, "last_anchor", None))
+                self._json(anchor or {"err": "no stream"})
+            elif self.path.startswith("/whys"):
+                try:
+                    at = float((self.path.split("=", 1) + ["0"])[1])
+                except ValueError:
+                    at = 0.0
+                self._json(engine.whys_at(at))
             elif self.path == "/patches":
                 self._json(cats)
             elif self.path == "/pieces":
                 self._json([n for n, _ in engine.playlist])
-            elif self.path == "/opus":
+            elif self.path.startswith("/opus"):
                 # remote path: Opus at 256 kbps through ffmpeg, streamed
                 # as Ogg — the <audio> element's own jitter buffering
                 # absorbs WAN stalls that starve the raw PCM path
@@ -715,7 +857,8 @@ def serve(engine, cats, host, port):
                         self._json({"err": "ffmpeg failed to start"}, 503)
                         return
 
-                    q = engine.subscribe(prefill=True)
+                    tok = (self.path.split("tok=", 1) + [""])[1][:64]
+                    q = engine.subscribe(prefill=True, token=tok or None)
                     self.send_response(200)
                     self.send_header("Content-Type", "audio/ogg")
                     self.send_header("Cache-Control", "no-store")
@@ -854,6 +997,11 @@ def main():
                          "the unauthenticated control page to the LAN)")
     ap.add_argument("--local", action="store_true",
                     help="also play on the local audio device (sounddevice)")
+    ap.add_argument("--calibration", metavar="CAL.json",
+                    default=None,
+                    help="patch-envelope calibration; note ends are "
+                         "compensated for each channel's release tail "
+                         "(applied at piece load)")
     ap.add_argument("--casting", metavar="DIR",
                     help="directory of <piece>.json channel->patch maps "
                          "(default: config/casting/)")
@@ -891,7 +1039,12 @@ def main():
         sys.exit("no Surge patch library found (patches_factory)")
     casting_dir = args.casting or os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "config", "casting")
-    engine = Engine(playlist, args.sr, args.scl, casting_dir=casting_dir)
+    calibration = None
+    if args.calibration and os.path.isfile(args.calibration):
+        with open(args.calibration) as f:
+            calibration = json.load(f)
+    engine = Engine(playlist, args.sr, args.scl, casting_dir=casting_dir,
+                    calibration=calibration)
     print(f"album: {len(playlist)} pieces, starting {playlist[0][0]}",
           flush=True)
     if shutil.which("ffmpeg") is None:

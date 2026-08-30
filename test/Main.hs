@@ -290,6 +290,10 @@ units = testGroup "otb"
           assertBool "peak of the 4/4 bar" (at (1 / 2) > at (1 / 16))
           assertBool "a fresh trough at the change" (at 1 < at (1 / 2))
           assertBool "peak of the 3/8 group" (at (1 + 3 / 16) > at 1)
+      , testCase "hostile arch depths never take tempo non-positive" $ do
+          let ag = defaultAgogicParams {agRitSpan = 0}
+              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [2, 4] (Bpm 100) 8
+          assertBool "all positive" (all (\(_, Bpm b) -> b > 0) tm)
       , testCase "short piece: no rit, single tempo" $
           length (tempoMap defaultAgogicParams [] [] (Bpm 100) (1 / 2)) @?= 1
       , testCase "fermata holds" $ do
@@ -707,6 +711,35 @@ sota = testGroup "sota"
                  h <- harmOf f
                  (hKeyAt h 0, hMajorAt h 0) @?= (k, mj))
           expect
+  , testCase "harmony: opening keys vs WTC ground truth (>= 95/96)" $ do
+      present <- doesDirectoryExist corpusDir
+      if not present then pure () else do
+        results <- mapM
+          (\(bk, nn, kind) -> do
+             let name = "wtc" <> show (bk :: Int) <> [kind]
+                          <> (if nn < 10 then '0' : show nn else show nn)
+                 expPc = [0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11]
+                           !! (nn - 1)
+             h <- harmOf name
+             pure (name, (hKeyAt h 0, hMajorAt h 0) == (expPc, odd nn)))
+          [(bk, nn, k) | bk <- [1, 2], nn <- [1 .. 24], k <- "pf"]
+        let wrong = [n | (n, False) <- results]
+        assertBool ("wrong keys: " <> show wrong) (length wrong <= 1)
+  , testCase "adaptive temperament: settled major third goes just" $ do
+      -- root C (Werckmeister offset 0): at full stability the E sits at
+      -- the just major third, -13.7 cents — flatter than Werckmeister's
+      -- -9.775, which is the audible point of the whole feature
+      let Cents atRest = adaptiveCents werckmeister3 0 1 64
+          Cents moving = adaptiveCents werckmeister3 0 0 64
+          Cents just3 = justOffsetFor 4
+      assertBool "settled = just third" (abs (atRest - just3) < 0.01)
+      assertBool "moving = Werckmeister" (abs (moving - (-9.775)) < 0.01)
+  , testCase "harmony: stability rises while the root holds" $ do
+      -- a held C major triad: beat 1 unstable, beat 3+ settled
+      let notes = [(0, 2, 48), (0, 2, 64), (0, 2, 67)]
+          h = analyzeHarmony [(0, (4, 4))] notes 2
+      hStabilityAt h 0 @?= 0
+      assertBool "settled by the third beat" (hStabilityAt h (3 / 4) >= 1)
   , testCase "harmony: melodic charge table (Friberg 1991)" $ do
       melodicCharge 60 0 @?= 0 -- root
       melodicCharge 67 0 @?= 1 -- fifth
@@ -719,6 +752,9 @@ sota = testGroup "sota"
         let entries = subjectEntries f
         assertBool "fugue entries found" (length entries >= 40)
         subjectEntries p @?= []
+  , testProperty "reshapers never produce non-positive durations, any k" $
+      forAll ((,) <$> choose (0, 3.0) <*> genLane) $ \(k, l) ->
+        all ((> 0) . snDur) (uphillLane k (doubleDurLane k l))
   , testProperty "uphill reshaper preserves lane duration sum" $
       forAll genLane $ \l ->
         sum (map snDur (uphillLane 0.05 l)) === sum (map snDur l)

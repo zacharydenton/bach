@@ -24,6 +24,9 @@ data Interp = Interp
   , iDynamics :: !DynParams
   , iExpress :: !ExpressParams
   , iPiece :: !String -- ^ seeds the deterministic jitter
+  , iAdaptive :: Bool
+    -- ^ per-chord adaptive temperament: Werckmeister that relaxes toward
+    -- just intonation where the root stands still (bend-carried only)
   , iTuning :: !TuningTable
   , iBendRange :: !Double
   }
@@ -32,4 +35,4 @@ defaultInterp :: Interp
 defaultInterp =
   Interp defaultArtParams defaultAgogicParams defaultPhraseParams
     defaultOrnamentParams defaultDynParams defaultExpressParams ""
-    werckmeister3 2
+    False werckmeister3 2

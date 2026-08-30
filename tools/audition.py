@@ -38,7 +38,23 @@ def load_perf(path):
         return json.load(f)
 
 
-def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0):
+def comp_for(cal, patch_path):
+    """Note-end compensation (seconds) for a patch's release tail.
+
+    Half the measured release, capped at 300 ms: enough that the
+    intended silence survives the tail, never so much that the note
+    itself disappears (a second clamp at half the note guards that).
+    """
+    if not cal or not patch_path:
+        return 0.0
+    m = cal.get(patch_path)
+    if not m:
+        return 0.0
+    return min(0.5 * m.get("releaseS", 0.0), 0.3)
+
+
+def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0,
+           cal=None):
     tracks = perf["tracks"]
     events = []  # (samples, kind, ch, a, b) 0=bend 1=on 2=off 3=tempo(all)
     channels = set()
@@ -47,7 +63,12 @@ def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0):
             ch = n["ch"]
             channels.add(ch)
             on = int(n["onS"] * sr)
-            off = int((n["onS"] + n["durS"]) * sr)
+            # timbre-aware articulation: subtract the patch's measured
+            # release so perceived silence matches the written gate
+            p = patches or {}
+            comp = comp_for(cal, p.get(ch, p.get(None)))
+            durS = max(n["durS"] * 0.5, n["durS"] - comp)
+            off = int((n["onS"] + durS) * sr)
             if not scl:
                 # bend carries the temperament ONLY when Surge isn't
                 # natively tuned — with .scl loaded, sending bends too
@@ -134,6 +155,10 @@ def main():
     ap.add_argument("--patch-ch", action="append", default=[],
                     metavar="CH:FILE.fxp", help="per-channel patch override")
     ap.add_argument("--sr", type=int, default=48000)
+    ap.add_argument("--calibrate", metavar="CAL.json",
+                    help="patch-envelope calibration (tools/"
+                         "calibrate_patch.py): note ends compensated "
+                         "for each channel's release tail")
     args = ap.parse_args()
 
     patches = {}
@@ -143,8 +168,13 @@ def main():
         ch, _, path = spec.partition(":")
         patches[int(ch)] = path
 
+    cal = None
+    if args.calibrate:
+        with open(args.calibrate) as f:
+            cal = json.load(f)
     perf = load_perf(args.perf)
-    mix = render(perf, args.sr, scl=args.scl, patches=patches)
+    mix = render(perf, args.sr, scl=args.scl, patches=patches,
+        cal=cal)
     write_wav(args.output, mix, args.sr)
     n = sum(len(t) for t in perf["tracks"])
     print(f"{n} notes | {mix.shape[1]/args.sr:.1f}s | "
