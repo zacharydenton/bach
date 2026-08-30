@@ -24,8 +24,12 @@ module OTB.Player
 import Data.List (findIndex, nub, sort, sortOn)
 import Data.Ratio (approxRational)
 import EuterpeaLite.Music (Control (..), Music (..), Primitive (..))
+import OTB.Analysis.Grouping (groupSpans)
+import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony)
+import OTB.Analysis.Subject (subjectEntries)
 import OTB.Annotate
 import OTB.Explain (Why, why)
+import OTB.Interp.Phrasing (boundaryStrengths)
 import OTB.Interp
 import OTB.Interp.Agogics (tempoMap)
 import OTB.Interp.Express
@@ -45,6 +49,8 @@ data PerfNote = PerfNote
   , pnSrcOn :: !WholeNotes
     -- ^ notated score onset — bar selection must use this, not 'pnOnset',
     -- which melody lead and jitter have already moved
+  , pnCharge :: !Double
+    -- ^ dissonance charge; velocity-blind hardware converts it to agogics
   }
   deriving (Show)
 
@@ -75,10 +81,16 @@ lanes ns =
                  | (j, (l, xs)) <- zip [0 :: Int ..] ls ]
 
 -- | Grid reshapers only; ornaments are annotations now and realise in
--- 'interpret'.
+-- 'interpret'. Order: the inegales grid first (a style decision the
+-- other rules should see), then the KTH micro-timing pair (double
+-- duration softens 2:1, faster uphill rushes ascending runs), finger
+-- pedal last.
 prepareLane :: Interp -> [ScoreNote] -> [ScoreNote]
 prepareLane ip =
-  overholdLane (exOverhold ex) . inegalLane (exInegal ex)
+  overholdLane (exOverhold ex)
+    . uphillLane (exExpression ex * exUphill ex)
+    . doubleDurLane (exExpression ex * exDoubleDur ex)
+    . inegalLane (exInegal ex)
   where
     ex = iExpress ip
 
@@ -109,7 +121,7 @@ voiceEvents = musicEvents 1 0 . foldr (:=:) (Prim (Rest 0))
 -- perform
 
 perform :: Interp -> Score -> Either String Performance
-perform ip (Score tempo voices _ _ meter _) =
+perform ip score@(Score tempo voices _ _ meter _) =
   if totalLanes > length usableChannels
     then Left ("score needs " <> show totalLanes
                  <> " monophonic lanes; only "
@@ -131,16 +143,47 @@ perform ip (Score tempo voices _ _ meter _) =
       | (_, ls) <- voiceLanes, l <- ls, n <- l ]
     end = maximum (0 : [o + d | (o, d, _) <- allSounding])
 
-    groups = case meter of
-      [] -> [(0, fromIntegral (exArchBars ex))]
-      ms -> [ (t, WholeNotes (fromIntegral n / fromIntegral d)
-                    * fromIntegral (exArchBars ex))
-            | (t, (n, d)) <- ms ]
     exN = exExpression ex
+
+    -- the harmony model and the fugue's subject, analysed once
+    harm = analyzeHarmony meter allSounding end
+    subjSet = subjectEntries score
+    inSubject src = src `elem` subjSet
+
+    -- the grouping tree: per-lane boundary strengths aggregated across
+    -- the texture, split recursively (Todd's arches nest over it)
+    allBounds =
+      [ (snOnset n + snDur n, str)
+      | (_, ls) <- voiceLanes, lane <- ls
+      , (n, str) <- zip lane (boundaryStrengths (iPhrasing ip) lane)
+      , str > 0.3 ]
+    barLen0 = case meter of
+      ((_, (n, d)) : _) -> WholeNotes (fromIntegral n / fromIntegral d)
+      [] -> 1
+    tree = groupSpans 3 (2 * barLen0) allBounds 0 end
+
+    -- one arch per node: piece level, tree levels decaying by depth,
+    -- and the metrical bar groups as the innermost uniform layer
+    barGroups = case meter of
+      [] -> [(0, end)]
+      ms ->
+        concat
+          [ [ (a, min end (a + gl))
+            | a <- takeWhile (< stop) (iterate (+ gl) t) ]
+          | ((t, (n, d)), stop) <-
+              zip ms (map fst (drop 1 ms) <> [end])
+          , let gl = WholeNotes (fromIntegral n / fromIntegral d)
+                       * fromIntegral (exArchBars ex)
+          , gl > 0 ]
+    arches =
+      (0, end, exN * exArchPiece ex)
+        : [ (a, b, exN * exArchGroup ex * 0.8 ^ (depth - 1))
+          | (a, b, depth) <- tree ]
+        <> [ (a, b, exN * exArchGroup ex * 0.5) | (a, b) <- barGroups ]
+
     -- curve -> conductor Music -> derived map: the conductor is the
     -- carrier, deriveTempoMap the single reader
-    curve = tempoMap (iAgogics ip) (exN * exArchPiece ex)
-              (exN * exArchGroup ex) groups tempo end
+    curve = tempoMap (iAgogics ip) arches (hCadences harm) tempo end
     conductor = annotateConductor curve tempo end
     tmap = deriveTempoMap tempo conductor
 
@@ -159,7 +202,11 @@ perform ip (Score tempo voices _ _ meter _) =
     ctx ch = Ctx { cSounding = allSounding
                  , cMeters = meter
                  , cFinalTag = finalTag
-                 , cChannel = ch }
+                 , cChannel = ch
+                 , cRootAt = hRootAt harm
+                 , cChargeAt = hChargeAt harm
+                 , cCadences = hCadences harm
+                 , cSubject = inSubject }
 
     tracks = snd (foldl deal (usableChannels, []) voiceLanes)
     deal (chans, acc) (_, ls) =
@@ -203,24 +250,25 @@ assemble ip tempo tmap finalOnset melodyVi trs =
               isMelody = vi == melodyVi
               lead = if isMelody then msToWnAt (fromRational t) leadMs else 0
               jms = exEnsemble ex * exJitterMs ex
-                      * seededJitter seed (i * 13 + ch * 7 + 1)
+                      * seededJitter1f seed (i * 13 + ch * 7 + 1)
               jit = msToWnAt (fromRational t) jms
               jv = exEnsemble ex * exJitterVel ex
-                     * seededJitter seed (i * 31 + ch * 3)
+                     * seededJitter1f seed (i * 31 + ch * 3)
               vel = clampV (evVel ev + round jv)
               bend = bendValue (iBendRange ip)
                        (offsetFor (iTuning ip) (evPitch ev))
               ws = evWhy ev
                 <> [ why "melody-lead"
                        ("-" <> show (round leadMs :: Int) <> " ms (leads)")
-                       "Palmer 1996" | isMelody, leadMs > 0 ]
+                       "Palmer 1996; Rasch 1979 (asynchrony aids voice streaming)"
+                   | isMelody, leadMs > 0 ]
                 <> [ why "jitter"
-                       (showMs jms <> " ms, " <> showD jv <> " vel (seeded)")
-                       "KTH noise rules" | exEnsemble ex > 0 ]
+                       (showMs jms <> " ms, " <> showD jv <> " vel (seeded 1/f)")
+                       "KTH noise rules; Gilden 1995" | exEnsemble ex > 0 ]
            in ( ( evFinal ev
                 , PerfNote (max 0 (fromRational t - lead + jit))
                     (fromRational (d * evGate ev * evHold ev))
-                    (evPitch ev) vel bend ch i (evSrcOn ev) )
+                    (evPitch ev) vel bend ch i (evSrcOn ev) (evCharge ev) )
               , ((ch, i), ws) )
         showMs v = showD v
         showD v =

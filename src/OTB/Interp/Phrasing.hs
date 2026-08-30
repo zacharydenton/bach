@@ -40,6 +40,7 @@ data PhraseParams = PhraseParams
   , ppWGap :: !Double -- ^ weight: written rest after the note
   , ppWDur :: !Double -- ^ weight: long note after shorter ones
   , ppWLeap :: !Double -- ^ weight: leap to the next note
+  , ppWCadence :: !Double -- ^ bonus at harmonic cadences (V-I arrivals)
   }
   deriving (Show, Eq)
 
@@ -50,6 +51,8 @@ defaultPhraseParams = PhraseParams
   , ppWGap = 1.2 -- a written rest is already a breath: strongest signal
   , ppWDur = 0.7
   , ppWLeap = 0.5
+  , ppWCadence = 0.8 -- a V-I clause ending is a boundary even when the
+                     -- surface is smooth (Quantz on musical commas)
   }
 
 -- | Weighted boundary strength *after* each note of a chronological lane.
@@ -82,14 +85,18 @@ boundaryStrengths pp ns = zipWith3 strength ns nexts prevs
 -- silence. The lane's final note is left alone — the final rit owns
 -- endings.
 breatheLane :: PhraseParams -> [ScoreNote] -> [(ScoreNote, Rational)] -> [(ScoreNote, Rational)]
-breatheLane pp raw = map (\(n, g, _) -> (n, g)) . breatheLane' pp raw
+breatheLane pp raw = map (\(n, g, _) -> (n, g)) . breatheLane' pp (map (const 0) raw) raw
 
 -- | The same rule with provenance — the annotator's view. The Maybe Why is
--- Nothing on notes that do not breathe.
-breatheLane' :: PhraseParams -> [ScoreNote] -> [(ScoreNote, Rational)]
+-- Nothing on notes that do not breathe. The bonus list (one per note)
+-- carries strengths the lane surface cannot see — cadence arrivals from
+-- the harmony model.
+breatheLane' :: PhraseParams -> [Double] -> [ScoreNote] -> [(ScoreNote, Rational)]
              -> [(ScoreNote, Rational, Maybe Why)]
-breatheLane' pp raw arts = zipWith3 apply arts (boundaryStrengths pp raw) lastFlags
+breatheLane' pp bonus raw arts =
+  zipWith3 apply arts strengths lastFlags
   where
+    strengths = zipWith (+) (boundaryStrengths pp raw) (bonus <> repeat 0)
     lastFlags = map (const False) (drop 1 arts) <> [True]
     apply (sn, gate) s isLast
       | not isLast, s >= ppThreshold pp =

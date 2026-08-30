@@ -51,6 +51,9 @@ library
         OTB.Emit.Midi
         OTB.Emit.Json
         OTB.Analysis.Counterpoint
+        OTB.Analysis.Grouping
+        OTB.Analysis.Harmony
+        OTB.Analysis.Subject
     build-depends:
         base >=4.17 && <5,
         deepseq,

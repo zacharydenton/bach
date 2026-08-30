@@ -39,6 +39,7 @@ import OTB.Interp.Articulation (articulateLane')
 import OTB.Interp.Dynamics (dynamicsLane')
 import OTB.Interp.Express
 import OTB.Interp.Ornament (realizeNote)
+import OTB.Analysis.Harmony (melodicCharge)
 import OTB.Interp.Phrasing (PhraseParams (..), boundaryStrengths, breatheLane')
 import OTB.Kern.Token qualified as K
 import OTB.Score
@@ -59,6 +60,10 @@ data Ctx = Ctx
   , cMeters :: [(WholeNotes, (Int, Int))] -- ^ meter map
   , cFinalTag :: ScoreNote -> Maybe Int -- ^ final-chord membership
   , cChannel :: Int
+  , cRootAt :: WholeNotes -> Maybe Int -- ^ chord root pc (harmony model)
+  , cChargeAt :: WholeNotes -> Double -- ^ harmonic charge at a position
+  , cCadences :: [WholeNotes] -- ^ V-I arrival onsets
+  , cSubject :: (WholeNotes, Int) -> Bool -- ^ fugue subject membership
   }
 
 -- | The interpreter's output payload, plus provenance.
@@ -70,6 +75,8 @@ data Ev = Ev
   , evChannel :: !Int
   , evIndex :: !Int
   , evSrcOn :: !WholeNotes -- ^ notated onset (explain's bar selector key)
+  , evCharge :: !Double -- ^ dissonance charge — velocity-blind targets
+                        -- convert it to agogics downstream
   , evFinal :: !(Maybe Int)
   , evWhy :: [Why] -- ^ lazy on purpose: forced only by explain
   }
@@ -85,26 +92,83 @@ annotateLane ip ctx l = Annotated (go 0 decided)
   where
     ex = iExpress ip
     arts = articulateLane' (iArt ip) l
-    breaths = breatheLane' (iPhrasing ip) l [(n, g) | (n, g, _) <- arts]
+    -- cadence arrivals from the harmony model bolster the boundary
+    -- strength a lane's surface alone would compute
+    cadBonus =
+      [ if any (\c -> abs' (snOnset n + snDur n - c) <= 1 / 8)
+             (cCadences ctx)
+          then ppWCadence (iPhrasing ip) else 0
+      | n <- l ]
+    abs' (WholeNotes r) = WholeNotes (abs r)
+    breaths = breatheLane' (iPhrasing ip) cadBonus l
+                [(n, g) | (n, g, _) <- arts]
     charges = chargesForLane (cSounding ctx) l
     bounds = map (>= ppThreshold (iPhrasing ip))
-               (boundaryStrengths (iPhrasing ip) l)
+               (zipWith (+) (boundaryStrengths (iPhrasing ip) l) cadBonus)
     vels = dynamicsLane' (iDynamics ip) (cMeters ctx) bounds l
 
-    decided = zipWith4 build arts breaths charges vels
-    zipWith4 f (a : as) (b : bs) (c : cs) (d : ds) =
-      f a b c d : zipWith4 f as bs cs ds
-    zipWith4 _ _ _ _ _ = []
+    -- KTH leap articulation / leap tone duration (Friberg, Bresin &
+    -- Sundberg 2006): micropause before a large leap, a fuller hold on
+    -- its arrival
+    nextIv = [ fmap (\nx -> abs (snPitch nx - snPitch n)) mnx
+             | (n, mnx) <- zip l (map Just (drop 1 l) <> [Nothing]) ]
+    prevIv = Nothing : init nextIv
+    -- KTH duration contrast: short notes against the lane's median get
+    -- crisper (velocity side lives in Dynamics' hierarchy already)
+    medianDur = case map snDur l of
+      [] -> 1
+      ds -> let srt = sortDurs ds in srt !! (length srt `div` 2)
+    sortDurs = foldr ins []
+      where ins x (y : ys) | x > y = y : ins x ys
+            ins x ys = x : ys
 
-    build (_, _, artWhy) (sn, gateBreathed, mBreath) charge (v, velWhys) =
+    decided = zipWith6 build arts breaths charges vels nextIv prevIv
+    zipWith6 f (a : as) (b : bs) (c : cs) (d : ds) (e : es) (g : gs) =
+      f a b c d e g : zipWith6 f as bs cs ds es gs
+    zipWith6 _ _ _ _ _ _ _ = []
+
+    build (_, _, artWhy) (sn, gateBreathed, mBreath) charge (v, velWhys)
+          mNextIv mPrevIv =
       (sn, attrs, whys)
       where
-        gate = leanGate ex charge gateBreathed
+        leapCut = case mNextIv of
+          Just iv | iv >= 7 ->
+            exExpression ex * exLeapPause ex
+              * min 1 (fromIntegral (iv - 6) / 12)
+          _ -> 0
+        leapHold = case mPrevIv of
+          Just iv | iv >= 7 -> exExpression ex * exLeapDur ex
+          _ -> 0
+        dcCut =
+          let WholeNotes dr = snDur sn
+              WholeNotes mr = medianDur
+              ratio = fromRational (dr / max mr (1 / 64)) :: Double
+           in if ratio < 1
+                then exExpression ex * exDurContrast ex * (1 - ratio)
+                else 0
+        gateK = max (1 / 20) $ min (23 / 20) $
+          gateBreathed * approx ((1 - leapCut) * (1 - dcCut))
+            + approx leapHold
+        approx x = toRational (fromIntegral (round (x * 1e6) :: Int)) / 1e6
+        gate = leanGate ex charge gateK
+
+        -- harmony model: melodic + harmonic charge (Friberg 1991), and
+        -- the fugue subject speaks up (Czerny's practice)
+        mcBump = case cRootAt ctx (snOnset sn) of
+          Just r -> round (exExpression ex * exMelCharge ex
+                             * melodicCharge (snPitch sn) r)
+          Nothing -> 0
+        hcBump = round (exExpression ex * exHarmCharge ex
+                          * cChargeAt ctx (snOnset sn))
+        sBump = if cSubject ctx (snSource sn)
+                  then round (exExpression ex * exSubjectVel ex)
+                  else 0 :: Int
+        vOut = v + mcBump + hcBump + sBump
         attrs = concat
           [ [Art (if gate < 1 then Staccato gate else Legato gate)]
           , [Art Breath | isJust mBreath]
           , [Art Fermata | K.Fermata `elem` snMarks sn]
-          , [Dyn (Loudness (fromIntegral v))]
+          , [Dyn (Loudness (fromIntegral vOut))]
           , [Dyn (Accent (charge1000 charge)) | charge > 0]
           , mapMaybe ornAttr (snMarks sn)
           , [Orn Arpeggio | isJust (cFinalTag ctx sn)]
@@ -118,6 +182,25 @@ annotateLane ip ctx l = Annotated (go 0 decided)
                 "CPE Bach 1753; KTH harmonic charge"
             | charge > 0 ]
           , velWhys
+          , [ why "leap-pause"
+                ("gate x" <> showD2 (1 - leapCut) <> " before the leap")
+                "KTH leap articulation (Friberg/Bresin/Sundberg 2006)"
+            | leapCut > 0.005 ]
+          , [ why "leap-arrival"
+                ("gate +" <> showD2 leapHold <> " on the arrival")
+                "KTH leap tone duration" | leapHold > 0.005 ]
+          , [ why "duration-contrast"
+                ("gate x" <> showD2 (1 - dcCut) <> " (short vs lane median)")
+                "KTH duration contrast" | dcCut > 0.005 ]
+          , [ why "melodic-charge"
+                ("+" <> show mcBump <> " vel")
+                "Friberg 1991; DM melodic charge" | mcBump > 0 ]
+          , [ why "harmonic-charge"
+                ("+" <> show hcBump <> " vel")
+                "Sundberg; DM harmonic charge" | hcBump > 0 ]
+          , [ why "subject-entry"
+                ("+" <> show sBump <> " vel across the statement")
+                "fugal practice; Czerny's WTC edition" | sBump > 0 ]
           , [ why "ornament" (ornName m) "Bach's Explication; CPE Bach 1753"
             | m <- snMarks sn, isJust (ornAttr m) ]
           , [ why "final-chord" "member: rolled bass-upward in assembly"
@@ -125,6 +208,7 @@ annotateLane ip ctx l = Annotated (go 0 decided)
             | isJust (cFinalTag ctx sn) ]
           ]
         bump = round (exExpression ex * exDisVel ex * charge)
+        showD2 x = show (fromIntegral (round (x * 100) :: Int) / 100 :: Double)
 
     charge1000 :: Double -> Rational
     charge1000 c = fromIntegral (round (c * 1000) :: Int) / 1000
@@ -213,6 +297,9 @@ interpret ip tempo ch (Annotated m0) = snd (go [] 0 m0)
       , evChannel = ch
       , evIndex = i
       , evSrcOn = fst (snSource sn)
+      , evCharge = case [c | Dyn (Accent c) <- env] of
+          (c : _) -> fromRational c
+          [] -> 0
       , evFinal = if or [True | Orn Arpeggio <- env]
                     then Just (snd (snSource sn)) else Nothing
       , evWhy = ws

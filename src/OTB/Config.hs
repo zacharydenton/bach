@@ -134,6 +134,8 @@ agogicsFor cfg piece dflt =
         , agRitCurve = maybe (agRitCurve p) id (Map.lookup "rit_curve" m)
         , agTempoStep = getW "tempo_step" (agTempoStep p)
         , agFermataHold = getR "fermata_hold" (agFermataHold p)
+        , agCadenceDepth = maybe (agCadenceDepth p) id (Map.lookup "cadence_depth" m)
+        , agCadenceSpan = getW "cadence_span" (agCadenceSpan p)
         }
       where
         getW k dflt' = maybe dflt' (WholeNotes . (\v -> approxRational v 1e-9)) (Map.lookup k m)
@@ -152,6 +154,7 @@ phrasingFor cfg piece dflt =
         , ppWGap = getD "w_gap" (ppWGap p)
         , ppWDur = getD "w_dur" (ppWDur p)
         , ppWLeap = getD "w_leap" (ppWLeap p)
+        , ppWCadence = getD "w_cadence" (ppWCadence p)
         }
       where
         getD k dflt' = maybe dflt' id (Map.lookup k m)
@@ -163,7 +166,11 @@ ornamentsFor cfg piece dflt =
     (apply (Map.findWithDefault Map.empty "ornaments" cfg) dflt)
   where
     apply m p =
-      p {opTrillRate = maybe (opTrillRate p) id (Map.lookup "trill_rate" m)}
+      p { opTrillRate = maybe (opTrillRate p) id (Map.lookup "trill_rate" m)
+        , opTrillAccel = maybe (opTrillAccel p) id (Map.lookup "trill_accel" m)
+        , opTermination = maybe (opTermination p) (> 0.5)
+            (Map.lookup "trill_termination" m)
+        }
 
 -- | Dynamic parameters from @[dynamics]@ overlaid with @[piece.<name>]@.
 dynamicsFor :: Config -> Text -> DynParams -> DynParams
@@ -213,6 +220,14 @@ expressFor cfg piece dflt =
         , exJitterVel = g "jitter_vel" (exJitterVel p)
         , exInegal = g "inegal" (exInegal p)
         , exOverhold = g "overhold" (exOverhold p)
+        , exMelCharge = g "mel_charge" (exMelCharge p)
+        , exHarmCharge = g "harm_charge" (exHarmCharge p)
+        , exSubjectVel = g "subject_vel" (exSubjectVel p)
+        , exDurContrast = g "dur_contrast" (exDurContrast p)
+        , exLeapPause = g "leap_pause" (exLeapPause p)
+        , exLeapDur = g "leap_dur" (exLeapDur p)
+        , exUphill = g "uphill" (exUphill p)
+        , exDoubleDur = g "double_dur" (exDoubleDur p)
         }
       where
         g k dflt' = maybe dflt' id (Map.lookup k m)

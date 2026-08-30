@@ -24,6 +24,8 @@ import OTB.Interp.Express
 import OTB.Interp.Ornament
 import OTB.Interp.Phrasing
 import OTB.Explain (renderWhys)
+import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony, melodicCharge)
+import OTB.Analysis.Subject (subjectEntries)
 import OTB.Instrument (hardwareTracks)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..), scoreNote)
@@ -49,7 +51,7 @@ corpusDir = "corpus/bach-wtc/kern"
 main :: IO ()
 main = do
   sweep <- corpusSweep
-  defaultMain $ testGroup "all" [units, laws, sweep, oracle, review]
+  defaultMain $ testGroup "all" [units, laws, sweep, oracle, review, sota]
 
 -- | Parse every WTC file; assert full coverage and the known-baseline
 -- number of tie leftovers (encoding lapses in the corpus itself — see
@@ -263,7 +265,7 @@ units = testGroup "otb"
   , testGroup "agogics"
       [ testCase "tempo map: rit still descends to the floor (arches off)" $ do
           let ag = defaultAgogicParams {agRitSpan = 1, agRitFloor = 0.5}
-              tm = tempoMap ag 0 0 [(0, 1)] (Bpm 100) 4
+              tm = tempoMap ag [] [] (Bpm 100) 4
               bpms = [b | (_, Bpm b) <- tm]
           take 1 bpms @?= [100]
           assertBool ("not descending: " <> show bpms)
@@ -272,23 +274,24 @@ units = testGroup "otb"
             (last bpms >= 50 && last bpms < 100)
       , testCase "Todd arches: tempo rises to centre, sane bounds" $ do
           let ag = defaultAgogicParams {agRitSpan = 0}
-              tm = tempoMap ag 0.05 0 [(0, 1)] (Bpm 100) 8
+              tm = tempoMap ag [(0, 8, 0.05)] [] (Bpm 100) 8
               bpms = [b | (_, Bpm b) <- tm]
               mid = bpms !! (length bpms `div` 2)
           assertBool ("no arch: " <> show (take 5 bpms)) (mid > 100)
           assertBool "bounded" (all (\b -> b > 90 && b < 110) bpms)
       , testCase "group arches follow a meter change" $ do
-          -- 4/4 for one bar then 3/8: arch peaks must land at 1/2 and
-          -- at 1 + 3/16, i.e. the groups re-align at the change
+          -- 4/4 for one bar then 3/8: the caller lays arches per group,
+          -- re-aligned at the change; peaks at 1/2 and 1 + 3/16
           let ag = defaultAgogicParams {agRitSpan = 0, agTempoStep = 1 / 16}
-              tm = tempoMap ag 0 0.05 [(0, 1), (1, 3 / 8)] (Bpm 100) (1 + 3 / 8)
+              tm = tempoMap ag [(0, 1, 0.05), (1, 1 + 3 / 8, 0.05)] []
+                     (Bpm 100) (1 + 3 / 8)
               at t = case takeWhile ((<= t) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
           assertBool "peak of the 4/4 bar" (at (1 / 2) > at (1 / 16))
           assertBool "a fresh trough at the change" (at 1 < at (1 / 2))
           assertBool "peak of the 3/8 group" (at (1 + 3 / 16) > at 1)
       , testCase "short piece: no rit, single tempo" $
-          length (tempoMap defaultAgogicParams 0 0 [(0, 1)] (Bpm 100) (1 / 2)) @?= 1
+          length (tempoMap defaultAgogicParams [] [] (Bpm 100) (1 / 2)) @?= 1
       , testCase "fermata holds" $ do
           let sn = scoreNote 0 (1 / 4) 60 [Fermata]
           fermataFactor defaultAgogicParams sn @?= agFermataHold defaultAgogicParams
@@ -688,3 +691,60 @@ review = testGroup "review regressions"
         p <- either (assertFailure . ("perform: " <>)) pure
                (perform defaultInterp s)
         k p s
+
+
+-- ---------------------------------------------------------------------
+-- SOTA layer: harmony, subject, KTH reshapers
+
+sota :: TestTree
+sota = testGroup "sota"
+  [ testCase "harmony: WTC keys found (KK profiles + Viterbi)" $ do
+      present <- doesDirectoryExist corpusDir
+      if not present then pure () else do
+        let expect = [ ("wtc1p01", 0, True), ("wtc1f01", 0, True)
+                     , ("wtc1f04", 1, False), ("wtc2f01", 0, True) ]
+        mapM_ (\(f, k, mj) -> do
+                 h <- harmOf f
+                 (hKeyAt h 0, hMajorAt h 0) @?= (k, mj))
+          expect
+  , testCase "harmony: melodic charge table (Friberg 1991)" $ do
+      melodicCharge 60 0 @?= 0 -- root
+      melodicCharge 67 0 @?= 1 -- fifth
+      melodicCharge 61 0 @?= 6.5 -- flat second, heaviest
+  , testCase "subject: the C major fugue states, the prelude does not" $ do
+      present <- doesDirectoryExist corpusDir
+      if not present then pure () else do
+        f <- scoreOf "wtc1f01"
+        p <- scoreOf "wtc1p01"
+        let entries = subjectEntries f
+        assertBool "fugue entries found" (length entries >= 40)
+        subjectEntries p @?= []
+  , testProperty "uphill reshaper preserves lane duration sum" $
+      forAll genLane $ \l ->
+        sum (map snDur (uphillLane 0.05 l)) === sum (map snDur l)
+  , testProperty "double-duration reshaper preserves lane duration sum" $
+      forAll genLane $ \l ->
+        sum (map snDur (doubleDurLane 0.07 l)) === sum (map snDur l)
+  , testCase "accelerating trill still sums to the note" $ do
+      let sn = scoreNote 0 (1 / 2) 60 [Trill 2]
+          out = realizeNote defaultOrnamentParams (Bpm 96) sn
+      sum (map snDur out) @?= 1 / 2
+      assertBool "accelerates: first subnote longest"
+        (snDur (head out) > snDur (last out))
+  , testCase "long trill closes with the Nachschlag" $ do
+      let sn = scoreNote 0 1 60 [Trill 2]
+          out = realizeNote defaultOrnamentParams (Bpm 96) sn
+          ps = map snPitch out
+      assertBool "enough subnotes" (length ps >= 8)
+      drop (length ps - 2) ps @?= [58, 60] -- lower turn into the main
+  ]
+  where
+    harmOf f = do
+      s <- scoreOf f
+      let notes = [ (snOnset n, snDur n, snPitch n)
+                  | v <- scVoices s, n <- vNotes v ]
+          end' = maximum (0 : [o + d | (o, d, _) <- notes])
+      pure (analyzeHarmony (scMeter s) notes end')
+    scoreOf f = do
+      src <- TIO.readFile (corpusDir </> f <> ".krn")
+      either (assertFailure . ("parse: " <>)) pure (parseKern (Bpm 72) src)
