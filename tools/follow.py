@@ -21,6 +21,11 @@ the two tempo maps, and the report is a real error number, not vibes.
 Frames are 50 ms; the follower is causal — it never sees a live frame
 before emitting the previous estimate.
 
+STATUS: prototype. Tracking is verified in simulation (renders with
+known tempo maps) only; no live audio input, no engine integration
+yet. The ~100 ms medians are a floor for the algorithm, not a claim
+about stage conditions.
+
 License: GPL-2.0-or-later.
 """
 

@@ -16,6 +16,12 @@ ready to be implemented, re-run, and watched shrinking toward zero.
 This inverts the project's method exactly once: everywhere else the
 literature proposes and the corpus disposes; here the corpus proposes.
 
+STATUS: research instrument, not an oracle. The effects are
+observational associations on one corpus; the marginal table is
+descriptive (contexts overlap — trust the joint model's coefficients);
+a "discovered rule" here is a HYPOTHESIS that earns rule status only
+by being implemented, re-run, and surviving on held-out pieces.
+
   tools/residual_mine.py                 # all overlapping pieces
   tools/residual_mine.py wtc1f01 ...     # a selection
 

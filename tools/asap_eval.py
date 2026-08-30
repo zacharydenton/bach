@@ -21,6 +21,11 @@ tempoMap (piecewise-constant, same convention as Emit.Json).
   tools/asap_eval.py wtc1f01 wtc1p01     # a selection
   tools/asap_eval.py --fit wtc1f01       # grid the expression knob
 
+STATUS: the evaluation is dependable (exact beat ground truth, ~166
+performances); the FITS are research-grade — performer profiles are
+in-sample over at most four pieces and say "this stance correlates
+with this pianist here", not "this is how they play".
+
 Requires: corpus/asap (sparse clone of CPJKU/asap-dataset, Bach/),
 a built otb (stack build), and the kern corpus.
 
