@@ -36,11 +36,21 @@ import OTB.Units (Bpm (..), WholeNotes (..))
 
 data OrnamentParams = OrnamentParams
   { opTrillRate :: !Double -- ^ alternations per second (subnote rate)
+  , opTrillAccel :: !Double
+    -- ^ each alternation this much faster than the last (C.P.E. Bach:
+    -- trills may begin more slowly than they end); 1 = even
+  , opTermination :: !Bool
+    -- ^ long trills close with a Nachschlag (lower turn into the main
+    -- note) per C.P.E. Bach's Versuch, Tab. IV
   }
   deriving (Show, Eq)
 
 defaultOrnamentParams :: OrnamentParams
-defaultOrnamentParams = OrnamentParams {opTrillRate = 12}
+defaultOrnamentParams = OrnamentParams
+  { opTrillRate = 12
+  , opTrillAccel = 1.08
+  , opTermination = True
+  }
 
 -- | One subnote's duration in whole notes, from the wall-clock rate at
 -- this tempo: bpm quarters/min = bpm/4 wholes/min = bpm/240 wholes/sec.
@@ -88,12 +98,24 @@ realizeNote op bpm = realize
           p = snPitch sn
        in case orn of
             Trill aux ->
-              -- even subnote count >= 4, upper start => main-note ending
+              -- even subnote count >= 4, upper start => main-note ending;
+              -- durations accelerate (opTrillAccel) so the trill spins up
+              -- rather than sewing-machining; long trills close with the
+              -- Nachschlag (lower turn) when opTermination
               let n = max 4 (2 * floor (realToFrac (d / step) / 2 :: Double))
-                  sub = d / fromIntegral n
-                  pitches =
+                  accel = max 1 (opTrillAccel op)
+                  weights =
+                    [ toRational (accel ** fromIntegral (n - 1 - i))
+                    | i <- [0 .. n - 1] ] :: [Rational]
+                  total = sum weights
+                  durs = [d * WholeNotes (w / total) | w <- weights]
+                  alternation =
                     [if even i then p + aux else p | i <- [0 .. n - 1]]
-               in subdivide sn (map (,sub) pitches)
+                  pitches
+                    | opTermination op && n >= 8 =
+                        take (n - 2) alternation <> [p - 2, p]
+                    | otherwise = alternation
+               in subdivide sn (zip pitches durs)
             Mordent aux ->
               let s = min step (d / 4)
                in subdivide sn [(p, s), (p - aux, s), (p, d - 2 * s)]

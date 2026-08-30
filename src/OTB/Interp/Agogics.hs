@@ -36,6 +36,8 @@ data AgogicParams = AgogicParams
   , agRitCurve :: !Double -- ^ q in the Friberg–Sundberg model; 2 = runners
   , agTempoStep :: !WholeNotes -- ^ granularity of the discretised curve
   , agFermataHold :: !Rational -- ^ duration multiplier under a fermata
+  , agCadenceDepth :: !Double -- ^ slowing into a cadence arrival
+  , agCadenceSpan :: !WholeNotes -- ^ how far before the arrival it begins
   }
   deriving (Show, Eq)
 
@@ -46,40 +48,47 @@ defaultAgogicParams = AgogicParams
   , agRitCurve = 2
   , agTempoStep = 1 / 8
   , agFermataHold = 7 / 4
+  , agCadenceDepth = 0.04
+  , agCadenceSpan = 3 / 4
   }
 
--- | The piece's tempo curve. Three multiplicative layers on the base:
--- Todd (1992) arches at whole-piece and bar-group level (tempo and
--- loudness co-vary: faster toward centres, easing at boundaries), then
--- the Friberg–Sundberg closing rit. Pairs are (onset, tempo-from-here);
+-- | The piece's tempo curve. Multiplicative layers on the base: one
+-- Todd (1992) arch per node of the grouping hierarchy (tempo and
+-- loudness co-vary: faster toward centres, easing at boundaries),
+-- phrase-final slowing into each cadence arrival, then the
+-- Friberg–Sundberg closing rit. Pairs are (onset, tempo-from-here);
 -- the whole curve is discretised at agTempoStep.
 --
--- archPiece/archGroup are fractional depths (0.03 = ±3%); groups are a
--- map (from-onset, group length in whole notes) — one entry per meter
--- change, so a 4/4 → 3/8 piece re-lays its groups at the change.
-tempoMap :: AgogicParams -> Double -> Double -> [(WholeNotes, WholeNotes)]
+-- Arches come in as (start, end, fractional depth) — the caller owns
+-- the hierarchy (piece level, recursive grouping tree, bar groups);
+-- 0.03 = ±3%. Cadences are arrival onsets: over agCadenceSpan before
+-- each, tempo eases by up to agCadenceDepth, recovering at the arrival
+-- (the next phrase starts a tempo — phrase-final lengthening, not a
+-- global rit).
+tempoMap :: AgogicParams -> [(WholeNotes, WholeNotes, Double)] -> [WholeNotes]
          -> Bpm -> WholeNotes -> [(WholeNotes, Bpm)]
-tempoMap ag archPiece archGroup groups (Bpm base) end
+tempoMap ag arches cadences (Bpm base) end
   | end <= 0 || agTempoStep ag <= 0 = [(0, Bpm base)]
   | otherwise = thin [(t, Bpm (base * factor t)) | t <- gridPts]
   where
     gridPts = takeWhile (< end) (iterate (+ agTempoStep ag) 0)
-    factor t = arch archPiece 0 end t * groupArch t * ritF t
+    factor t = product [arch depth a b t | (a, b, depth) <- arches]
+                 * cadF t * ritF t
     arch depth a b t
-      | depth <= 0 || b <= a = 1
+      | depth <= 0 || b <= a || t < a || t > b = 1
       | otherwise =
           let x = realToFrac ((t - a) / (b - a)) :: Double
            in 1 + depth * (4 * x * (1 - x) * 2 - 1) -- ±depth, peak centre
-    groupArch t
-      | archGroup <= 0 = 1
-      | otherwise = case takeWhile ((<= t) . fst) groups of
-          [] -> 1
-          gs ->
-            let (WholeNotes from, groupLen@(WholeNotes gw)) = last gs
-                WholeNotes tw = t
-                a = from + gw * fromIntegral (floor ((tw - from) / gw) :: Integer)
-             in if gw <= 0 then 1
-                else arch archGroup (WholeNotes a) (WholeNotes a + groupLen) t
+    cadF t
+      | agCadenceDepth ag <= 0 || agCadenceSpan ag <= 0 = 1
+      | otherwise =
+          product
+            [ 1 - agCadenceDepth ag * ramp
+            | c <- cadences
+            , t >= c - agCadenceSpan ag, t < c
+            , let WholeNotes pr = (t - (c - agCadenceSpan ag))
+                                    / agCadenceSpan ag
+                  ramp = realToFrac pr :: Double ]
     ritF t
       | agRitSpan ag <= 0 || end <= agRitSpan ag || t < start = 1
       | otherwise =

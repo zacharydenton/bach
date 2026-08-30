@@ -21,9 +21,12 @@ module OTB.Interp.Express
   , defaultExpressParams
   , inegalLane
   , overholdLane
+  , uphillLane
+  , doubleDurLane
   , chargesForLane
   , leanGate
   , seededJitter
+  , seededJitter1f
   , seedOf
   ) where
 
@@ -47,6 +50,14 @@ data ExpressParams = ExpressParams
   , exJitterVel :: !Double -- ^ velocity jitter
   , exInegal :: !Double -- ^ per piece: 0 = equal; 0.33 ~ Quantz's long-short
   , exOverhold :: !Double -- ^ per piece: 0..1 of the gap to the next onset
+  , exMelCharge :: !Double -- ^ vel per unit melodic charge (Friberg 1991)
+  , exHarmCharge :: !Double -- ^ vel per unit harmonic charge
+  , exSubjectVel :: !Double -- ^ vel boost across fugue subject entries
+  , exDurContrast :: !Double -- ^ KTH duration contrast: short-note gate cut
+  , exLeapPause :: !Double -- ^ KTH leap articulation: micropause before leaps
+  , exLeapDur :: !Double -- ^ KTH leap tone duration: hold the arrival
+  , exUphill :: !Double -- ^ KTH faster uphill: rushing ascending runs
+  , exDoubleDur :: !Double -- ^ KTH double duration: soften 2:1 contrast
   }
   deriving (Show, Eq)
 
@@ -65,6 +76,14 @@ defaultExpressParams = ExpressParams
   , exJitterVel = 2
   , exInegal = 0
   , exOverhold = 0
+  , exMelCharge = 0.4
+  , exHarmCharge = 0.3
+  , exSubjectVel = 5
+  , exDurContrast = 0.12
+  , exLeapPause = 0.06
+  , exLeapDur = 0.05
+  , exUphill = 0.03
+  , exDoubleDur = 0.07
   }
 
 -- | Notes inégales (Quantz XI): conjunct equal-duration pairs on the
@@ -108,6 +127,64 @@ overholdLane o ns
         gap = snOnset nx - (snOnset n + snDur n)
     hold n _ = n
 
+-- | KTH "faster uphill" (Friberg, Bresin & Sundberg 2006): within an
+-- ascending stepwise run of three or more equal values, each interior
+-- note gives k of its duration to the run's final note — the run rushes
+-- slightly toward its top. Lane total duration is preserved.
+uphillLane :: Double -> [ScoreNote] -> [ScoreNote]
+uphillLane k ns
+  | k <= 0 = ns
+  | otherwise = concatMap reshape (runs ns)
+  where
+    runs xs = case xs of
+      [] -> []
+      (a : _) ->
+        let (r, more) = span' a xs
+         in r : runs more
+    span' _ [] = ([], [])
+    span' _ (x : xs) = go [x] xs
+      where
+        go acc (y : ys)
+          | up (last acc) y = go (acc <> [y]) ys
+        go acc rest' = (acc, rest')
+    up a b =
+      let iv = snPitch b - snPitch a
+       in iv > 0 && iv <= 2
+            && snDur a == snDur b
+            && snOnset a + snDur a == snOnset b
+    reshape r
+      | length r < 3 = r
+      | otherwise =
+          let d = WholeNotes (toRational k) * snDur (head r)
+              interior = length r - 1
+              stolen = d * fromIntegral interior
+              shifted =
+                [ n { snOnset = snOnset n - d * fromIntegral i'
+                    , snDur = snDur n - d }
+                | (i', n) <- zip [(0 :: Int) ..] (init r) ]
+              lastN = last r
+           in shifted
+                <> [ lastN { snOnset = snOnset lastN - stolen
+                           , snDur = snDur lastN + stolen } ]
+
+-- | KTH "double duration" (Friberg, Bresin & Sundberg 2006): in an
+-- adjacent 2:1 pair the contrast is softened — the short note takes k
+-- of its length from the long one. Runs on raw lanes like inégales.
+doubleDurLane :: Double -> [ScoreNote] -> [ScoreNote]
+doubleDurLane k ns
+  | k <= 0 = ns
+  | otherwise = go ns
+  where
+    go (a : b : rest)
+      | snDur a == 2 * snDur b
+      , snOnset a + snDur a == snOnset b =
+          let d = WholeNotes (toRational k) * snDur b
+           in a {snDur = snDur a - d}
+                : b {snOnset = snOnset b - d, snDur = snDur b + d}
+                : go rest
+      | otherwise = a : go (b : rest)
+    go xs = xs
+
 -- | C.P.E. Bach's rule, computed from what actually sounds: for each note
 -- of a lane, the dissonance charge in [0,1] against every other sounding
 -- note at its onset. Minor 2nd/major 7th charge 1, major 2nd/minor 7th
@@ -147,6 +224,16 @@ seededJitter seed i =
       z2 = z1 * 1274126177
       z3 = z2 `xor` (z2 `shiftR` 16)
    in fromIntegral (z3 `mod` 20001) / 10000 - 1
+
+-- | 1\/f-flavoured timing noise (Gilden, Thornton & Mallon 1995: human
+-- timing residuals are fractal, not white): three octaves of the seeded
+-- noise summed, the slower components shared across neighbouring notes.
+seededJitter1f :: Int -> Int -> Double
+seededJitter1f seed i =
+  ( seededJitter seed i
+      + 0.7 * seededJitter (seed + 101) (i `div` 4)
+      + 0.5 * seededJitter (seed + 707) (i `div` 16) )
+    / 2.2
 
 -- | A stable small seed from a piece name.
 seedOf :: String -> Int
