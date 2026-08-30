@@ -143,6 +143,12 @@ class Engine:
         labels = {vi: (names[rank] if names else f"voice {vi}")
                   for rank, vi in enumerate(order)}
 
+        # the executable edition's subtitle track: every note's rule
+        # citations, indexed by sounding time
+        self.why_index = sorted(
+            (n["onS"], n["onS"] + n["durS"], n["ch"], n["whys"])
+            for tr in perf["tracks"] for n in tr if n.get("whys"))
+
         end = 0.0
         for vi, tr in enumerate(perf["tracks"]):
             chans = sorted({n["ch"] for n in tr})
@@ -350,6 +356,17 @@ class Engine:
             else:  # render fell behind: resync rather than spiral
                 deadline = time.monotonic()
 
+    def whys_at(self, t):
+        """Rule citations for everything sounding at loop-time t."""
+        out = []
+        for on, off, ch, ws in self.why_index:
+            if on > t:
+                break
+            if t < off:
+                for w in ws:
+                    out.append({"ch": ch, "why": w})
+        return out[:16]
+
     def state(self):
         return {
             "playing": self.playing,
@@ -406,6 +423,9 @@ h1{font-size:1.2rem} .patch{color:#9c9} .pos{color:#777;font-size:.85rem}
  <button onclick=pieceStep(1)>⏭</button>
 </div>
 <div id=parts></div>
+<div id=whys style="min-height:5.5em;margin:8px 0;padding:6px 8px;
+  font-size:12px;line-height:1.45;opacity:.85;border-left:3px solid #888;
+  font-family:monospace;white-space:pre-wrap"></div>
 <h3>casting (paste into render_showcase / audition.py)</h3>
 <div id=cast></div>
 <script>
@@ -539,8 +559,30 @@ async function init(){
   const ps = document.getElementById('piecesel');
   ps.innerHTML = PIECES.map((n,i)=>`<option>${n}</option>`).join('');
   await refresh(); setInterval(refresh, 1000);
+  setInterval(refreshWhys, 400); // the interpretation, explaining itself
 }
 function setPiece(i){ post('piece',{index:i}); }
+let lastWhys = '';
+async function refreshWhys(){
+  if (!STATE || !STATE.playing) return;
+  // estimate the current position between 1 Hz state polls
+  const at = STATE.position + (Date.now() - (STATE._t||Date.now()))/1000;
+  const ws = await (await fetch('whys?at='+at.toFixed(2))).json();
+  const seen = new Set();
+  const lines = [];
+  for (const w of ws){
+    const key = w.why.split(':')[0] + w.ch;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push('ch'+w.ch+'  '+w.why);
+    if (lines.length >= 7) break;
+  }
+  const txt = lines.join('\n');
+  if (txt !== lastWhys){
+    lastWhys = txt;
+    document.getElementById('whys').textContent = txt;
+  }
+}
 function pieceStep(d){
   if (!STATE) return;
   setPiece((STATE.pieceIndex + d + PIECES.length) % PIECES.length);
@@ -557,6 +599,7 @@ function opts(){
 }
 async function refresh(){
   STATE = await (await fetch('state')).json();
+  STATE._t = Date.now();
   document.getElementById('play').textContent = STATE.playing?'pause':'play';
   document.getElementById('pos').textContent =
     STATE.piece+' ('+(STATE.pieceIndex+1)+'/'+STATE.pieceCount+') · '+
@@ -677,6 +720,12 @@ def serve(engine, cats, host, port):
                 self.wfile.write(b)
             elif self.path == "/state":
                 self._json(engine.state())
+            elif self.path.startswith("/whys"):
+                try:
+                    at = float((self.path.split("=", 1) + ["0"])[1])
+                except ValueError:
+                    at = 0.0
+                self._json(engine.whys_at(at))
             elif self.path == "/patches":
                 self._json(cats)
             elif self.path == "/pieces":
