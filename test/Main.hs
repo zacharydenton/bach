@@ -707,6 +707,21 @@ sota = testGroup "sota"
                  h <- harmOf f
                  (hKeyAt h 0, hMajorAt h 0) @?= (k, mj))
           expect
+  , testCase "adaptive temperament: settled major third goes just" $ do
+      -- root C (Werckmeister offset 0): at full stability the E sits at
+      -- the just major third, -13.7 cents — flatter than Werckmeister's
+      -- -9.775, which is the audible point of the whole feature
+      let Cents atRest = adaptiveCents werckmeister3 0 1 64
+          Cents moving = adaptiveCents werckmeister3 0 0 64
+          Cents just3 = justOffsetFor 4
+      assertBool "settled = just third" (abs (atRest - just3) < 0.01)
+      assertBool "moving = Werckmeister" (abs (moving - (-9.775)) < 0.01)
+  , testCase "harmony: stability rises while the root holds" $ do
+      -- a held C major triad: beat 1 unstable, beat 3+ settled
+      let notes = [(0, 2, 48), (0, 2, 64), (0, 2, 67)]
+          h = analyzeHarmony [(0, (4, 4))] notes 2
+      hStabilityAt h 0 @?= 0
+      assertBool "settled by the third beat" (hStabilityAt h (3 / 4) >= 1)
   , testCase "harmony: melodic charge table (Friberg 1991)" $ do
       melodicCharge 60 0 @?= 0 -- root
       melodicCharge 67 0 @?= 1 -- fifth

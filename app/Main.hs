@@ -182,7 +182,9 @@ load com = do
            then either (die . (("config " <> cConfig com <> ": ") <>)) pure
                   . loadConfig =<< TIO.readFile (cConfig com)
            else pure emptyConfig
-  table <- resolveTemperament (cTemperament com)
+  let adaptive = cTemperament com == "adaptive"
+  table <- resolveTemperament
+             (if adaptive then "werckmeister3" else cTemperament com)
   let piece = T.pack (takeBaseName (cInput com))
       score = maybe score0 (\bpm -> score0 {scTempo = Bpm bpm})
                 (pieceTempo cfg piece)
@@ -196,6 +198,7 @@ load com = do
         , iDynamics = dynamicsFor cfg piece defaultDynParams
         , iExpress = expressFor cfg piece defaultExpressParams
         , iPiece = T.unpack piece
+        , iAdaptive = adaptive
         , iTuning = table
         , iBendRange = tuningBendRange cfg
         }
@@ -204,6 +207,9 @@ load com = do
 
 runCompile :: Common -> FilePath -> Maybe FilePath -> Maybe FilePath -> String -> IO ()
 runCompile com out mscl mjson tgt = do
+  when (cTemperament com == "adaptive" && mscl /= Nothing)
+    (die ("adaptive temperament is bend-carried per chord; no static "
+            <> ".scl can express it — drop --emit-scl"))
   (piece, score, p0, table, haveCfg) <- load com
   (p, hwClips) <- case tgt of
     "hardware" -> either die pure (hardwareTracks p0)
@@ -300,8 +306,8 @@ loadCfg cfgPath = do
            . loadConfig =<< TIO.readFile cfgPath
     else pure emptyConfig
 
-mkInterp :: OTB.Config.Config -> TuningTable -> String -> Interp
-mkInterp cfg table piece0 =
+mkInterp :: OTB.Config.Config -> TuningTable -> Bool -> String -> Interp
+mkInterp cfg table adaptive piece0 =
   let piece = T.pack piece0
    in Interp
         { iArt = artParamsFor cfg piece
@@ -311,6 +317,7 @@ mkInterp cfg table piece0 =
         , iDynamics = dynamicsFor cfg piece defaultDynParams
         , iExpress = expressFor cfg piece defaultExpressParams
         , iPiece = piece0
+        , iAdaptive = adaptive
         , iTuning = table
         , iBendRange = tuningBendRange cfg
         }
@@ -319,7 +326,8 @@ runAlbum :: FilePath -> FilePath -> FilePath -> Double -> String -> IO ()
 runAlbum corpus outDir cfgPath tempo temp = do
   checkBpm "--tempo" tempo
   cfg <- loadCfg cfgPath
-  table <- resolveTemperament temp
+  let adaptive = temp == "adaptive"
+  table <- resolveTemperament (if adaptive then "werckmeister3" else temp)
   files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
   srcs <- mapM (\f -> (,) f <$> TIO.readFile (corpus </> f)) (sort files)
   createDirectoryIfMissing True outDir
@@ -332,7 +340,7 @@ runAlbum corpus outDir cfgPath tempo temp = do
                         (pieceTempo cfg (T.pack piece))
               mapM_ (Left . ("config tempo: " <>))
                 (badBpm . (\(Bpm b) -> b) . scTempo $ s)
-              p <- perform (mkInterp cfg table piece) s
+              p <- perform (mkInterp cfg table adaptive piece) s
               pure ( force (renderSmf p)
                    , force (renderJson piece p) )
          in (piece, r)
@@ -342,7 +350,8 @@ runAlbum corpus outDir cfgPath tempo temp = do
     Right (smf, json) -> do
       BL.writeFile (outDir </> piece <> ".mid") smf
       writeFile (outDir </> piece <> ".json") json
-  TIO.writeFile (outDir </> "w3.scl") (renderScl (T.pack temp) table)
+  when (not adaptive) $
+    TIO.writeFile (outDir </> "w3.scl") (renderScl (T.pack temp) table)
   let failed = length [() | (_, Left _) <- results]
       ok = length results - failed
   putStrLn (show ok <> " pieces -> " <> outDir
@@ -395,10 +404,11 @@ runGround
   -> FilePath -> Maybe FilePath -> Maybe FilePath -> IO ()
 runGround bass nvar tempo temp out mscl mjson = do
   checkBpm "--tempo" tempo
-  table <- resolveTemperament temp
+  let adaptive = temp == "adaptive"
+  table <- resolveTemperament (if adaptive then "werckmeister3" else temp)
   s <- either die pure (generateScore bass nvar (Bpm tempo))
   let piece = "ground-" <> bass
-      ip = defaultInterp {iPiece = piece, iTuning = table}
+      ip = defaultInterp {iPiece = piece, iTuning = table, iAdaptive = adaptive}
   p <- either die pure (perform ip s)
   writeSmf out p
   putStrLn (out <> ": " <> bass <> ", " <> show nvar <> " variations")

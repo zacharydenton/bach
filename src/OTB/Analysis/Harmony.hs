@@ -34,6 +34,9 @@ data Harmony = Harmony
   , hMajorAt :: WholeNotes -> Bool
   , hRootAt :: WholeNotes -> Maybe Int -- ^ chord root pc for the beat
   , hChargeAt :: WholeNotes -> Double -- ^ harmonic charge, 0..~6.5
+  , hStabilityAt :: WholeNotes -> Double
+    -- ^ 0 = the root just moved, 1 = settled (held three beats or more);
+    -- the adaptive temperament's blend factor
   , hCadences :: [WholeNotes] -- ^ onsets of V–I arrivals on barlines
   }
 
@@ -63,6 +66,7 @@ analyzeHarmony meter notes end = Harmony
   , hMajorAt = \t -> snd (keyAtT t)
   , hRootAt = rootAtT
   , hChargeAt = chargeAtT
+  , hStabilityAt = stabilityAtT
   , hCadences = cadences
   }
   where
@@ -172,6 +176,23 @@ analyzeHarmony meter notes end = Harmony
           WholeNotes sr = step
           i = max 0 (floor (tr / sr)) :: Int
        in if i < length rootTrack then rootTrack !! i else Nothing
+
+    -- how many consecutive beats (up to and including this one) the
+    -- current root has been held; blend saturates at three
+    heldTrack = go 0 Nothing rootTrack
+      where
+        go _ _ [] = []
+        go n prev (r : more) =
+          let n' = if r == prev && r /= Nothing then n + 1 else 1
+           in n' : go n' r more
+    stabilityAtT t =
+      let step = beatLenAt 0
+          WholeNotes tr = t
+          WholeNotes sr = step
+          i = max 0 (floor (tr / sr)) :: Int
+       in if i < length heldTrack
+            then min 1 ((fromIntegral (heldTrack !! i) - 1) / 2)
+            else 0
 
     -- harmonic charge: the prevailing chord root's melodic charge
     -- against the key root — the leading term of DM's harmonic charge

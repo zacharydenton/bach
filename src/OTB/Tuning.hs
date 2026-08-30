@@ -24,6 +24,8 @@ module OTB.Tuning
   , equalTable
   , werckmeister3
   , bendValue
+  , justOffsetFor
+  , adaptiveCents
   , parseScl
   , renderScl
   ) where
@@ -60,6 +62,28 @@ werckmeister3 =
       [ 0, 90.225, 192.18, 294.135, 390.225, 498.045
       , 588.27, 696.09, 792.18, 888.27, 996.09, 1092.18
       ]
+
+-- | 5-limit just-intonation deviation from ET for an interval above a
+-- root, in cents (Duffin, /How Equal Temperament Ruined Harmony/, for
+-- the argument; the ratios are the classical ones — 5/4 thirds, 3/2
+-- fifths). The tritone is left tempered.
+justOffsetFor :: Int -> Cents
+justOffsetFor iv =
+  Cents ([ 0, 11.7, 3.9, 15.6, -13.7, -2.0
+         , 0, 2.0, 13.7, -15.9, 17.6, -11.7 ] !! (iv `mod` 12))
+
+-- | The adaptive policy's arithmetic: blend a note's tempered offset
+-- toward "just above the tempered root" by s in [0,1]. At s=0 this is
+-- Werckmeister exactly; at s=1 the chord is a just sonority anchored on
+-- the root's Werckmeister position — the temperament breathes with the
+-- harmonic rhythm.
+adaptiveCents :: TuningTable -> Int -> Double -> Int -> Cents
+adaptiveCents table root s pitch =
+  let Cents w = offsetFor table pitch
+      Cents wr = offsetFor table root
+      Cents j = justOffsetFor ((pitch - root) `mod` 12)
+      s' = max 0 (min 1 s)
+   in Cents ((1 - s') * w + s' * (wr + j))
 
 -- | 14-bit pitch-bend value for a cent offset, given the receiver's bend
 -- range in semitones (±). Center 8192; clamped to the legal range.
