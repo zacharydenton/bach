@@ -27,6 +27,7 @@ import OTB.Generate (generateScore)
 import Data.List (intercalate)
 import OTB.Analysis.Grouping (groupSpans)
 import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony)
+import OTB.Analysis.Parallelism (Sequences (..), findSequences)
 import OTB.Analysis.Subject (subjectEntries)
 import OTB.Interp.Express (chargesForLane)
 import OTB.Interp.Phrasing (boundaryStrengths)
@@ -460,6 +461,7 @@ runAnalyze com = do
         [] -> 1
       tree = groupSpans 3 (2 * barLen0) allBounds 0 end
       subj = subjectEntries score
+      sq = findSequences score
       wn (WholeNotes r) = show (fromRational r :: Double)
       arr xs = "[" <> intercalate "," xs <> "]"
       pair a b = "[" <> a <> "," <> b <> "]"
@@ -476,5 +478,9 @@ runAnalyze com = do
                              | let WholeNotes er = end
                              , t <- takeWhile (< er) (iterate (+ 1 / 4) 0) ]
     <> ",\"subject\":" <> arr (map (wn . fst) subj)
+    <> ",\"sequences\":" <> arr [ pair (wn a) (wn b) | (a, b) <- sqSpans sq ]
+    <> ",\"seams\":" <> arr (map wn (sqSeams sq))
+    <> ",\"novelty\":" <> arr [ pair (wn o) (show v)
+                              | (o, v) <- sqNovelty sq ]
     <> ",\"onsets\":" <> arr (map (wn . (\(o, _, _) -> o)) notes)
     <> "}"

@@ -266,7 +266,7 @@ units = testGroup "otb"
       [ testCase "tempo map: rit still descends to the floor (arches off)" $ do
           let ag = defaultAgogicParams
                      {agRitSpan = 1, agRitFloor = 0.5, agOpenPush = 0}
-              tm = tempoMap ag [] [] [] (Bpm 100) 4
+              tm = tempoMap ag [] [] [] [] (Bpm 100) 4
               bpms = [b | (_, Bpm b) <- tm]
           take 1 bpms @?= [100]
           assertBool ("not descending: " <> show bpms)
@@ -275,7 +275,7 @@ units = testGroup "otb"
             (last bpms >= 50 && last bpms < 100)
       , testCase "Todd arches: tempo rises to centre, sane bounds" $ do
           let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
-              tm = tempoMap ag [(0, 8, 0.05)] [] [] (Bpm 100) 8
+              tm = tempoMap ag [(0, 8, 0.05)] [] [] [] (Bpm 100) 8
               bpms = [b | (_, Bpm b) <- tm]
               mid = bpms !! (length bpms `div` 2)
           assertBool ("no arch: " <> show (take 5 bpms)) (mid > 100)
@@ -285,7 +285,7 @@ units = testGroup "otb"
           -- re-aligned at the change; peaks at 1/2 and 1 + 3/16
           let ag = defaultAgogicParams
                      {agRitSpan = 0, agTempoStep = 1 / 16, agOpenPush = 0}
-              tm = tempoMap ag [(0, 1, 0.05), (1, 1 + 3 / 8, 0.05)] [] []
+              tm = tempoMap ag [(0, 1, 0.05), (1, 1 + 3 / 8, 0.05)] [] [] []
                      (Bpm 100) (1 + 3 / 8)
               at t = case takeWhile ((<= t) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
@@ -295,7 +295,7 @@ units = testGroup "otb"
       , testCase "opening push decays to base over its span" $ do
           let ag = defaultAgogicParams
                      {agRitSpan = 0, agOpenPush = 0.05, agOpenSpan = 2}
-              tm = tempoMap ag [] [] [] (Bpm 100) 8
+              tm = tempoMap ag [] [] [] [] (Bpm 100) 8
               at x = case takeWhile ((<= x) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
           assertBool "opens above base" (at 0 > 103)
@@ -303,7 +303,7 @@ units = testGroup "otb"
             (abs (at 3 - 100) < 0.5)
       , testCase "boundary easing slows into the arrival, recovers after" $ do
           let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
-              tm = tempoMap ag [] [(4, 0.08)] [] (Bpm 100) 8
+              tm = tempoMap ag [] [(4, 0.08)] [] [] (Bpm 100) 8
               at x = case takeWhile ((<= x) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
           assertBool "eases before" (at 3.9 < 96)
@@ -311,18 +311,18 @@ units = testGroup "otb"
       , testCase "subject spans push forward" $ do
           let ag = defaultAgogicParams
                      {agRitSpan = 0, agOpenPush = 0, agSubjectPush = 0.02}
-              tm = tempoMap ag [] [] [(1, 2)] (Bpm 100) 8
+              tm = tempoMap ag [] [] [(1, 2)] [] (Bpm 100) 8
               at x = case takeWhile ((<= x) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
           assertBool "pushes inside" (at 1.5 > 101)
           assertBool "base outside" (abs (at 3 - 100) < 0.5)
       , testCase "hostile arch depths never take tempo non-positive" $ do
           let ag = defaultAgogicParams {agRitSpan = 0}
-              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [(2, 5.0), (4, 0.2)] [] (Bpm 100) 8
+              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [(2, 5.0), (4, 0.2)] [] [] (Bpm 100) 8
           assertBool "all positive" (all (\(_, Bpm b) -> b > 0) tm)
       , testCase "short piece: no rit, single tempo" $
           length (tempoMap (defaultAgogicParams {agOpenPush = 0})
-                    [] [] [] (Bpm 100) (1 / 2)) @?= 1
+                    [] [] [] [] (Bpm 100) (1 / 2)) @?= 1
       , testCase "fermata holds" $ do
           let sn = scoreNote 0 (1 / 4) 60 [Fermata]
           fermataFactor defaultAgogicParams sn @?= agFermataHold defaultAgogicParams

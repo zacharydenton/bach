@@ -73,6 +73,8 @@ FEATURES = [
     "density[k]",
     "downbeat", "bar-final",
     "pos", "arch",
+    "seq-active[k]", "seam[k]", "seam[k+1]", "seam[k-1]",
+    "novelty[k]", "novelty[k-1]",
 ]
 
 
@@ -99,6 +101,9 @@ def design(piece, ana, positions, kinds):
     onsets = [(o, 1.0) for o in ana["onsets"]]
     charge = ana["charge"]
     tree_ends = [(b, 1.0 / d) for a, b, d in ana["tree"]]
+    seq_spans = ana.get("sequences", [])
+    seams = [(t, 1.0) for t in ana.get("seams", [])]
+    nov = ana.get("novelty", [])
 
     def beat_span(k):
         lo = positions[k]
@@ -110,6 +115,8 @@ def design(piece, ana, positions, kinds):
     strong = np.zeros(n + 2)
     cad = np.zeros(n + 1)
     ten = np.zeros(n + 2)
+    seam = np.zeros(n + 2)
+    novb = np.zeros(n + 2)
     for k in range(n):
         lo, hi = beat_span(k)
         bnd[k + 1] = in_beat(bounds, lo, hi)
@@ -119,6 +126,11 @@ def design(piece, ana, positions, kinds):
     # boundary feature lets the model say "mostly nothing, here a lot"
     thresh = np.quantile(bnd[bnd > 0], 0.9) if (bnd > 0).any() else 1e9
     strong[bnd >= thresh] = 1.0
+    for k in range(n):
+        lo, hi = beat_span(k)
+        seam[k + 1] = in_beat(seams, lo, hi)
+        tot = in_beat(nov, lo, hi, val=lambda x: 1.0)
+        novb[k + 1] = (in_beat(nov, lo, hi) / tot) if tot > 0 else 0.0
     for k in range(n):
         lo, hi = beat_span(k)
         w = max(1e-6, hi - lo)
@@ -134,6 +146,9 @@ def design(piece, ana, positions, kinds):
             1.0 if (k < len(kinds) and kinds[k] == "db") else 0.0,
             1.0 if (k + 1 < len(kinds) and kinds[k + 1] == "db") else 0.0,
             x, 4 * x * (1 - x),
+            1.0 if any(a <= positions[k] < b for a, b in seq_spans) else 0.0,
+            seam[k + 1], seam[k + 2], seam[k],
+            novb[k + 1], novb[k],
         ]
     return rows
 

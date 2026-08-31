@@ -28,6 +28,7 @@ import Data.Ratio (approxRational)
 import EuterpeaLite.Music (Control (..), Music (..), Primitive (..))
 import OTB.Analysis.Grouping (groupSpans)
 import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony)
+import OTB.Analysis.Parallelism (Sequences (..), findSequences)
 import OTB.Analysis.Subject (subjectEntries)
 import OTB.Annotate
 import OTB.Explain (Why, why)
@@ -202,6 +203,24 @@ perform ip score@(Score tempo voices _ _ meter _) =
       [(c, agCadenceDepth (iAgogics ip)) | c <- hCadences harm]
         <> strongBounds
 
+    -- the novelty brake: mean first-appearance rate per beat, applied
+    -- from the FOLLOWING beat (humans respond, not anticipate)
+    noveltySteps
+      | agNoveltyBrake (iAgogics ip) <= 0 = []
+      | otherwise =
+          let nov = sqNovelty (findSequences score)
+              beatLen = case meter of
+                ((_, (_, d)) : _) ->
+                  WholeNotes (1 / fromIntegral d)
+                [] -> 1 / 4
+              beats = takeWhile (< end) (iterate (+ beatLen) 0)
+              rate lo =
+                let xs = [v | (o, v) <- nov, lo <= o, o < lo + beatLen]
+                 in if null xs then 0 else sum xs / fromIntegral (length xs)
+           in [ (b + beatLen,
+                 1 - agNoveltyBrake (iAgogics ip) * rate b)
+              | b <- beats ]
+
     -- subject statements as merged spans, for the forward-motion push
     subjSpans = spansOf (sort (map fst subjSet))
     spansOf [] = []
@@ -212,7 +231,8 @@ perform ip score@(Score tempo voices _ _ meter _) =
 
     -- curve -> conductor Music -> derived map: the conductor is the
     -- carrier, deriveTempoMap the single reader
-    curve = tempoMap (iAgogics ip) arches easings subjSpans tempo end
+    curve = tempoMap (iAgogics ip) arches easings subjSpans noveltySteps
+              tempo end
     conductor = annotateConductor curve tempo end
     tmap = deriveTempoMap tempo conductor
 

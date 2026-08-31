@@ -51,6 +51,19 @@ data AgogicParams = AgogicParams
     -- strong boundaries TEMPO events. This deliberately overrules the
     -- Harnoncourt principle the Phrasing module cites (per-voice
     -- breath, global time untouched): on the evidence, players do both.
+  , agNoveltyBrake :: !Double
+    -- ^ broaden where novel material has just entered. Distilled from
+    -- the GBM (novelty[k-1] = -0.68%%/sd, the 4th-strongest middle
+    -- feature; cf. Huron 2006) — and VETOED on held-out data
+    -- (2026-08-31): as a causal rule it HURTS train middle r at every
+    -- magnitude. The correlation is real; the rule shape is not.
+    -- Default 0; the knob remains for future shapes.
+  , agMidDrift :: !Double
+    -- ^ linear settling across the piece beyond open/rit. Distilled
+    -- from the strongest single middle feature (pos, -1.2%%/sd);
+    -- train middle r 0.153 -> 0.179 — and VETOED held out: Book II
+    -- 0.139-0.143 vs 0.140 baseline, full-curve r degrades. A
+    -- train-only mirage, kept at 0 as a caution.
   , agSubjectPush :: !Double
     -- ^ forward motion while a fugue subject sounds. DISCOVERED:
     -- +1.3%% marginal / +0.9%% joint, t = 3.6 clustered.
@@ -69,6 +82,8 @@ defaultAgogicParams = AgogicParams
   , agOpenPush = 0.05
   , agOpenSpan = 2
   , agBoundaryEase = 0.05
+  , agNoveltyBrake = 0.0 -- enters via the fit, not by hand
+  , agMidDrift = 0.0
   , agSubjectPush = 0.015
   }
 
@@ -89,8 +104,9 @@ defaultAgogicParams = AgogicParams
 -- opening gets agOpenPush, decaying over agOpenSpan.
 tempoMap :: AgogicParams -> [(WholeNotes, WholeNotes, Double)]
          -> [(WholeNotes, Double)] -> [(WholeNotes, WholeNotes)]
+         -> [(WholeNotes, Double)]
          -> Bpm -> WholeNotes -> [(WholeNotes, Bpm)]
-tempoMap ag arches easings subjSpans (Bpm base) end
+tempoMap ag arches easings subjSpans steps (Bpm base) end
   | end <= 0 || agTempoStep ag <= 0 = [(0, Bpm base)]
   | otherwise = thin [(t, Bpm (base * factor t)) | t <- gridPts]
   where
@@ -98,7 +114,8 @@ tempoMap ag arches easings subjSpans (Bpm base) end
     -- the total factor is floored: however hostile the (validated-per-
     -- knob but unbounded-in-product) configuration, tempo stays positive
     factor t = max 0.1 (product [arch d a b t | (a, b, d) <- arches]
-                          * easeF t * openF t * subjF t * ritF t)
+                          * easeF t * openF t * subjF t * stepF t
+                          * driftF t * ritF t)
     arch depth0 a b t
       | depth <= 0 || b <= a || t < a || t > b = 1
       | otherwise =
@@ -124,6 +141,16 @@ tempoMap ag arches easings subjSpans (Bpm base) end
       | otherwise =
           let WholeNotes x = t / agOpenSpan ag
            in 1 + min 0.5 (agOpenPush ag) * (1 - realToFrac x)
+    -- piecewise-constant multiplier stream (the novelty brake rides
+    -- here: Player emits one step per beat)
+    stepF t = case takeWhile ((<= t) . fst) steps of
+      [] -> 1
+      xs -> max 0.5 (min 1.5 (snd (last xs)))
+    driftF t
+      | agMidDrift ag <= 0 || end <= 0 = 1
+      | otherwise =
+          let WholeNotes x = t / end
+           in 1 + min 0.3 (agMidDrift ag) * (1 - 2 * realToFrac x)
     subjF t
       | agSubjectPush ag <= 0 = 1
       | any (\(s0, s1) -> t >= s0 && t < s1) subjSpans =

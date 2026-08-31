@@ -127,7 +127,8 @@ loadConfig src = do
     fractions = [ "breath", "inegal", "uphill", "double_dur"
                 , "dur_contrast", "leap_pause", "cadence_depth"
                 , "arch_piece", "arch_group"
-                , "open_push", "boundary_ease", "subject_push" ]
+                , "open_push", "boundary_ease", "subject_push"
+                , "novelty_brake", "mid_drift" ]
 
 -- | Agogic parameters from @[agogics]@ overlaid with @[piece.<name>]@.
 agogicsFor :: Config -> Text -> AgogicParams -> AgogicParams
@@ -148,6 +149,8 @@ agogicsFor cfg piece dflt =
         , agOpenSpan = getW "open_span" (agOpenSpan p)
         , agBoundaryEase = maybe (agBoundaryEase p) id (Map.lookup "boundary_ease" m)
         , agSubjectPush = maybe (agSubjectPush p) id (Map.lookup "subject_push" m)
+        , agNoveltyBrake = maybe (agNoveltyBrake p) id (Map.lookup "novelty_brake" m)
+        , agMidDrift = maybe (agMidDrift p) id (Map.lookup "mid_drift" m)
         }
       where
         getW k dflt' = maybe dflt' (WholeNotes . (\v -> approxRational v 1e-9)) (Map.lookup k m)

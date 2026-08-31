@@ -191,6 +191,8 @@ KNOB_SECTIONS = {
     "open_push": "agogics",
     "open_span": "agogics",
     "subject_push": "agogics",
+    "novelty_brake": "agogics",
+    "mid_drift": "agogics",
 }
 
 # every grid contains an OFF value: fitting may disable a rule the
@@ -206,6 +208,8 @@ KNOB_GRIDS = {
     "open_push": [0.0, 0.03, 0.06, 0.1],
     "open_span": [1.0, 2.0, 4.0],
     "subject_push": [0.0, 0.015, 0.03],
+    "novelty_brake": [0.0, 0.02, 0.04, 0.08],
+    "mid_drift": [0.0, 0.01, 0.02, 0.04],
 }
 
 

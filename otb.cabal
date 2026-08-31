@@ -53,6 +53,7 @@ library
         OTB.Analysis.Counterpoint
         OTB.Analysis.Grouping
         OTB.Analysis.Harmony
+        OTB.Analysis.Parallelism
         OTB.Analysis.Subject
     build-depends:
         base >=4.17 && <5,
