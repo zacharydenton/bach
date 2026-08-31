@@ -696,7 +696,7 @@ async function refreshWhys(){
     lines.push('ch'+w.ch+'  '+w.why);
     if (lines.length >= 7) break;
   }
-  const txt = lines.join('\n');
+  const txt = lines.join('\\n');
   if (txt !== lastWhys){
     lastWhys = txt;
     document.getElementById('whys').textContent = txt;
