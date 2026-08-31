@@ -31,7 +31,7 @@ import OTB.Annotate
 import OTB.Explain (Why, why)
 import OTB.Interp.Phrasing (boundaryStrengths)
 import OTB.Interp
-import OTB.Interp.Agogics (tempoMap)
+import OTB.Interp.Agogics (AgogicParams (..), tempoMap)
 import OTB.Interp.Express
 import OTB.Interp.Ornament ()
 import OTB.Score
@@ -185,9 +185,32 @@ perform ip score@(Score tempo voices _ _ meter _) =
           | (a, b, depth) <- tree ]
         <> [ (a, b, exN * exArchGroup ex * 0.5) | (a, b) <- barGroups ]
 
+    -- easings: cadence arrivals at full depth, plus strong breath
+    -- boundaries scaled by excess strength — the miner's discovered
+    -- rule that players make strong boundaries tempo events
+    strongBounds =
+      mergeNearB
+        [ (t, min 0.2 (agBoundaryEase (iAgogics ip) * (str - 1.5)))
+        | (t, str) <- sortOn fst allBounds, str > 1.5 ]
+    mergeNearB ((t1, d1) : (t2, d2) : more)
+      | t2 - t1 <= 1 / 8 = mergeNearB ((t1, max d1 d2) : more)
+      | otherwise = (t1, d1) : mergeNearB ((t2, d2) : more)
+    mergeNearB xs = xs
+    easings =
+      [(c, agCadenceDepth (iAgogics ip)) | c <- hCadences harm]
+        <> strongBounds
+
+    -- subject statements as merged spans, for the forward-motion push
+    subjSpans = spansOf (sort (map fst subjSet))
+    spansOf [] = []
+    spansOf (t : ts) = go t t ts
+      where
+        go s e (x : xs) | x - e <= 1 / 2 = go s x xs
+        go s e xs = (s, e + 1 / 4) : spansOf xs
+
     -- curve -> conductor Music -> derived map: the conductor is the
     -- carrier, deriveTempoMap the single reader
-    curve = tempoMap (iAgogics ip) arches (hCadences harm) tempo end
+    curve = tempoMap (iAgogics ip) arches easings subjSpans tempo end
     conductor = annotateConductor curve tempo end
     tmap = deriveTempoMap tempo conductor
 

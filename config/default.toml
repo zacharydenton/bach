@@ -12,11 +12,25 @@ cantabile = 0.90  # stepwise motion at singing values leans legato
 min_gate = 0.10
 
 [agogics]
-rit_span = 1.0      # closing ritardando spans the last whole note
-rit_floor = 0.6     # ...easing to 60% of base tempo at the final barline
+# rit + opening fitted against 166 ASAP human performances of the WTC
+# (asap_eval --fit-defaults, 2026-08-31): coordinate descent on Book I,
+# Book II held out. Test r 0.234 -> 0.558; grand mean 0.333 -> 0.578.
+rit_span = 2.0      # FITTED (was 1.0): humans slow -21% over the final
+                    # two bars (residual mining, t = -14.1)
+rit_floor = 0.3     # FITTED (was 0.6): the deep ending humans take
 rit_curve = 2       # Friberg–Sundberg q: 2 = stopping-runner braking curve
 tempo_step = 0.125  # curve granularity (eighth notes): smooth, not steppy
 fermata_hold = 1.75
+open_push = 0.06    # DISCOVERED + FITTED: settling in — humans open +5%
+                    # above their own mean (t = 10.6); decays over open_span
+open_span = 4.0
+cadence_depth = 0.0 # mined marginal effect was confounded (joint model
+                    # -3.4%, mostly shared with breath/bar-final); the fit
+                    # switched it off on held-out evidence
+boundary_ease = 0.0 # the deep boundary holds are real in the residuals,
+                    # but a linear easing is not how humans do them —
+                    # switched off by the fit; a better shape awaits
+subject_push = 0.0  # +0.9% joint did not survive fitting
 
 [phrasing]
 # KTH Punctuation via Quantz's placement rules: breathe at rests, after
@@ -59,8 +73,9 @@ dis_vel = 10      # CPE Bach 1753: dissonances louder — vel units per charge
 dis_lean = 0.10   # ...and leaned on: gate boost toward legato per charge
 
 [arches]
-arch_piece = 0.03 # Todd 1992: tempo/dynamics arch over the whole piece
-arch_group = 0.02 # ...and per bar-group
+arch_piece = 0.024 # FITTED (was 0.03): Todd 1992 piece arch, at the depth
+arch_group = 0.004 # the humans actually take (group arches nearly off —
+                   # boundaries, not arches, carry human tempo shape)
 arch_bars = 4
 
 [performance]

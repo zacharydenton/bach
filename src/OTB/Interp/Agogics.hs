@@ -37,7 +37,23 @@ data AgogicParams = AgogicParams
   , agTempoStep :: !WholeNotes -- ^ granularity of the discretised curve
   , agFermataHold :: !Rational -- ^ duration multiplier under a fermata
   , agCadenceDepth :: !Double -- ^ slowing into a cadence arrival
-  , agCadenceSpan :: !WholeNotes -- ^ how far before the arrival it begins
+  , agCadenceSpan :: !WholeNotes -- ^ how far before an easing it begins
+  , agOpenPush :: !Double
+    -- ^ settling in: tempo starts this fraction above base and decays
+    -- to base over agOpenSpan. DISCOVERED, not cited: residual mining
+    -- vs 166 ASAP performances (2026-08-31) — humans open their first
+    -- two bars +5%% above their own mean, t = 10.6 clustered.
+  , agOpenSpan :: !WholeNotes
+  , agBoundaryEase :: !Double
+    -- ^ phrase-final lengthening at strong breath boundaries, per unit
+    -- of excess boundary strength. DISCOVERED: the miner's deep
+    -- unexplained holds all sit at breath boundaries — humans make
+    -- strong boundaries TEMPO events. This deliberately overrules the
+    -- Harnoncourt principle the Phrasing module cites (per-voice
+    -- breath, global time untouched): on the evidence, players do both.
+  , agSubjectPush :: !Double
+    -- ^ forward motion while a fugue subject sounds. DISCOVERED:
+    -- +1.3%% marginal / +0.9%% joint, t = 3.6 clustered.
   }
   deriving (Show, Eq)
 
@@ -50,6 +66,10 @@ defaultAgogicParams = AgogicParams
   , agFermataHold = 7 / 4
   , agCadenceDepth = 0.04
   , agCadenceSpan = 3 / 4
+  , agOpenPush = 0.05
+  , agOpenSpan = 2
+  , agBoundaryEase = 0.05
+  , agSubjectPush = 0.015
   }
 
 -- | The piece's tempo curve. Multiplicative layers on the base: one
@@ -61,13 +81,16 @@ defaultAgogicParams = AgogicParams
 --
 -- Arches come in as (start, end, fractional depth) — the caller owns
 -- the hierarchy (piece level, recursive grouping tree, bar groups);
--- 0.03 = ±3%. Cadences are arrival onsets: over agCadenceSpan before
--- each, tempo eases by up to agCadenceDepth, recovering at the arrival
--- (the next phrase starts a tempo — phrase-final lengthening, not a
--- global rit).
-tempoMap :: AgogicParams -> [(WholeNotes, WholeNotes, Double)] -> [WholeNotes]
+-- 0.03 = ±3%. Easings are (arrival onset, depth) pairs — cadences and
+-- strong breath boundaries alike: over agCadenceSpan before each,
+-- tempo eases by up to the depth, recovering at the arrival (the next
+-- phrase starts a tempo — phrase-final lengthening, not a global
+-- rit). Subject spans get agSubjectPush of forward motion; the
+-- opening gets agOpenPush, decaying over agOpenSpan.
+tempoMap :: AgogicParams -> [(WholeNotes, WholeNotes, Double)]
+         -> [(WholeNotes, Double)] -> [(WholeNotes, WholeNotes)]
          -> Bpm -> WholeNotes -> [(WholeNotes, Bpm)]
-tempoMap ag arches cadences (Bpm base) end
+tempoMap ag arches easings subjSpans (Bpm base) end
   | end <= 0 || agTempoStep ag <= 0 = [(0, Bpm base)]
   | otherwise = thin [(t, Bpm (base * factor t)) | t <- gridPts]
   where
@@ -75,7 +98,7 @@ tempoMap ag arches cadences (Bpm base) end
     -- the total factor is floored: however hostile the (validated-per-
     -- knob but unbounded-in-product) configuration, tempo stays positive
     factor t = max 0.1 (product [arch d a b t | (a, b, d) <- arches]
-                          * cadF t * ritF t)
+                          * easeF t * openF t * subjF t * ritF t)
     arch depth0 a b t
       | depth <= 0 || b <= a || t < a || t > b = 1
       | otherwise =
@@ -85,17 +108,27 @@ tempoMap ag arches cadences (Bpm base) end
         -- effective depth is expression x arch_*: clamp the PRODUCT
         -- here, where it exists (per-knob validation cannot bound it)
         depth = min 0.9 depth0
-    cadDepth = min 0.9 (agCadenceDepth ag)
-    cadF t
-      | cadDepth <= 0 || agCadenceSpan ag <= 0 = 1
+    easeF t
+      | agCadenceSpan ag <= 0 = 1
       | otherwise =
           product
-            [ 1 - cadDepth * ramp
-            | c <- cadences
+            [ 1 - min 0.9 depth * ramp
+            | (c, depth) <- easings
+            , depth > 0
             , t >= c - agCadenceSpan ag, t < c
             , let WholeNotes pr = (t - (c - agCadenceSpan ag))
                                     / agCadenceSpan ag
                   ramp = realToFrac pr :: Double ]
+    openF t
+      | agOpenPush ag <= 0 || agOpenSpan ag <= 0 || t >= agOpenSpan ag = 1
+      | otherwise =
+          let WholeNotes x = t / agOpenSpan ag
+           in 1 + min 0.5 (agOpenPush ag) * (1 - realToFrac x)
+    subjF t
+      | agSubjectPush ag <= 0 = 1
+      | any (\(s0, s1) -> t >= s0 && t < s1) subjSpans =
+          1 + min 0.5 (agSubjectPush ag)
+      | otherwise = 1
     ritF t
       | agRitSpan ag <= 0 || end <= agRitSpan ag || t < start = 1
       | otherwise =

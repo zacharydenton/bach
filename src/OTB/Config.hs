@@ -118,7 +118,7 @@ loadConfig src = do
       [ "rit_span", "rit_curve", "expression", "ensemble", "lead_ms", "roll_ms"
       , "jitter_ms", "jitter_vel", "dis_vel", "dis_lean", "arch_piece"
       , "breath_threshold", "w_gap", "w_dur", "w_leap"
-      , "w_cadence", "cadence_span", "mel_charge", "harm_charge"
+      , "w_cadence", "cadence_span", "open_span", "mel_charge", "harm_charge"
       , "subject_vel", "leap_dur", "trill_termination" ]
     gates = ["base", "staccato", "tenuto", "legato", "repeated", "cantabile"
             , "min_gate", "rit_floor"]
@@ -126,7 +126,8 @@ loadConfig src = do
     -- produce zero or negative durations/BPM downstream
     fractions = [ "breath", "inegal", "uphill", "double_dur"
                 , "dur_contrast", "leap_pause", "cadence_depth"
-                , "arch_piece", "arch_group" ]
+                , "arch_piece", "arch_group"
+                , "open_push", "boundary_ease", "subject_push" ]
 
 -- | Agogic parameters from @[agogics]@ overlaid with @[piece.<name>]@.
 agogicsFor :: Config -> Text -> AgogicParams -> AgogicParams
@@ -143,6 +144,10 @@ agogicsFor cfg piece dflt =
         , agFermataHold = getR "fermata_hold" (agFermataHold p)
         , agCadenceDepth = maybe (agCadenceDepth p) id (Map.lookup "cadence_depth" m)
         , agCadenceSpan = getW "cadence_span" (agCadenceSpan p)
+        , agOpenPush = maybe (agOpenPush p) id (Map.lookup "open_push" m)
+        , agOpenSpan = getW "open_span" (agOpenSpan p)
+        , agBoundaryEase = maybe (agBoundaryEase p) id (Map.lookup "boundary_ease" m)
+        , agSubjectPush = maybe (agSubjectPush p) id (Map.lookup "subject_push" m)
         }
       where
         getW k dflt' = maybe dflt' (WholeNotes . (\v -> approxRational v 1e-9)) (Map.lookup k m)

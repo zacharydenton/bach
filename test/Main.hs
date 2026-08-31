@@ -264,8 +264,9 @@ units = testGroup "otb"
       ]
   , testGroup "agogics"
       [ testCase "tempo map: rit still descends to the floor (arches off)" $ do
-          let ag = defaultAgogicParams {agRitSpan = 1, agRitFloor = 0.5}
-              tm = tempoMap ag [] [] (Bpm 100) 4
+          let ag = defaultAgogicParams
+                     {agRitSpan = 1, agRitFloor = 0.5, agOpenPush = 0}
+              tm = tempoMap ag [] [] [] (Bpm 100) 4
               bpms = [b | (_, Bpm b) <- tm]
           take 1 bpms @?= [100]
           assertBool ("not descending: " <> show bpms)
@@ -273,8 +274,8 @@ units = testGroup "otb"
           assertBool ("floor overshot: " <> show (last bpms))
             (last bpms >= 50 && last bpms < 100)
       , testCase "Todd arches: tempo rises to centre, sane bounds" $ do
-          let ag = defaultAgogicParams {agRitSpan = 0}
-              tm = tempoMap ag [(0, 8, 0.05)] [] (Bpm 100) 8
+          let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
+              tm = tempoMap ag [(0, 8, 0.05)] [] [] (Bpm 100) 8
               bpms = [b | (_, Bpm b) <- tm]
               mid = bpms !! (length bpms `div` 2)
           assertBool ("no arch: " <> show (take 5 bpms)) (mid > 100)
@@ -282,20 +283,46 @@ units = testGroup "otb"
       , testCase "group arches follow a meter change" $ do
           -- 4/4 for one bar then 3/8: the caller lays arches per group,
           -- re-aligned at the change; peaks at 1/2 and 1 + 3/16
-          let ag = defaultAgogicParams {agRitSpan = 0, agTempoStep = 1 / 16}
-              tm = tempoMap ag [(0, 1, 0.05), (1, 1 + 3 / 8, 0.05)] []
+          let ag = defaultAgogicParams
+                     {agRitSpan = 0, agTempoStep = 1 / 16, agOpenPush = 0}
+              tm = tempoMap ag [(0, 1, 0.05), (1, 1 + 3 / 8, 0.05)] [] []
                      (Bpm 100) (1 + 3 / 8)
               at t = case takeWhile ((<= t) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
           assertBool "peak of the 4/4 bar" (at (1 / 2) > at (1 / 16))
           assertBool "a fresh trough at the change" (at 1 < at (1 / 2))
           assertBool "peak of the 3/8 group" (at (1 + 3 / 16) > at 1)
+      , testCase "opening push decays to base over its span" $ do
+          let ag = defaultAgogicParams
+                     {agRitSpan = 0, agOpenPush = 0.05, agOpenSpan = 2}
+              tm = tempoMap ag [] [] [] (Bpm 100) 8
+              at x = case takeWhile ((<= x) . fst) tm of
+                [] -> 100; xs -> let Bpm b = snd (last xs) in b
+          assertBool "opens above base" (at 0 > 103)
+          assertBool "settled at base after the span"
+            (abs (at 3 - 100) < 0.5)
+      , testCase "boundary easing slows into the arrival, recovers after" $ do
+          let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
+              tm = tempoMap ag [] [(4, 0.08)] [] (Bpm 100) 8
+              at x = case takeWhile ((<= x) . fst) tm of
+                [] -> 100; xs -> let Bpm b = snd (last xs) in b
+          assertBool "eases before" (at 3.9 < 96)
+          assertBool "a tempo after" (abs (at 4.5 - 100) < 0.5)
+      , testCase "subject spans push forward" $ do
+          let ag = defaultAgogicParams
+                     {agRitSpan = 0, agOpenPush = 0, agSubjectPush = 0.02}
+              tm = tempoMap ag [] [] [(1, 2)] (Bpm 100) 8
+              at x = case takeWhile ((<= x) . fst) tm of
+                [] -> 100; xs -> let Bpm b = snd (last xs) in b
+          assertBool "pushes inside" (at 1.5 > 101)
+          assertBool "base outside" (abs (at 3 - 100) < 0.5)
       , testCase "hostile arch depths never take tempo non-positive" $ do
           let ag = defaultAgogicParams {agRitSpan = 0}
-              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [2, 4] (Bpm 100) 8
+              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [(2, 5.0), (4, 0.2)] [] (Bpm 100) 8
           assertBool "all positive" (all (\(_, Bpm b) -> b > 0) tm)
       , testCase "short piece: no rit, single tempo" $
-          length (tempoMap defaultAgogicParams [] [] (Bpm 100) (1 / 2)) @?= 1
+          length (tempoMap (defaultAgogicParams {agOpenPush = 0})
+                    [] [] [] (Bpm 100) (1 / 2)) @?= 1
       , testCase "fermata holds" $ do
           let sn = scoreNote 0 (1 / 4) 60 [Fermata]
           fermataFactor defaultAgogicParams sn @?= agFermataHold defaultAgogicParams

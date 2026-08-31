@@ -187,15 +187,25 @@ KNOB_SECTIONS = {
     "rit_floor": "agogics",
     "rit_span": "agogics",
     "cadence_depth": "agogics",
+    "boundary_ease": "agogics",
+    "open_push": "agogics",
+    "open_span": "agogics",
+    "subject_push": "agogics",
 }
 
+# every grid contains an OFF value: fitting may disable a rule the
+# residuals proposed — the data giveth and the data taketh away
 KNOB_GRIDS = {
     "expression": [0.4, 0.6, 0.8, 1.0, 1.3],
     "arch_piece": [0.0, 0.015, 0.03, 0.06],
     "arch_group": [0.0, 0.01, 0.02, 0.04],
-    "rit_floor": [0.4, 0.5, 0.6, 0.75],
-    "rit_span": [0.5, 1.0, 2.0],
+    "rit_floor": [0.3, 0.4, 0.5, 0.6, 0.75],
+    "rit_span": [0.5, 1.0, 2.0, 3.0],
     "cadence_depth": [0.0, 0.04, 0.08, 0.15],
+    "boundary_ease": [0.0, 0.03, 0.06, 0.12],
+    "open_push": [0.0, 0.03, 0.06, 0.1],
+    "open_span": [1.0, 2.0, 4.0],
+    "subject_push": [0.0, 0.015, 0.03],
 }
 
 
@@ -282,6 +292,60 @@ def performer_objective(otb, args, performer, pieces, config, tmp):
     return sum(rs) / len(rs) if rs else float("nan")
 
 
+def mean_r(otb, args, pieces, config, tmp):
+    rs = []
+    for piece in pieces:
+        ir = compile_ir(otb, piece, args.kern, tmp, config)
+        rs.extend(r for _, r in eval_piece(ir, args.asap, piece)
+                  if not math.isnan(r))
+    return sum(rs) / len(rs) if rs else float("nan")
+
+
+def fit_defaults(otb, args, pieces, tmp):
+    """Fit the tempo-side defaults against the human population.
+
+    Discipline: coordinate descent on the Book I overlap only; Book II
+    is held out and only ever evaluated — the reported test r is the
+    honest number. Discovered-rule knobs all carry 0 in their grids, so
+    a rule that does not survive contact with the humans gets switched
+    off rather than defended.
+    """
+    train = [p for p in pieces if p.startswith("wtc1")]
+    test = [p for p in pieces if p.startswith("wtc2")]
+    print(f"train: {len(train)} Book I pieces | "
+          f"test: {len(test)} Book II pieces (held out)")
+    base_tr = mean_r(otb, args, train, args.config, tmp)
+    base_te = mean_r(otb, args, test, args.config, tmp)
+    print(f"defaults: train r = {base_tr:.3f}, test r = {base_te:.3f}")
+    knobs = {}
+    for sweep in range(2):
+        for knob, grid in KNOB_GRIDS.items():
+            best_v, best_r = None, -2
+            for v in grid:
+                trial = dict(knobs)
+                trial[knob] = v
+                cfg = with_knobs(args.config, trial, tmp)
+                r = mean_r(otb, args, train, cfg, tmp)
+                if not math.isnan(r) and r > best_r:
+                    best_v, best_r = v, r
+            knobs[knob] = best_v
+            print(f"  sweep {sweep + 1} {knob:<14} -> {best_v}"
+                  f"   train r = {best_r:.3f}")
+    cfg = with_knobs(args.config, knobs, tmp)
+    final_tr = mean_r(otb, args, train, cfg, tmp)
+    final_te = mean_r(otb, args, test, cfg, tmp)
+    print(f"\nfitted: train r = {final_tr:.3f} (was {base_tr:.3f}) | "
+          f"TEST r = {final_te:.3f} (was {base_te:.3f})")
+    print("\nfitted values (merge into config/default.toml):")
+    by_sec = {}
+    for k, v in knobs.items():
+        by_sec.setdefault(KNOB_SECTIONS[k], []).append((k, v))
+    for sec, kvs in sorted(by_sec.items()):
+        print(f"[{sec}]")
+        for k, v in sorted(kvs):
+            print(f"{k} = {v}")
+
+
 def fit_performer(otb, args, performer, tmp):
     pieces = performer_pieces(args.asap, args.kern, performer)
     if not pieces:
@@ -344,6 +408,10 @@ def main():
     ap.add_argument("--otb", default=None)
     ap.add_argument("--fit", action="store_true",
                     help="grid the [interpretation] expression knob")
+    ap.add_argument("--fit-defaults", action="store_true",
+                    help="coordinate-descent the tempo knobs against ALL "
+                         "performances: train on Book I, validate on "
+                         "Book II, print the fitted [sections]")
     ap.add_argument("--performer-fit", metavar="NAME",
                     help="fit the interpretation knobs to one ASAP "
                          "performer; write config/performers/NAME.toml")
@@ -368,6 +436,9 @@ def main():
         sys.exit("no overlapping pieces found (is corpus/asap present?)")
 
     with tempfile.TemporaryDirectory() as tmp:
+        if args.fit_defaults:
+            fit_defaults(otb, args, pieces, tmp)
+            return
         if args.performer_fit:
             fit_performer(otb, args, args.performer_fit, tmp)
             return
