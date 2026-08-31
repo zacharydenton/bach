@@ -252,9 +252,6 @@ runCompile com out mscl mjson tgt = do
       <> (if scGraceDropped score > 0
             then " | WARN grace-notes-dropped " <> show (scGraceDropped score)
             else "")
-      <> (if scRestHolds score > 0
-            then " | WARN rest-fermatas-dropped " <> show (scRestHolds score)
-            else "")
       <> (if hwClips > 0
             then " | hardware mono-reduction clipped " <> show hwClips
             else "")

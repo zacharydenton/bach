@@ -87,11 +87,14 @@ data Ev = Ev
 -- ---------------------------------------------------------------------
 -- Annotation
 
--- | A prepared lane (inégales and overhold applied; ornaments NOT yet
--- realised) into an annotated Music line: each note wrapped in
+-- | A prepared lane (graces, inégales and overhold applied; ornaments
+-- NOT yet realised) into an annotated Music line: each note wrapped in
 -- @Modify (Phrase attrs)@ carrying every decision the lane rules made.
-annotateLane :: Interp -> Ctx -> [ScoreNote] -> Annotated
-annotateLane ip ctx l = Annotated (go 0 decided)
+-- The first argument carries per-note whys from the preparation stage
+-- (Player.prepareLaneW) so the reshapers' decisions reach the explain
+-- output alongside everything decided here.
+annotateLane :: Interp -> Ctx -> [[Why]] -> [ScoreNote] -> Annotated
+annotateLane ip ctx preWs l = Annotated (go 0 decided)
   where
     ex = iExpress ip
     arts = articulateLane' (iArt ip) l
@@ -125,12 +128,16 @@ annotateLane ip ctx l = Annotated (go 0 decided)
       where ins x (y : ys) | x > y = y : ins x ys
             ins x ys = x : ys
 
-    decided = zipWith6 build arts breaths charges vels nextIv prevIv
-    zipWith6 f (a : as) (b : bs) (c : cs) (d : ds) (e : es) (g : gs) =
-      f a b c d e g : zipWith6 f as bs cs ds es gs
-    zipWith6 _ _ _ _ _ _ _ = []
+    -- preWs padded: it is positionally aligned but the pad keeps this
+    -- total if a caller supplies fewer (the other lists bound the zip)
+    decided =
+      zipWith7 build (preWs <> repeat []) arts breaths charges vels
+        nextIv prevIv
+    zipWith7 f (p : ps) (a : as) (b : bs) (c : cs) (d : ds) (e : es) (g : gs) =
+      f p a b c d e g : zipWith7 f ps as bs cs ds es gs
+    zipWith7 _ _ _ _ _ _ _ _ = []
 
-    build (_, _, artWhy) (sn, gateBreathed, mBreath) charge (v, velWhys)
+    build preW (_, _, artWhy) (sn, gateBreathed, mBreath) charge (v, velWhys)
           mNextIv mPrevIv =
       (sn, attrs, whys)
       where
@@ -180,7 +187,8 @@ annotateLane ip ctx l = Annotated (go 0 decided)
           , [Orn Arpeggio | isJust (cFinalTag ctx sn)]
           ]
         whys = concat
-          [ [artWhy]
+          [ preW -- preparation-stage decisions happened first
+          , [artWhy]
           , maybe [] pure mBreath
           , [ why "dissonance"
                 ("+" <> show (bump :: Int) <> " vel, agogic lean; charge "

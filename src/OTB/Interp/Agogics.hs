@@ -14,6 +14,11 @@
 --     sit on final chords; a mid-piece fermata would overlap its
 --     successors rather than pushing them (a global pause needs the tempo
 --     map, and earns it when repertoire demands one).
+--   * **rest hold** — a fermata on a rest IS that repertoire demand:
+--     silence has no duration to stretch, so the hold rides the tempo
+--     map — tempo divides by agFermataHold across the rest's span, which
+--     pushes every voice's successors together. The parser records the
+--     spans ('scRestHolds'); the Player passes them through.
 --
 -- Phrase-boundary breaths and cadence detection are where listening
 -- drives the parameters; the machinery lands with them in a later pass.
@@ -26,6 +31,7 @@ module OTB.Interp.Agogics
   , fermataFactor
   ) where
 
+import Data.List (nub, sort)
 import OTB.Kern.Token (Mark (..))
 import OTB.Score (ScoreNote (..))
 import OTB.Units (Bpm (..), WholeNotes (..))
@@ -104,18 +110,29 @@ defaultAgogicParams = AgogicParams
 -- opening gets agOpenPush, decaying over agOpenSpan.
 tempoMap :: AgogicParams -> [(WholeNotes, WholeNotes, Double)]
          -> [(WholeNotes, Double)] -> [(WholeNotes, WholeNotes)]
-         -> [(WholeNotes, Double)]
+         -> [(WholeNotes, Double)] -> [(WholeNotes, WholeNotes)]
          -> Bpm -> WholeNotes -> [(WholeNotes, Bpm)]
-tempoMap ag arches easings subjSpans steps (Bpm base) end
+tempoMap ag arches easings subjSpans steps holds (Bpm base) end
   | end <= 0 || agTempoStep ag <= 0 = [(0, Bpm base)]
   | otherwise = thin [(t, Bpm (base * factor t)) | t <- gridPts]
   where
-    gridPts = takeWhile (< end) (iterate (+ agTempoStep ag) 0)
+    -- hold boundaries join the grid so a rest shorter than the step
+    -- still gets its span, exactly
+    gridPts =
+      sort . nub $
+        takeWhile (< end) (iterate (+ agTempoStep ag) 0)
+          <> [ t | (a, d) <- holds, t <- [a, a + d], 0 <= t, t < end ]
     -- the total factor is floored: however hostile the (validated-per-
     -- knob but unbounded-in-product) configuration, tempo stays positive
     factor t = max 0.1 (product [arch d a b t | (a, b, d) <- arches]
                           * easeF t * openF t * subjF t * stepF t
-                          * driftF t * ritF t)
+                          * driftF t * holdF t * ritF t)
+    -- fermata on a rest: the silence breathes — everything after is
+    -- pushed, globally, which a duration stretch cannot do
+    holdF t =
+      product
+        [ 1 / realToFrac (max 1 (agFermataHold ag))
+        | (a, d) <- holds, d > 0, t >= a, t < a + d ]
     arch depth0 a b t
       | depth <= 0 || b <= a || t < a || t > b = 1
       | otherwise =

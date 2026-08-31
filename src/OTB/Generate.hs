@@ -140,7 +140,7 @@ generateScore name nvar tempo = do
           , scMergeDrifts = 0
           , scMeter = [(WholeNotes 0, meter)]
           , scGraceDropped = 0
-          , scRestHolds = 0
+          , scRestHolds = []
           }
 
 -- | Whole-tone trill on the penultimate note of a flattened line.

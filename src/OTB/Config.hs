@@ -119,7 +119,8 @@ loadConfig src = do
       , "jitter_ms", "jitter_vel", "dis_vel", "dis_lean", "arch_piece"
       , "breath_threshold", "w_gap", "w_dur", "w_leap"
       , "w_cadence", "cadence_span", "open_span", "mel_charge", "harm_charge"
-      , "subject_vel", "leap_dur", "trill_termination", "dialogue_vel" ]
+      , "subject_vel", "leap_dur", "trill_termination", "grace_long"
+      , "dialogue_vel" ]
     gates = ["base", "staccato", "tenuto", "legato", "repeated", "cantabile"
             , "min_gate", "rit_floor"]
     -- these scale a duration or tempo multiplicatively: >= 1 would
@@ -186,6 +187,8 @@ ornamentsFor cfg piece dflt =
         , opTermination = maybe (opTermination p) (> 0.5)
             (Map.lookup "trill_termination" m)
         , opGraceMs = maybe (opGraceMs p) id (Map.lookup "grace_ms" m)
+        , opGraceLong = maybe (opGraceLong p) (> 0.5)
+            (Map.lookup "grace_long" m)
         }
 
 -- | Dynamic parameters from @[dynamics]@ overlaid with @[piece.<name>]@.

@@ -270,7 +270,7 @@ units = testGroup "otb"
       [ testCase "tempo map: rit still descends to the floor (arches off)" $ do
           let ag = defaultAgogicParams
                      {agRitSpan = 1, agRitFloor = 0.5, agOpenPush = 0}
-              tm = tempoMap ag [] [] [] [] (Bpm 100) 4
+              tm = tempoMap ag [] [] [] [] [] (Bpm 100) 4
               bpms = [b | (_, Bpm b) <- tm]
           take 1 bpms @?= [100]
           assertBool ("not descending: " <> show bpms)
@@ -279,7 +279,7 @@ units = testGroup "otb"
             (last bpms >= 50 && last bpms < 100)
       , testCase "Todd arches: tempo rises to centre, sane bounds" $ do
           let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
-              tm = tempoMap ag [(0, 8, 0.05)] [] [] [] (Bpm 100) 8
+              tm = tempoMap ag [(0, 8, 0.05)] [] [] [] [] (Bpm 100) 8
               bpms = [b | (_, Bpm b) <- tm]
               mid = bpms !! (length bpms `div` 2)
           assertBool ("no arch: " <> show (take 5 bpms)) (mid > 100)
@@ -289,7 +289,7 @@ units = testGroup "otb"
           -- re-aligned at the change; peaks at 1/2 and 1 + 3/16
           let ag = defaultAgogicParams
                      {agRitSpan = 0, agTempoStep = 1 / 16, agOpenPush = 0}
-              tm = tempoMap ag [(0, 1, 0.05), (1, 1 + 3 / 8, 0.05)] [] [] []
+              tm = tempoMap ag [(0, 1, 0.05), (1, 1 + 3 / 8, 0.05)] [] [] [] []
                      (Bpm 100) (1 + 3 / 8)
               at t = case takeWhile ((<= t) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
@@ -299,7 +299,7 @@ units = testGroup "otb"
       , testCase "opening push decays to base over its span" $ do
           let ag = defaultAgogicParams
                      {agRitSpan = 0, agOpenPush = 0.05, agOpenSpan = 2}
-              tm = tempoMap ag [] [] [] [] (Bpm 100) 8
+              tm = tempoMap ag [] [] [] [] [] (Bpm 100) 8
               at x = case takeWhile ((<= x) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
           assertBool "opens above base" (at 0 > 103)
@@ -307,7 +307,7 @@ units = testGroup "otb"
             (abs (at 3 - 100) < 0.5)
       , testCase "boundary easing slows into the arrival, recovers after" $ do
           let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
-              tm = tempoMap ag [] [(4, 0.08)] [] [] (Bpm 100) 8
+              tm = tempoMap ag [] [(4, 0.08)] [] [] [] (Bpm 100) 8
               at x = case takeWhile ((<= x) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
           assertBool "eases before" (at 3.9 < 96)
@@ -315,18 +315,18 @@ units = testGroup "otb"
       , testCase "subject spans push forward" $ do
           let ag = defaultAgogicParams
                      {agRitSpan = 0, agOpenPush = 0, agSubjectPush = 0.02}
-              tm = tempoMap ag [] [] [(1, 2)] [] (Bpm 100) 8
+              tm = tempoMap ag [] [] [(1, 2)] [] [] (Bpm 100) 8
               at x = case takeWhile ((<= x) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
           assertBool "pushes inside" (at 1.5 > 101)
           assertBool "base outside" (abs (at 3 - 100) < 0.5)
       , testCase "hostile arch depths never take tempo non-positive" $ do
           let ag = defaultAgogicParams {agRitSpan = 0}
-              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [(2, 5.0), (4, 0.2)] [] [] (Bpm 100) 8
+              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [(2, 5.0), (4, 0.2)] [] [] [] (Bpm 100) 8
           assertBool "all positive" (all (\(_, Bpm b) -> b > 0) tm)
       , testCase "short piece: no rit, single tempo" $
           length (tempoMap (defaultAgogicParams {agOpenPush = 0})
-                    [] [] [] [] (Bpm 100) (1 / 2)) @?= 1
+                    [] [] [] [] [] (Bpm 100) (1 / 2)) @?= 1
       , testCase "fermata holds" $ do
           let sn = scoreNote 0 (1 / 4) 60 [Fermata]
           fermataFactor defaultAgogicParams sn @?= agFermataHold defaultAgogicParams
@@ -418,7 +418,7 @@ units = testGroup "otb"
                 }
               score bpm = Score (Bpm bpm)
                 [Voice 0 [scoreNote 0 (1/4) 60 [],
-                          scoreNote (1/4) (1/4) 62 []]] 0 0 [(0, (4, 4))] 0 0
+                          scoreNote (1/4) (1/4) 62 []]] 0 0 [(0, (4, 4))] 0 []
               gapMs bpm = case perform interp (score bpm) of
                 Left e -> error e
                 Right pf -> case perfTracks pf of
@@ -441,7 +441,7 @@ units = testGroup "otb"
                 }
               score = Score (Bpm 120)
                 [Voice 0 [scoreNote 0 (d/4) 60 [], scoreNote d d 67 []]]
-                0 0 [(0, (4, 4))] 0 0
+                0 0 [(0, (4, 4))] 0 []
           case perform interp score of
             Left e -> assertFailure e
             Right pf | [[a, b]] <- perfTracks pf -> do
@@ -565,7 +565,7 @@ genScore = do
   nv <- chooseInt (1, 3)
   vs <- vectorOf nv genLane
   pure (Score (Bpm 96) [Voice i l | (i, l) <- zip [0 ..] vs]
-          0 0 [(0, (4, 4))] 0 0)
+          0 0 [(0, (4, 4))] 0 [])
 
 transposeScore :: Int -> Score -> Score
 transposeScore n s =
@@ -746,11 +746,34 @@ review = testGroup "review regressions"
       case parseKern (Bpm 72) src of
         Left e -> assertBool ("error names *x: " <> e) ("*x" `isInfixOf` e)
         Right _ -> assertFailure "*x absorbed silently"
-  , testCase "parser: fermata on a rest is counted, not silent" $ do
+  , testCase "parser: fermata on a rest is recorded as a span" $ do
       let src = T.unlines ["**kern", "4c", "4r;", "4c", "*-"]
       case parseKern (Bpm 72) src of
         Left e -> assertFailure e
-        Right s -> scRestHolds s @?= 1
+        Right s -> scRestHolds s @?= [(1 / 4, 1 / 4)]
+  , testCase "rest fermata: the silence breathes through the tempo map" $ do
+      -- every other agogic layer zeroed: the curve must be base tempo
+      -- everywhere except the rest's span, where it divides by the hold
+      let src = T.unlines ["**kern", "4c", "4r;", "4c", "*-"]
+          interp = defaultInterp
+            { iAgogics = defaultAgogicParams
+                { agRitSpan = 0, agOpenPush = 0, agCadenceDepth = 0
+                , agBoundaryEase = 0, agSubjectPush = 0 }
+            , iExpress = defaultExpressParams
+                {exExpression = 0, exEnsemble = 0}
+            }
+      case parseKern (Bpm 120) src >>= perform interp of
+        Left e -> assertFailure e
+        Right p -> do
+          let tm = perfTempoMap p
+              at t = snd (last (takeWhile ((<= t) . fst) tm))
+              Bpm held = at (3 / 8) -- mid-rest
+              Bpm before = at (1 / 8)
+              Bpm after = at (5 / 8)
+              hold = fromRational (agFermataHold defaultAgogicParams)
+          assertBool ("held " <> show held) (abs (held - 120 / hold) < 0.01)
+          assertBool ("before " <> show before) (abs (before - 120) < 0.01)
+          assertBool ("after " <> show after) (abs (after - 120) < 0.01)
   , testCase "lexer: longa and rational reciprocals" $ do
       ntDur (lexNoteTok "0c") @?= 2 -- breve
       ntDur (lexNoteTok "00c") @?= 4 -- longa, not a second breve
@@ -798,10 +821,39 @@ review = testGroup "review regressions"
           m = scoreNote 0 (1 / 64) 72 []
           out = realizeGraceLane defaultOrnamentParams (Bpm 96) [g, m]
       map snDur out @?= [1 / 128, 1 / 128]
+  , testCase "grace: long appoggiatura takes half, 2/3 of a dotted note" $ do
+      let long = defaultOrnamentParams {opGraceLong = True}
+          g t = scoreNote t 0 74 [Grace]
+          run m = [(snOnset n, snDur n) | n <- realizeGraceLane long (Bpm 96) m]
+      -- plain main: half
+      run [g 0, scoreNote 0 (1 / 4) 72 []]
+        @?= [(0, 1 / 8), (1 / 8, 1 / 8)]
+      -- dotted main: two thirds
+      run [g 0, scoreNote 0 (3 / 8) 72 []]
+        @?= [(0, 1 / 4), (1 / 4, 1 / 8)]
+      -- a run of graces (slide) stays short even in long mode
+      let out = run [g 0, g 0, scoreNote 0 (1 / 4) 72 []]
+      sum (map snd out) @?= 1 / 4
+      assertBool "slide subnotes stay short"
+        (all (< 1 / 8) (init (map snd out)))
   , testCase "grace: dangling at lane end still speaks" $ do
       let g = scoreNote (1 / 2) 0 74 [Grace]
           out = realizeGraceLane defaultOrnamentParams (Bpm 96) [g]
       [(snOnset n, snDur n) | n <- out] @?= [(1 / 2, 7 / 250)]
+  , testCase "provenance: preparation-stage decisions reach the whys" $ do
+      -- the reshapers and the grace steal happen before annotation; their
+      -- whys must ride through to the performance all the same
+      let src = T.unlines ["**kern", "ccq", "4c", "8d", "8e", "8f", "8g", "*-"]
+          interp = defaultInterp
+            {iExpress = defaultExpressParams {exInegal = 0.33}}
+      case parseKern (Bpm 96) src >>= perform interp of
+        Left e -> assertFailure e
+        Right p -> do
+          let rules = [whyRule w | (_, ws) <- perfWhys p, w <- ws]
+          assertBool ("grace why present in " <> show (nub rules))
+            ("grace" `elem` rules)
+          assertBool ("inegales why present in " <> show (nub rules))
+            ("inegales" `elem` rules)
   , testCase "grace: wtc2p13's four graces survive parse and perform" $ do
       present <- doesDirectoryExist corpusDir
       if not present then pure () else do
@@ -849,7 +901,7 @@ review = testGroup "review regressions"
   , testCase "counterpoint: a diminished sixth is not a fifth" $ do
       let sp l a o m t = (scoreNote t (1 / 4) m []) {snSpell = Just (Spelled l a o)}
           mkS v1 v2 =
-            Score (Bpm 96) [Voice 0 v1, Voice 1 v2] 0 0 [(0, (4, 4))] 0 0
+            Score (Bpm 96) [Voice 0 v1, Voice 1 v2] 0 0 [(0, (4, 4))] 0 []
           -- C4->D4 under Abb4->Bbb4: seven semitones both times, but a
           -- sixth by letter — similar motion, and not parallel fifths
           dim6 = mkS [sp 0 0 4 60 0, sp 1 0 4 62 (1 / 4)]
@@ -869,7 +921,7 @@ review = testGroup "review regressions"
             Score (Bpm 96)
               [ Voice 0 [sp 0 0 4 60 0, bare 62 (1 / 4)]
               , Voice 1 [sp 4 0 4 67 0, bare 69 (1 / 4)] ]
-              0 0 [(0, (4, 4))] 0 0
+              0 0 [(0, (4, 4))] 0 []
       parallelPerfects mixed @?= 1
   , testCase "transpose clears spelling (it cannot keep the notation)" $ do
       let sn = (scoreNote 0 (1 / 4) 60 []) {snSpell = Just (Spelled 0 0 4)}
@@ -967,7 +1019,7 @@ sota = testGroup "sota"
             [ scoreNote (fromIntegral (it * 4 + j) / 8) (1 / 8)
                 (p + it * step) []
             | it <- [0 .. k - 1], (j, p) <- zip [0 ..] ps ]
-          mkS ns = Score (Bpm 96) [Voice 0 ns] 0 0 [(0, (4, 4))] 0 0
+          mkS ns = Score (Bpm 96) [Voice 0 ns] 0 0 [(0, (4, 4))] 0 []
           figure = [60, 64, 62, 65] -- direction changes, distinctive
           seqS = mkS (line figure (-2) 4)
       assertBool "descending sequence detected"
@@ -994,7 +1046,7 @@ sota = testGroup "sota"
           motif = [60, 64, 62, 67, 65, 69] -- direction changes galore
           a = mk 0 [fromIntegral i / 8 | i <- [0 :: Int ..]] motif
           b = mk 1 [1/2 + fromIntegral i / 8 | i <- [0 :: Int ..]] (map (+ 5) motif)
-          s = Score (Bpm 96) [a, b] 0 0 [(0, (4, 4))] 0 0
+          s = Score (Bpm 96) [a, b] 0 0 [(0, (4, 4))] 0 []
           im = findImitation s
       map (\(t', v, _) -> (t', v)) (imTakes im) @?= [(1 / 2, 1)]
   , testCase "imitation: a scale run is figuration, not speech" $ do
@@ -1003,7 +1055,7 @@ sota = testGroup "sota"
           run = [60, 62, 64, 65, 67, 69]
           s = Score (Bpm 96)
                 [mk 0 [fromIntegral i / 8 | i <- [0 :: Int ..]] run, mk 1 [1/2 + fromIntegral i / 8 | i <- [0 :: Int ..]] run]
-                0 0 [(0, (4, 4))] 0 0
+                0 0 [(0, (4, 4))] 0 []
       imTakes (findImitation s) @?= []
   , testCase "dialogue: the fugue converses, the prelude does not" $ do
       present <- doesDirectoryExist corpusDir

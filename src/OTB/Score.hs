@@ -71,8 +71,10 @@ data Score = Score
     -- malformed graces) — pitched graces are retained as zero-duration
     -- 'Grace'-marked notes and realised by the Player. Counted so the
     -- residual loss stays visible rather than silent.
-  , scRestHolds :: !Int
-    -- ^ fermatas sitting on rests. The model has no rest to hang them on,
-    -- so the hold is not realised — counted so the loss is visible.
+  , scRestHolds :: ![(WholeNotes, WholeNotes)]
+    -- ^ fermatas sitting on rests, as (onset, duration) spans. Silence
+    -- has no note to stretch, so the Player realises these through the
+    -- tempo map (Agogics: tempo divides by the fermata hold across the
+    -- span, pushing every voice together).
   }
   deriving (Show)

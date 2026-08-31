@@ -33,7 +33,9 @@ data PSt = PSt
   , psMeter :: [(WholeNotes, (Int, Int))] -- ^ reverse order
   , psDrifts :: !Int
   , psGrace :: !Int -- ^ grace tokens skipped (see 'noteTok')
-  , psRestHolds :: !Int -- ^ fermatas on rests (unrealisable; counted)
+  , psRestHolds :: [(WholeNotes, WholeNotes)]
+    -- ^ fermatas on rests, (onset, dur), reverse order — realised by the
+    -- Player as tempo-map holds
   , psDone :: Map Int [ScoreNote] -- ^ per voice, reverse order
   , psTies :: Map (Int, Int) [ScoreNote]
     -- ^ open ties by (voice, staff position) — spelled degree, so a
@@ -57,7 +59,7 @@ parseKern defaultTempo src = do
       | any isExclusive fs -> Right (h, rest)
     _ -> Left "no **kern exclusive interpretation record found"
   st0 <- initFromHeader header
-  final <- foldM step (PSt st0 Nothing [] 0 0 0 Map.empty Map.empty) body
+  final <- foldM step (PSt st0 Nothing [] 0 0 [] Map.empty Map.empty) body
   -- flush unclosed ties as sounding notes: they *were* heard for their
   -- accumulated duration (usually an enharmonic respelling at the close, or
   -- an editorial quirk); the count is surfaced, not fatal
@@ -76,7 +78,7 @@ parseKern defaultTempo src = do
   Right
     (Score (fromMaybe defaultTempo (psTempo final)) voices
        (length leftovers) (psDrifts final) (reverse (psMeter final))
-       (psGrace final) (psRestHolds final))
+       (psGrace final) (reverse (psRestHolds final)))
   where
     foldM f z = foldl (\acc x -> acc >>= \s -> f s x) (Right z)
 
@@ -163,10 +165,11 @@ noteTok voice lane onset st (NoteTok d mpit mspell _ marks)
                       mspell
              in st {psDone = Map.insertWith (<>) voice [g] (psDone st)}
       _ -> st {psGrace = psGrace st + 1}
--- rest: clock already advanced. A fermata on a rest cannot be realised
--- (the model has no rests), so the dropped hold is counted, not silent
-noteTok _ _ _ st (NoteTok _ Nothing _ _ marks)
-  | Fermata `elem` marks = st {psRestHolds = psRestHolds st + 1}
+-- rest: clock already advanced. A fermata on a rest has no note to
+-- stretch — its (onset, dur) span is recorded for the Player, which
+-- realises the hold through the tempo map
+noteTok _ _ onset st (NoteTok d Nothing _ _ marks)
+  | Fermata `elem` marks = st {psRestHolds = (onset, d) : psRestHolds st}
   | otherwise = st
 noteTok voice lane onset st (NoteTok d (Just pit) mspell tie marks) =
   case tie of

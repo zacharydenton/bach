@@ -31,7 +31,7 @@ module OTB.Interp.Ornament
   , realizeGraceLane
   ) where
 
-import Data.Ratio (approxRational)
+import Data.Ratio (approxRational, numerator)
 import OTB.Interp.Express (setDur)
 import OTB.Kern.Token (Mark (..))
 import OTB.Score (ScoreNote (..))
@@ -47,6 +47,11 @@ data OrnamentParams = OrnamentParams
     -- note) per C.P.E. Bach's Versuch, Tab. IV
   , opGraceMs :: !Double
     -- ^ wall-clock length of a realised grace note (the short Vorschlag)
+  , opGraceLong :: !Bool
+    -- ^ realise a SINGLE grace as the long appoggiatura instead: half
+    -- the main note, two thirds of a dotted one (C.P.E. Bach, Versuch
+    -- I.2.§11). A per-piece stylistic decision — runs of several graces
+    -- (slides, double graces) stay short either way.
   }
   deriving (Show, Eq)
 
@@ -56,6 +61,7 @@ defaultOrnamentParams = OrnamentParams
   , opTrillAccel = 1.08
   , opTermination = True
   , opGraceMs = 70
+  , opGraceLong = False
   }
 
 -- | One subnote's duration in whole notes, from the wall-clock rate at
@@ -105,8 +111,13 @@ realizeGraceLane op (Bpm bpm) ns
                     : go ys)
         where
           k = length gs
-          g = min graceWn (snDur y / fromIntegral (2 * k))
+          g | opGraceLong op && k == 1 =
+                -- the long appoggiatura: half the main note, two thirds
+                -- of a dotted one (numerator 3 when reduced = dotted)
+                if dotted (snDur y) then snDur y * 2 / 3 else snDur y / 2
+            | otherwise = min graceWn (snDur y / fromIntegral (2 * k))
           stolen = g * fromIntegral k
+          dotted (WholeNotes r) = numerator r == 3
       (gs, []) ->
         [ place gr (snOnset gr + graceWn * fromIntegral i) graceWn
         | (i, gr) <- zip [0 :: Int ..] gs ]

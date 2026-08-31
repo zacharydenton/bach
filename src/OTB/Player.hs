@@ -26,6 +26,7 @@ module OTB.Player
   ) where
 
 import Data.List (findIndex, nub, sort, sortOn)
+import Numeric (showFFloat)
 import Data.Ratio (approxRational)
 import EuterpeaLite.Music (Control (..), Music (..), Primitive (..))
 import OTB.Analysis.Grouping (groupSpans)
@@ -96,14 +97,56 @@ lanes ns =
 -- duration softens 2:1, faster uphill rushes ascending runs), finger
 -- pedal last.
 prepareLane :: Interp -> Bpm -> [ScoreNote] -> [ScoreNote]
-prepareLane ip bpm =
-  overholdLane (exOverhold ex)
-    . uphillLane (exExpression ex * exUphill ex)
-    . doubleDurLane (exExpression ex * exDoubleDur ex)
-    . inegalLane (exInegal ex)
-    . realizeGraceLane (iOrnaments ip) bpm
+prepareLane ip bpm = fst . prepareLaneW ip bpm
+
+-- | 'prepareLane' with provenance: every stage preserves note count and
+-- order, so each stage's effect is read off a positional diff — the
+-- reshapers stay pure and never learn about whys. The per-note why
+-- lists ride into 'annotateLane' and out through @otb explain@.
+prepareLaneW :: Interp -> Bpm -> [ScoreNote] -> ([ScoreNote], [[Why]])
+prepareLaneW ip bpm l0 = foldl step (l0, map (const []) l0) stages
   where
     ex = iExpress ip
+    stages =
+      [ ( "grace", "CPE Bach, Versuch I.2"
+        , realizeGraceLane (iOrnaments ip) bpm )
+      , ( "inegales", "Quantz XI"
+        , inegalLane (exInegal ex) )
+      , ( "double-duration", "KTH (Friberg/Bresin/Sundberg 2006)"
+        , doubleDurLane (exExpression ex * exDoubleDur ex) )
+      , ( "faster-uphill", "KTH (Friberg/Bresin/Sundberg 2006)"
+        , uphillLane (exExpression ex * exUphill ex) )
+      , ( "finger-pedal", "Czerny on BWV 846"
+        , overholdLane (exOverhold ex) )
+      ]
+    step (ns, ws) (rule, cite, f) =
+      let ns' = f ns
+       in if length ns' /= length ns
+            then (ns', map (const []) ns') -- unreachable; stay total
+            else (ns', zipWith3 (attach rule cite) ns ns' ws)
+    attach rule cite o n w = w <> diffWhy rule cite o n
+    diffWhy rule cite o n
+      | snDur o == snDur n && snOnset o == snOnset n = []
+      | otherwise = [why rule (durPart <> onsetPart) cite]
+      where
+        durPart
+          | snDur o == snDur n = ""
+          | snDur o <= 0 = "realised at " <> showWn (snDur n) <> " wn"
+          | otherwise =
+              "dur x" <> showR (case (snDur n, snDur o) of
+                                  (WholeNotes a, WholeNotes b) -> a / b)
+        onsetPart
+          | snOnset o == snOnset n = ""
+          | otherwise =
+              (if null durPart then "" else ", ")
+                <> "onset "
+                <> (if snOnset n > snOnset o then "+" else "")
+                <> showWn (snOnset n - snOnset o) <> " wn"
+        showWn (WholeNotes r) = showR r
+        -- fixed-point, not show: 1/64 wn must read 0.016, not 1.6e-2
+        showR r =
+          let s = showFFloat (Just 3) (fromRational r :: Double) ""
+           in reverse (dropWhile (== '.') (dropWhile (== '0') (reverse s)))
 
 -- | Timed events from a Music line, honouring @Modify (Tempo r)@
 -- (times and durations scale by 1/r) — Euterpea's own semantics.
@@ -184,7 +227,7 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
     ex = iExpress ip
     usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
 
-    voiceLanes = [(v, map (prepareLane ip tempo) (lanes (vNotes v))) | v <- voices]
+    voiceLanes = [(v, map (prepareLaneW ip tempo) (lanes (vNotes v))) | v <- voices]
     totalLanes = sum (map (length . snd) voiceLanes)
 
     -- what sounds after preparation: overheld tones charged on purpose;
@@ -276,7 +319,7 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
     -- curve -> conductor Music -> derived map: the conductor is the
     -- carrier, deriveTempoMap the single reader
     curve = tempoMap (iAgogics ip) arches easings subjSpans noveltySteps
-              tempo end
+              (scRestHolds score) tempo end
     conductor = annotateConductor curve tempo end
     tmap = deriveTempoMap tempo conductor
 
@@ -307,8 +350,9 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
       let (mine, more) = splitAt (length ls) chans
        in ( more
           , acc <> [voiceEvents
-                      [ interpret ip tempo ch (annotateLane ip (ctx vi ch) l)
-                      | (ch, l) <- zip mine ls ]] )
+                      [ interpret ip tempo ch
+                          (annotateLane ip (ctx vi ch) ws l)
+                      | (ch, (l, ws)) <- zip mine ls ]] )
 
 -- ---------------------------------------------------------------------
 -- Assembly: the ensemble family, across voices
