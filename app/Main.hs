@@ -24,7 +24,13 @@ import OTB.Config
 import OTB.Config qualified
 import OTB.Emit.Midi (renderSmf, writeSmf)
 import OTB.Generate (generateScore)
+import Data.List (intercalate)
+import OTB.Analysis.Grouping (groupSpans)
+import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony)
+import OTB.Analysis.Subject (subjectEntries)
 import OTB.Interp.Express (chargesForLane)
+import OTB.Interp.Phrasing (boundaryStrengths)
+import OTB.Player (lanes)
 import OTB.Kern.Token (Mark (..))
 import OTB.Emit.Json (renderJson)
 import OTB.Explain (renderWhys)
@@ -57,6 +63,7 @@ data Cmd
   | Album FilePath FilePath FilePath Double String
   | Stats FilePath FilePath Double
   | Ground String Int Double String FilePath (Maybe FilePath) (Maybe FilePath)
+  | Analyze Common
 
 common :: Parser Common
 common =
@@ -120,6 +127,9 @@ groundCmd =
     <*> optional (strOption (long "emit-scl" <> metavar "OUT.scl"))
     <*> optional (strOption (long "emit-json" <> metavar "OUT.json"))
 
+analyzeCmd :: Parser Cmd
+analyzeCmd = Analyze <$> common
+
 statsCmd :: Parser Cmd
 statsCmd =
   Stats
@@ -144,6 +154,9 @@ cmdP =
         <> command "ground"
              (info groundCmd
                 (progDesc "generate a ground-bass variation set (pole two)"))
+        <> command "analyze"
+             (info analyzeCmd
+                (progDesc "the piece's structure as JSON (boundaries, tree, cadences, subject)"))
     )
     <|> compileCmd -- bare invocation = compile
 
@@ -158,6 +171,7 @@ main = do
     Stats corpus cfgPath tempo -> runStats corpus cfgPath tempo
     Ground bass nvar tempo temp out mscl mjson ->
       runGround bass nvar tempo temp out mscl mjson
+    Analyze com -> runAnalyze com
 
 -- | Every tempo that enters the pipeline — CLI or per-piece config
 -- override — passes through here; a non-finite or non-positive BPM
@@ -421,3 +435,46 @@ runGround bass nvar tempo temp out mscl mjson = do
   case mjson of
     Nothing -> pure ()
     Just fp -> writeFile fp (renderJson piece p)
+
+-- ---------------------------------------------------------------------
+-- analyze: the structural features, exported for the basis-function
+-- optimizer (tools/structure_fit.py) — the same analysis code the
+-- Player itself runs, so what gets fitted is what gets performed
+
+runAnalyze :: Common -> IO ()
+runAnalyze com = do
+  (_, score, _, _, _) <- load com
+  let voices = scVoices score
+      pp = defaultPhraseParams
+      voiceLanes = [lanes (vNotes v) | v <- voices]
+      allBounds =
+        [ (snOnset n + snDur n, str)
+        | ls <- voiceLanes, l <- ls
+        , (n, str) <- zip l (boundaryStrengths pp l) ]
+      notes = [ (snOnset n, snDur n, snPitch n)
+              | v <- voices, n <- vNotes v ]
+      end = maximum (0 : [o + d | (o, d, _) <- notes])
+      harm = analyzeHarmony (scMeter score) notes end
+      barLen0 = case scMeter score of
+        ((_, (n, d)) : _) -> WholeNotes (fromIntegral n / fromIntegral d)
+        [] -> 1
+      tree = groupSpans 3 (2 * barLen0) allBounds 0 end
+      subj = subjectEntries score
+      wn (WholeNotes r) = show (fromRational r :: Double)
+      arr xs = "[" <> intercalate "," xs <> "]"
+      pair a b = "[" <> a <> "," <> b <> "]"
+  putStrLn $ "{"
+    <> "\"end\":" <> wn end
+    <> ",\"boundaries\":" <> arr [ pair (wn t) (show s)
+                                 | (t, s) <- sortOn fst allBounds ]
+    <> ",\"tree\":" <> arr [ "[" <> wn a <> "," <> wn b <> ","
+                               <> show depth <> "]"
+                           | (a, b, depth) <- tree ]
+    <> ",\"cadences\":" <> arr (map wn (hCadences harm))
+    <> ",\"charge\":" <> arr [ pair (wn (WholeNotes t))
+                                 (show (hChargeAt harm (WholeNotes t)))
+                             | let WholeNotes er = end
+                             , t <- takeWhile (< er) (iterate (+ 1 / 4) 0) ]
+    <> ",\"subject\":" <> arr (map (wn . fst) subj)
+    <> ",\"onsets\":" <> arr (map (wn . (\(o, _, _) -> o)) notes)
+    <> "}"

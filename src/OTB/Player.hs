@@ -19,6 +19,8 @@ module OTB.Player
   , Interp (..)
   , defaultInterp
   , perform
+  , lanes
+  , prepareLane
   ) where
 
 import Data.List (findIndex, nub, sort, sortOn)
