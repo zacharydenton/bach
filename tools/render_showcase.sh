@@ -15,7 +15,7 @@
 set -euo pipefail
 
 OUT=${1:?usage: render_showcase.sh OUTDIR}
-SURGEPY_DIR=${SURGEPY_DIR:-$(dirname "$(find ~/code/surge-src/ignore/bpy -name 'surgepy*.so' | head -1)")}
+SURGEPY_DIR=${SURGEPY_DIR:-$HOME/.local/share/otb/surgepy}
 VENV=${VENV:-.venv-audition}
 FP=/usr/share/surge-xt/patches_factory
 PY="$VENV/bin/python"

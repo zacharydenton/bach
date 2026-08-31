@@ -56,8 +56,8 @@ def patch_dirs():
         os.path.expanduser(
             "~/Library/Application Support/Surge XT/patches_factory"),
         "/Library/Application Support/Surge XT/patches_factory",
-        # a surge-src checkout works without installing Surge at all
-        os.path.expanduser("~/code/surge-src/resources/data/patches_factory"),
+        # a surge checkout works without installing Surge at all
+        os.path.expanduser("~/code/surge/resources/data/patches_factory"),
     ]
     return [d for d in cands if d and os.path.isdir(d)]
 
@@ -77,7 +77,7 @@ def resolve_patch(path):
 
 
 def scan_patches():
-    # a system install and a surge-src checkout carry the same factory
+    # a system install and a surge checkout carry the same factory
     # bank; first tree wins per (category, name) so nothing lists twice
     cats = {}
     seen = set()

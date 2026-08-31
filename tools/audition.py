@@ -16,7 +16,7 @@ path); without it the JSON's per-note pitch-bend values are sent instead,
 which is exactly what the hardware will receive. Rendering the same
 performance both ways and comparing is the tuning oracle.
 
-Deps: surgepy (built from surge-src), numpy. Everything else stdlib.
+Deps: surgepy (built from ~/code/surge; stable copy in ~/.local/share/otb/surgepy), numpy. Everything else stdlib.
 License: GPL-2.0-or-later.
 """
 

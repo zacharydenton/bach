@@ -63,7 +63,7 @@ surgepy build:
 
 ```sh
 # once: xcode-select --install ; brew install cmake ninja ffmpeg ; uv python install 3.11
-git clone https://github.com/surge-synthesizer/surge && cd surge   # or copy surge-src
+git clone https://github.com/surge-synthesizer/surge && cd surge
 git submodule update --init --recursive
 uv venv --python 3.11 ~/.venv-audition && uv pip install --python ~/.venv-audition/bin/python numpy
 cmake -S . -B build -DSURGE_BUILD_PYTHON_BINDINGS=ON -DCMAKE_BUILD_TYPE=Release \
