@@ -69,7 +69,7 @@ lexNoteTok tok = NoteTok dur pit tie marks
     -- reciprocal n = 1/n whole notes; each dot multiplies by 3/2.
     -- n == 0 is the kern breve (2 wholes), each extra zero doubles (@00@
     -- longa = 4); grace notes (q) have no duration digits and fall out as
-    -- dur 0 — the Player skips them for now.
+    -- dur 0 — the Player realises them on the beat (realizeGraceLane).
     base
       | null digits = 0
       | not (null denStr) && recip' > 0 =
