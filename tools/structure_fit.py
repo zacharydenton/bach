@@ -29,7 +29,18 @@ already implemented. The middle frontier needs new ANALYSIS — melodic
 parallelism/sequence detection, harmonic rhythm, phrase structure at
 finer grain — not better optimization over the current features.
 
-  tools/structure_fit.py
+  tools/structure_fit.py          # ridge (linear baseline)
+  tools/structure_fit.py --gbm    # gradient boosting, +/-4 beat window
+
+SECOND FINDING (--gbm, same day): the features are NOT exhausted, only
+linearly. Gradient boosting over a +/-4-beat context window reaches
+test middle r = 0.177 vs the compiler's 0.140 (ceiling 0.356). Its
+attention is ~35% on note-density windows — textural rhythm, which no
+implemented rule uses — but the signal is interactive: linear pulls
+top out at r 0.07 and the best derived feature (anticipatory braking
+before texture thickens) at 0.06 on both books, so it resists
+distillation into a single named rule at meaningful magnitude. The
++0.037 sits on the table as the price of staying fully symbolic.
 
 License: GPL-2.0-or-later.
 """
@@ -175,6 +186,15 @@ def rs_against(H, pred, mask):
     return out
 
 
+def widen(X):
+    """+/-4 beats of context per feature: temporal shapes in tree reach."""
+    cols = [X]
+    for lag in (1, 2, 3, 4):
+        cols.append(np.roll(X, lag, axis=0))
+        cols.append(np.roll(X, -lag, axis=0))
+    return np.hstack(cols)
+
+
 def main():
     root = subprocess.check_output(
         ["stack", "path", "--local-install-root"], cwd=ROOT,
@@ -190,6 +210,29 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         for p in pieces:
             data[p] = piece_data(otb, p, tmp)
+
+    if "--gbm" in sys.argv:
+        from sklearn.ensemble import GradientBoostingRegressor
+        Xs, ys = [], []
+        for p in train:
+            X, y, _, _, mid = data[p]
+            ok = mid & ~np.isnan(y)
+            Xs.append(widen(X)[ok])
+            ys.append(y[ok])
+        model = GradientBoostingRegressor(
+            n_estimators=300, max_depth=3, learning_rate=0.05,
+            subsample=0.7, random_state=7)
+        model.fit(np.vstack(Xs), np.concatenate(ys))
+        for gname, group in [("train", train), ("TEST", test)]:
+            mrs, crs = [], []
+            for p in group:
+                X, _, H, ours, mid = data[p]
+                mrs += rs_against(H, model.predict(widen(X)), mid)
+                crs += rs_against(H, ours, mid)
+            print(f"gbm {gname}: middle r = {sum(mrs)/len(mrs):.3f} | "
+                  f"compiler {sum(crs)/len(crs):.3f}")
+        print("(human-human middle ceiling: 0.356)")
+        return
 
     # ridge on TRAIN middle beats, mean-human target
     Xs, ys = [], []
