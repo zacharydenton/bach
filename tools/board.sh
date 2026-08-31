@@ -14,7 +14,15 @@ DATA=$HOME/.local/share/otb
 SURGEPY=${SURGEPY_DIR:-$HOME/code/surge-src/ignore/bpy/src/surge-python}
 LOG=$DATA/patchboard.log
 
-pid() { pgrep -f "venv-audition/bin/python tools/patchboard.py" | head -1 || true; }
+pid() {
+  # match the python itself, not shells whose cmdline quotes the same text
+  for p in $(pgrep -f "tools/patchboard.py" 2>/dev/null); do
+    if [ "$(ps -o comm= -p "$p" 2>/dev/null)" = python ]; then
+      echo "$p"; return
+    fi
+  done
+  true
+}
 
 case "${1:-status}" in
   start)
