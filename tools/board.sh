@@ -14,7 +14,7 @@ DATA=$HOME/.local/share/otb
 SURGEPY=${SURGEPY_DIR:-$HOME/code/surge-src/ignore/bpy/src/surge-python}
 LOG=$DATA/patchboard.log
 
-pid() { pgrep -f "tools/patchboard.py.*--port 8766" | head -1 || true; }
+pid() { pgrep -f "venv-audition/bin/python tools/patchboard.py" | head -1 || true; }
 
 case "${1:-status}" in
   start)
