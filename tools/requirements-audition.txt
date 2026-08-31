@@ -1,0 +1,4 @@
+# the audition/analysis venv, pinned to the versions behind the
+# committed research numbers (structure_fit, asap_eval)
+numpy==2.4.3
+scikit-learn==1.9.0

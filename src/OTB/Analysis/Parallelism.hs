@@ -99,8 +99,10 @@ findSequences s = Sequences
                 (\x y -> let WholeNotes d = snOnset y - snOnset x
                           in fromRational d :: Double)
                 xs (drop 1 xs)
+              -- symmetric tolerance: max/min, not abs(ratio - 1),
+              -- so statement and answer order cannot change the verdict
               rOK = and
-                [ y > 0 && abs (x / y - 1) < 0.25
+                [ x > 0 && y > 0 && max x y / min x y < 1.25
                 | (x, y) <- zip (iois a) (iois b) ]
            -- diatonic transposition bends interval QUALITY freely (a
            -- major second becomes minor): every interval may deviate a

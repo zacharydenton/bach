@@ -322,6 +322,13 @@ class Engine:
                 for s in self.instances.values():
                     if hasattr(s, "setTempo"):
                         s.setTempo(bpm)
+                    elif not getattr(self, "_tempo_warned", False):
+                        self._tempo_warned = True
+                        print("WARN: this surgepy lacks setTempo — "
+                              "tempo-synced LFOs/delays will drift; "
+                              "apply tools/surgepy-patches/"
+                              "0001-expose-tempo.patch and rebuild",
+                              flush=True)
                 self.tempo_i += 1
             span = min(frames - done, self.loop_len - self.sample)
             # stop at the next tempo change so it lands on its block, not
@@ -588,7 +595,6 @@ function listenRemote(){
   const tok = Math.random().toString(36).slice(2);
   const a = new Audio('opus?tok=' + tok);
   a.preload = 'auto';
-  setTimeout(pollAnchor, 300);
   // the server records an exact anchor (engine position + true banked
   // history) when it assembles this listener's burst; fetch it so the
   // why-subtitles track OUR ears, not the engine's now
@@ -602,6 +608,7 @@ function listenRemote(){
       .then(x => { if (!x.err) OPUS.anchor = x; else setTimeout(pollAnchor, 500); })
       .catch(() => setTimeout(pollAnchor, 500));
   };
+  setTimeout(pollAnchor, 300); // AFTER the definition: const has no hoisting
   const b = document.getElementById('listenr');
   b.classList.add('on');
   const stat = s => { b.textContent = s; };

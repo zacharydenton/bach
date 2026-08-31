@@ -33,9 +33,13 @@ finer grain — not better optimization over the current features.
   tools/structure_fit.py --gbm    # gradient boosting, +/-4 beat window
                                   # (needs scikit-learn in the venv)
 
-SECOND FINDING (--gbm, same day): the features are NOT exhausted, only
-linearly. Gradient boosting over a +/-4-beat context window reaches
-test middle r = 0.177 vs the compiler's 0.140 (ceiling 0.356). Its
+SECOND FINDING (--gbm, 2026-08-31): the features are NOT exhausted,
+only linearly. Gradient boosting over a +/-4-beat context window
+reaches test middle r = 0.188 (numpy 2.4.3, scikit-learn 1.9.0) vs the compiler's 0.140 (ceiling
+0.356). The third decimal moves with library versions and feature
+revisions — results print their numpy/sklearn versions, and
+tools/requirements-audition.txt pins the environment that produced
+the committed numbers. Its
 attention is ~35% on note-density windows — textural rhythm, which no
 implemented rule uses — but the signal is interactive: linear pulls
 top out at r 0.07 and the best derived feature (anticipatory braking
@@ -263,6 +267,9 @@ def main():
         model = GradientBoostingRegressor(
             n_estimators=300, max_depth=3, learning_rate=0.05,
             subsample=0.7, random_state=7)
+        import sklearn
+        print(f"numpy {np.__version__}, scikit-learn "
+              f"{sklearn.__version__}")
         model.fit(np.vstack(Xs), np.concatenate(ys))
         for gname, group in [("train", train), ("TEST", test)]:
             mrs, crs = [], []

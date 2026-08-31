@@ -121,7 +121,10 @@ findImitation s = Imitation
                           | (a, b) <- zip c1 c2]
           -- ATTACK rhythm: inter-onset intervals see the rests and
           -- spacing that note lengths ignore
-          rOK = and [ y > 0 && abs (x / y - 1) < 0.25
+          -- symmetric: max/min < 1.25 treats a slower answer and a
+          -- faster one identically (abs(x/y - 1) allowed +33% but
+          -- only -20%, so acceptance depended on argument order)
+          rOK = and [ x > 0 && y > 0 && max x y / min x y < 1.25
                     | (x, y) <- zip (iois ns1 i) (iois ns2 j) ]
        in and [d <= 1 | d <- devs] && contourOK && rOK
     iois ns i =

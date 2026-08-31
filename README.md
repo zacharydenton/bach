@@ -65,6 +65,10 @@ surgepy build:
 # once: xcode-select --install ; brew install cmake ninja ffmpeg ; uv python install 3.11
 git clone https://github.com/surge-synthesizer/surge && cd surge
 git submodule update --init --recursive
+# REQUIRED: stock surgepy has no setTempo — without this patch every
+# tempo-synced LFO and delay drifts against the piece (the patchboard
+# warns, but warns is all it can do)
+git apply /path/to/otb/tools/surgepy-patches/0001-expose-tempo.patch
 uv venv --python 3.11 ~/.venv-audition && uv pip install --python ~/.venv-audition/bin/python numpy
 cmake -S . -B build -DSURGE_BUILD_PYTHON_BINDINGS=ON -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
