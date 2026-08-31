@@ -70,7 +70,7 @@ werckmeister3 =
 justOffsetFor :: Int -> Cents
 justOffsetFor iv =
   Cents ([ 0, 11.7, 3.9, 15.6, -13.7, -2.0
-         , 0, 2.0, 13.7, -15.9, 17.6, -11.7 ] !! (iv `mod` 12))
+         , 0, 2.0, 13.7, -15.64, 17.6, -11.7 ] !! (iv `mod` 12))
 
 -- | The adaptive policy's arithmetic: blend a note's tempered offset
 -- toward "just above the tempered root" by s in [0,1]. At s=0 this is
@@ -128,6 +128,12 @@ parseScl src = do
       , Right (den, "") <- TR.decimal (T.strip (T.drop 1 b))
       , (den :: Integer) > 0, (num :: Integer) > 0 =
           Right (1200 * logBase 2 (fromIntegral num / fromIntegral den))
+      -- Scala spec: a value without a period is a ratio ("2" means 2/1);
+      -- cents always carry one
+      | not (T.any (== '.') t)
+      , Right (num, "") <- TR.decimal (T.strip t)
+      , (num :: Integer) > 0 =
+          Right (1200 * logBase 2 (fromIntegral num))
       | otherwise = case TR.double t of
           Right (v, rest') | T.null (T.strip rest'), not (isNaN v) -> Right v
           _ -> Left ("bad interval: " <> T.unpack t)

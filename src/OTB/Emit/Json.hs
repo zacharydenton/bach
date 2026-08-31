@@ -26,7 +26,9 @@ import OTB.Units (Bpm (..), Seconds (..), WholeNotes (..), secondsAt)
 renderJson :: String -> Performance -> String
 renderJson piece (Performance tmap tracks whys cads) =
   obj
-    [ ("piece", show piece)
+    -- through the JSON escaper, not Haskell show: show writes \233-style
+    -- escapes for non-ASCII, which is not legal JSON
+    [ ("piece", str piece)
     , ("cadences", arr [num (fromRational c) | WholeNotes c <- cads])
     , ("tempoMap", arr (map tempoJson tmap))
     , ("tracks", arr (map trackJson tracks))

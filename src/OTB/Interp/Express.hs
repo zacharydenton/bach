@@ -91,6 +91,17 @@ defaultExpressParams = ExpressParams
   , exDialogueVel = 4
   }
 
+-- | Change a note's duration without breaking the Score invariant that
+-- 'snSegs' sums to 'snDur' (Score.hs): segments scale proportionally, so
+-- a segment-local mark (a fermata on the closing tied token) keeps its
+-- share of the reshaped note.
+setDur :: WholeNotes -> ScoreNote -> ScoreNote
+setDur d' n
+  | snDur n <= 0 = n {snDur = d'}
+  | otherwise =
+      n { snDur = d'
+        , snSegs = [(sd * d' / snDur n, ms) | (sd, ms) <- snSegs n] }
+
 -- | Notes inégales (Quantz XI): conjunct equal-duration pairs on the
 -- subdivision become long–short. Applied to raw lanes so everything
 -- downstream (ornaments, articulation, dynamics) sees the swung grid.
@@ -107,8 +118,8 @@ inegalLane r ns
       , onBeatPair a =
           let d = snDur a
               shift = WholeNotes (toRational r) * d / 2
-           in a {snDur = d + shift}
-                : b {snOnset = snOnset b + shift, snDur = d - shift}
+           in setDur (d + shift) a
+                : (setDur (d - shift) b) {snOnset = snOnset b + shift}
                 : go rest
       | otherwise = a : go (b : rest)
     go xs = xs
@@ -127,7 +138,7 @@ overholdLane o ns
   | otherwise = zipWith hold ns (map Just (drop 1 ns) <> [Nothing])
   where
     hold n (Just nx)
-      | gap > 0 = n {snDur = snDur n + WholeNotes (toRational o) * gap}
+      | gap > 0 = setDur (snDur n + WholeNotes (toRational o) * gap) n
       where
         gap = snOnset nx - (snOnset n + snDur n)
     hold n _ = n
@@ -167,13 +178,13 @@ uphillLane k0 ns
               interior = length r - 1
               stolen = d * fromIntegral interior
               shifted =
-                [ n { snOnset = snOnset n - d * fromIntegral i'
-                    , snDur = snDur n - d }
+                [ (setDur (snDur n - d) n)
+                    {snOnset = snOnset n - d * fromIntegral i'}
                 | (i', n) <- zip [(0 :: Int) ..] (init r) ]
               lastN = last r
            in shifted
-                <> [ lastN { snOnset = snOnset lastN - stolen
-                           , snDur = snDur lastN + stolen } ]
+                <> [ (setDur (snDur lastN + stolen) lastN)
+                       {snOnset = snOnset lastN - stolen} ]
 
 -- | KTH "double duration" (Friberg, Bresin & Sundberg 2006): in an
 -- adjacent 2:1 pair the contrast is softened — the short note takes k
@@ -188,8 +199,8 @@ doubleDurLane k0 ns
       | snDur a == 2 * snDur b
       , snOnset a + snDur a == snOnset b =
           let d = WholeNotes (toRational k) * snDur b
-           in a {snDur = snDur a - d}
-                : b {snOnset = snOnset b - d, snDur = snDur b + d}
+           in setDur (snDur a - d) a
+                : (setDur (snDur b + d) b) {snOnset = snOnset b - d}
                 : go rest
       | otherwise = a : go (b : rest)
     go xs = xs
@@ -220,9 +231,14 @@ chargesForLane others = map charge
 -- | Agogic lean: dissonant notes get held toward legato. approxRational,
 -- not toRational: raw Double rationals carry 2^52-ish denominators that
 -- blow up downstream arithmetic (see Units.toTicks).
+--
+-- The cap applies to the LEAN only — an incoming gate above 1 (the KTH
+-- leap-tone-duration hold; gateK's 23/20 headroom in Annotate) must pass
+-- through, or that rule is silently a no-op near legato.
 leanGate :: ExpressParams -> Double -> Rational -> Rational
 leanGate ex ch gate =
-  min 1 (gate + approxRational (exExpression ex * exDisLean ex * ch) 1e-6)
+  max gate $
+    min 1 (gate + approxRational (exExpression ex * exDisLean ex * ch) 1e-6)
 
 -- | Deterministic per-note jitter from a seed and note index — an xorshift
 -- over (seed, i), mapped to [-1, 1]. Same piece name, same performance.

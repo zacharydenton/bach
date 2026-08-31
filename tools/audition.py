@@ -49,6 +49,15 @@ def comp_for(cal, patch_path):
         return 0.0
     m = cal.get(patch_path)
     if not m:
+        # measurements travel with the patch, not the filesystem: fall
+        # back to the Category/Name.fxp tail, same rule as the
+        # patchboard's _cal_for
+        tail = "/".join(patch_path.replace("\\", "/").split("/")[-2:])
+        for k, v in cal.items():
+            if k.replace("\\", "/").endswith("/" + tail):
+                m = v
+                break
+    if not m:
         return 0.0
     return min(0.5 * m.get("releaseS", 0.0), 0.3)
 

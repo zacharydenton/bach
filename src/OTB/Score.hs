@@ -64,5 +64,8 @@ data Score = Score
   , scGraceDropped :: !Int
     -- ^ zero-duration (grace) tokens the parser skipped. Not realised yet;
     -- counted so the loss is visible rather than silent.
+  , scRestHolds :: !Int
+    -- ^ fermatas sitting on rests. The model has no rest to hang them on,
+    -- so the hold is not realised — counted so the loss is visible.
   }
   deriving (Show)

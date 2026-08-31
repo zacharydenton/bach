@@ -38,6 +38,7 @@ lexField t
   | t == "*^" = FInterp ISplit
   | t == "*v" = FInterp IMerge
   | t == "*+" = FInterp IAdd
+  | t == "*x" = FInterp IExchange
   | t == "*-" = FInterp ITerminate
   | T.isPrefixOf "*MM" t = FInterp (lexTempo (T.drop 3 t))
   | T.isPrefixOf "*M" t = FInterp (IMeter (T.drop 2 t))
@@ -56,15 +57,24 @@ lexNoteTok :: Text -> NoteTok
 lexNoteTok tok = NoteTok dur pit tie marks
   where
     cs = T.unpack tok
-    digits = filter isDigit cs
+    -- the duration prefix in char-bag order: digits plus the extended
+    -- reciprocal's '%' (kern @n%m@ = n/m in reciprocal position, so the
+    -- duration is m/n whole notes — e.g. @2%3@ is a triplet breve, 3/2)
+    durChars = filter (\c -> isDigit c || c == '%') cs
+    (numStr, denStr') = break (== '%') durChars
+    denStr = filter isDigit denStr'
+    digits = filter isDigit durChars
     dots = length (filter (== '.') cs)
-    recip' = if null digits then 0 else read digits :: Integer
+    recip' = if null numStr then 0 else read numStr :: Integer
     -- reciprocal n = 1/n whole notes; each dot multiplies by 3/2.
-    -- n == 0 is the kern breve (2 whole notes); grace notes (q) have no
-    -- duration digits and fall out as dur 0 — the Player skips them for now.
+    -- n == 0 is the kern breve (2 wholes), each extra zero doubles (@00@
+    -- longa = 4); grace notes (q) have no duration digits and fall out as
+    -- dur 0 — the Player skips them for now.
     base
       | null digits = 0
-      | recip' == 0 = 2
+      | not (null denStr) && recip' > 0 =
+          fromIntegral (read denStr :: Integer) / fromIntegral recip'
+      | recip' == 0 = 2 ^ length numStr
       | otherwise = 1 / fromIntegral recip'
     dur = WholeNotes (base * (3 / 2) ^^ dots * densityFix)
     -- 'q'/'Q' grace note: force zero duration regardless of digits
@@ -98,6 +108,8 @@ lexNoteTok tok = NoteTok dur pit tie marks
         , [InvMordent 1 | 'w' `elem` cs]
         , [Turn | 'S' `elem` cs]
         , [InvTurn | '$' `elem` cs]
+        , [GenericOrn | 'O' `elem` cs]
+        , [Sforzando | 'z' `elem` cs]
         , [SlurOpen | '(' `elem` cs]
         , [SlurClose | ')' `elem` cs]
         ]

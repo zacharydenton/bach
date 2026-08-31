@@ -140,7 +140,7 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score (Bpm t) vs 0 _ _ _) -> do
+            Right (Score (Bpm t) vs 0 _ _ _ _) -> do
               t @?= 96
               map (length . vNotes) vs @?= [2, 2]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -153,14 +153,14 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ [n]] 0 _ _ _) ->
+            Right (Score _ [Voice _ [n]] 0 _ _ _ _) ->
               snDur n @?= (1 / 2)
             Right s -> assertFailure ("unexpected shape: " <> show s)
       , testCase "fermata on a tied close holds only the close" $ do
           let src = T.unlines ["**kern", "[2c", "4c;]", "*-"]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ [n]] 0 _ _ _) -> do
+            Right (Score _ [Voice _ [n]] 0 _ _ _ _) -> do
               snDur n @?= (3 / 4)
               snMarks n @?= [Fermata]
               snSegs n @?= [(1 / 2, []), (1 / 4, [Fermata])]
@@ -182,7 +182,7 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ ns] 0 _ _ _) ->
+            Right (Score _ [Voice _ ns] 0 _ _ _ _) ->
               sort [(snLane n, snPitch n) | n <- ns]
                 @?= [(0, 60), (0, 60), (0, 60), (1, 64), (1, 67)]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -192,7 +192,7 @@ units = testGroup "otb"
           let src = T.unlines ["**kern", "[2c", "4cT]", "*-"]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ ns] 0 _ _ _) ->
+            Right (Score _ [Voice _ ns] 0 _ _ _ _) ->
               [(snOnset n, snDur n, snMarks n) | n <- ns]
                 @?= [(0, 1 / 2, []), (1 / 2, 1 / 4, [Trill 2])]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -416,7 +416,7 @@ units = testGroup "otb"
                 }
               score bpm = Score (Bpm bpm)
                 [Voice 0 [scoreNote 0 (1/4) 60 [],
-                          scoreNote (1/4) (1/4) 62 []]] 0 0 [(0, (4, 4))] 0
+                          scoreNote (1/4) (1/4) 62 []]] 0 0 [(0, (4, 4))] 0 0
               gapMs bpm = case perform interp (score bpm) of
                 Left e -> error e
                 Right pf -> case perfTracks pf of
@@ -439,7 +439,7 @@ units = testGroup "otb"
                 }
               score = Score (Bpm 120)
                 [Voice 0 [scoreNote 0 (d/4) 60 [], scoreNote d d 67 []]]
-                0 0 [(0, (4, 4))] 0
+                0 0 [(0, (4, 4))] 0 0
           case perform interp score of
             Left e -> assertFailure e
             Right pf | [[a, b]] <- perfTracks pf -> do
@@ -563,7 +563,7 @@ genScore = do
   nv <- chooseInt (1, 3)
   vs <- vectorOf nv genLane
   pure (Score (Bpm 96) [Voice i l | (i, l) <- zip [0 ..] vs]
-          0 0 [(0, (4, 4))] 0)
+          0 0 [(0, (4, 4))] 0 0)
 
 transposeScore :: Int -> Score -> Score
 transposeScore n s =
@@ -710,6 +710,67 @@ review = testGroup "review regressions"
         assertEqual "stale/colliding provenance keys" 0 (length stale)
         assertEqual "no duplicate note identities"
           (length keys) (length (nubOrd keys))
+
+  -- 2026-08-31 findings
+  , testCase "emitter: sub-tick note is floored to one tick, not stuck" $ do
+      -- enforceMono can clamp a duration below one tick; at the same tick
+      -- the off<on sort order would emit the release BEFORE its own
+      -- attack — a stuck note on the default (non-hardware) path
+      let tiny = PerfNote 0 (1 / 16384) 60 96 8192 0 0 0 0
+          p = Performance [(0, Bpm 120)] [[tiny]] [] []
+      notes <- either assertFailure pure (readSmf (BL.toStrict (renderSmf p)))
+      [(smfPitch n, smfDurQ n > 0) | n <- notes] @?= [(60, True)]
+  , testCase "parser: cross-spine tie continuation keeps the sound" $ do
+      -- wtc1p04:240 continues a tie opened in the neighbouring spine; the
+      -- (voice, pitch) key cannot match, but the note must not vanish
+      let src = T.unlines
+            [ "**kern\t**kern"
+            , "4c\t[4c"
+            , "2c_\t4r"
+            , "*-\t*-"
+            ]
+      case parseKern (Bpm 72) src of
+        Left e -> assertFailure e
+        Right s -> do
+          scTieLeftovers s @?= 1 -- the abandoned open still flushes
+          sort [ (snOnset n, snDur n, snPitch n)
+               | v <- scVoices s, n <- vNotes v ]
+            @?= [(0, 1 / 4, 60), (0, 1 / 4, 60), (1 / 4, 1 / 2, 60)]
+  , testCase "parser: *x (spine exchange) is a hard error, not silence" $ do
+      let src = T.unlines ["**kern\t**kern", "*x\t*x", "4c\t4e", "*-\t*-"]
+      case parseKern (Bpm 72) src of
+        Left e -> assertBool ("error names *x: " <> e) ("*x" `isInfixOf` e)
+        Right _ -> assertFailure "*x absorbed silently"
+  , testCase "parser: fermata on a rest is counted, not silent" $ do
+      let src = T.unlines ["**kern", "4c", "4r;", "4c", "*-"]
+      case parseKern (Bpm 72) src of
+        Left e -> assertFailure e
+        Right s -> scRestHolds s @?= 1
+  , testCase "lexer: longa and rational reciprocals" $ do
+      ntDur (lexNoteTok "0c") @?= 2 -- breve
+      ntDur (lexNoteTok "00c") @?= 4 -- longa, not a second breve
+      ntDur (lexNoteTok "2%3c") @?= 3 / 2 -- triplet breve, not recip 23
+  , testCase "lexer: O and z are retained marks, not dropped" $
+      ntMarks (lexNoteTok "4cOz") @?= [GenericOrn, Sforzando]
+  , testCase "trill: acceleration is a spin-up window, not a runaway" $ do
+      -- per-subnote compounding made first/last = accel^(n-1): a tied
+      -- whole-note trill (wtc1p16) opened at a third of nominal rate and
+      -- closed in a sub-tick buzz. The window caps the ratio at accel^8.
+      let sn = scoreNote 0 4 60 [Trill 2]
+          out = realizeNote defaultOrnamentParams (Bpm 96) sn
+          ds = map snDur out
+      sum ds @?= 4
+      assertBool "still accelerates" (head ds > last ds)
+      assertBool ("first/last ratio: " <> show (maximum ds / minimum ds))
+        (maximum ds / minimum ds < 2.5)
+  , testCase "scl: a bare integer is a ratio (2 = the octave)" $ do
+      let scl = T.unlines $
+            ["! t", "t", "12", "!"]
+              <> map (T.pack . show) ([100.0, 200 .. 1100] :: [Double])
+              <> ["2"]
+      case parseScl scl of
+        Left e -> assertFailure e
+        Right t -> t @?= equalTable
   ]
   where
     nubOrd = map head' . groupBy (==) . sort
@@ -790,7 +851,7 @@ sota = testGroup "sota"
             [ scoreNote (fromIntegral (it * 4 + j) / 8) (1 / 8)
                 (p + it * step) []
             | it <- [0 .. k - 1], (j, p) <- zip [0 ..] ps ]
-          mkS ns = Score (Bpm 96) [Voice 0 ns] 0 0 [(0, (4, 4))] 0
+          mkS ns = Score (Bpm 96) [Voice 0 ns] 0 0 [(0, (4, 4))] 0 0
           figure = [60, 64, 62, 65] -- direction changes, distinctive
           seqS = mkS (line figure (-2) 4)
       assertBool "descending sequence detected"
@@ -817,7 +878,7 @@ sota = testGroup "sota"
           motif = [60, 64, 62, 67, 65, 69] -- direction changes galore
           a = mk 0 [fromIntegral i / 8 | i <- [0 :: Int ..]] motif
           b = mk 1 [1/2 + fromIntegral i / 8 | i <- [0 :: Int ..]] (map (+ 5) motif)
-          s = Score (Bpm 96) [a, b] 0 0 [(0, (4, 4))] 0
+          s = Score (Bpm 96) [a, b] 0 0 [(0, (4, 4))] 0 0
           im = findImitation s
       map (\(t', v, _) -> (t', v)) (imTakes im) @?= [(1 / 2, 1)]
   , testCase "imitation: a scale run is figuration, not speech" $ do
@@ -826,7 +887,7 @@ sota = testGroup "sota"
           run = [60, 62, 64, 65, 67, 69]
           s = Score (Bpm 96)
                 [mk 0 [fromIntegral i / 8 | i <- [0 :: Int ..]] run, mk 1 [1/2 + fromIntegral i / 8 | i <- [0 :: Int ..]] run]
-                0 0 [(0, (4, 4))] 0
+                0 0 [(0, (4, 4))] 0 0
       imTakes (findImitation s) @?= []
   , testCase "dialogue: the fugue converses, the prelude does not" $ do
       present <- doesDirectoryExist corpusDir

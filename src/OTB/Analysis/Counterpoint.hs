@@ -13,7 +13,6 @@ module OTB.Analysis.Counterpoint
   ) where
 
 import Data.List (sortOn)
-import Data.Maybe (mapMaybe)
 import OTB.Score
 import OTB.Units (WholeNotes)
 
@@ -21,7 +20,7 @@ import OTB.Units (WholeNotes)
 -- successive onset slices where both voices moved in the same direction
 -- and the interval class stayed a perfect consonance (0 or 7 mod 12).
 parallelPerfects :: Score -> Int
-parallelPerfects (Score _ voices _ _ _ _) =
+parallelPerfects (Score _ voices _ _ _ _ _) =
   sum [pairCount a b | (a, bs) <- zip voices (drop 1 (iterate (drop 1) voices)), b <- bs]
 
 pairCount :: Voice -> Voice -> Int
@@ -30,11 +29,14 @@ pairCount va vb =
   where
     onsets =
       sortOn id (map snOnset (vNotes va) <> map snOnset (vNotes vb))
+    -- Maybe-slices, NOT mapMaybe: dropping silent onsets would make two
+    -- fifths separated by a rest in either voice look consecutive. A
+    -- Nothing between two sounding slices breaks their adjacency.
     slices =
-      mapMaybe
+      map
         (\t -> (,) <$> soundingAt t (vNotes va) <*> soundingAt t (vNotes vb))
         onsets
-    parallel ((a1, b1), (a2, b2)) =
+    parallel (Just (a1, b1), Just (a2, b2)) =
       let iv1 = abs (a1 - b1) `mod` 12
           iv2 = abs (a2 - b2) `mod` 12
        in iv1 == iv2
@@ -42,6 +44,7 @@ pairCount va vb =
             && a1 /= a2
             && b1 /= b2
             && signum (a2 - a1) == signum (b2 - b1)
+    parallel _ = False
 
 -- | The pitch sounding at time t, if any (highest, when a voice's
 -- sub-spines make it momentarily polyphonic).

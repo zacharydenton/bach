@@ -55,7 +55,10 @@ tempoTrack tmap = trackChunk (go 0 tmap)
     go _ [] = mempty
     go prev ((w, Bpm bpm) : rest') =
       let Ticks t = toTicks w
-          usPerQn = round (60_000_000 / bpm) :: Int
+          -- FF 51's payload is 24 bits; clamp so an extreme bpm saturates
+          -- instead of wrapping (word24BE masks per byte and would wrap
+          -- silently — the exact nonsense badBpm exists to prevent)
+          usPerQn = min 0xFFFFFF (max 1 (round (60_000_000 / bpm))) :: Int
        in vlq (t - prev)
             <> word8 0xFF <> word8 0x51 <> word8 0x03 <> word24BE usPerQn
             <> go t rest'
@@ -74,12 +77,18 @@ voiceTrack notes = trackChunk (deltas 0 events)
       sortOn (\(t, prio, _) -> (t, prio)) $
         concat
           [ [ (onT, 1 :: Int, (0xE0 .|. ch, bendLo, bendHi))
-            , (onT, 2, (0x90 .|. ch, p, fromIntegral (pnVel pn)))
+            , (onT, 2, (0x90 .|. ch, p, fromIntegral (pnVel pn .&. 0x7F)))
             , (offT, 0, (0x80 .|. ch, p, 0))
             ]
           | pn <- notes
           , let Ticks onT = toTicks (pnOnset pn)
-                Ticks offT = toTicks (pnOnset pn + pnDur pn)
+                -- a duration that rounds below one tick would put the off
+                -- at the on's own tick, where the off<on sort order turns
+                -- it into a stuck note (the Instrument arranger guards the
+                -- hardware path; the emitter must hold the invariant for
+                -- every path) — floor to one tick instead
+                Ticks rawOffT = toTicks (pnOnset pn + pnDur pn)
+                offT = max (onT + 1) rawOffT
                 ch = fromIntegral (pnChannel pn .&. 0x0F) :: Word8
                 p = fromIntegral (pnPitch pn .&. 0x7F) :: Word8
                 bendLo = fromIntegral (pnBend pn .&. 0x7F) :: Word8

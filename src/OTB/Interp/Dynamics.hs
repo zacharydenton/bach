@@ -75,7 +75,12 @@ dynamicsLane' dp meters bounds ns =
       let m = metrical n
           arch = dyArch dp * 4 * x * (1 - x)
           high = dyHighLoud dp * fromIntegral (snPitch n - 66)
-          acc = if Accent `elem` snMarks n then dyAccent dp else 0
+          -- kern @z@ (sforzando) is a stronger cousin of @^@; both land
+          -- as the accent bump rather than being dropped on the floor
+          acc =
+            if Accent `elem` snMarks n || Sforzando `elem` snMarks n
+              then dyAccent dp
+              else 0
           v = round (dyBase dp + m + arch + high + acc)
           ws =
             [ why "meter" (showD m) "Sloboda 1983" | m /= 0 ]

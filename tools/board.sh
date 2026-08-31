@@ -18,7 +18,13 @@ if [ -n "${SURGEPY_DIR:-}" ]; then
 elif [ -d "$HOME/.local/share/otb/surgepy" ]; then
   SURGEPY=$HOME/.local/share/otb/surgepy
 else
-  SURGEPY=$(dirname "$(find $HOME/code/surge -name 'surgepy*.so' 2>/dev/null | head -1)" 2>/dev/null || true)
+  SO=$(find "$HOME/code/surge" -name 'surgepy*.so' 2>/dev/null | head -1 || true)
+  if [ -z "$SO" ]; then
+    echo "no surgepy found: set SURGEPY_DIR, install the stable copy under" >&2
+    echo "$DATA/surgepy, or build ~/code/surge with surgepy (see README)" >&2
+    exit 1
+  fi
+  SURGEPY=$(dirname "$SO")
 fi
 LOG=$DATA/patchboard.log
 # the venv may live in the repo or in $HOME (the README's location)

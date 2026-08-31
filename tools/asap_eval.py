@@ -214,6 +214,10 @@ KNOB_GRIDS = {
 
 
 def with_knobs(base_config, knobs, tmpdir):
+    # a None would serialize as invalid TOML and kill the whole fit at
+    # load time; absent means "keep the config's default", which is
+    # what an unfittable knob deserves
+    knobs = {k: v for k, v in knobs.items() if v is not None}
     tag = "_".join(f"{k}{v}" for k, v in sorted(knobs.items()))
     path = os.path.join(tmpdir, f"knobs_{abs(hash(tag))}.toml")
     with open(path, "w") as out:
@@ -332,6 +336,11 @@ def fit_defaults(otb, args, pieces, tmp):
                 r = mean_r(otb, args, train, cfg, tmp)
                 if not math.isnan(r) and r > best_r:
                     best_v, best_r = v, r
+            if best_v is None:  # every grid value was NaN: keep default
+                knobs.pop(knob, None)
+                print(f"  sweep {sweep + 1} {knob:<14} -> all NaN, "
+                      f"keeping the config default")
+                continue
             knobs[knob] = best_v
             print(f"  sweep {sweep + 1} {knob:<14} -> {best_v}"
                   f"   train r = {best_r:.3f}")
@@ -371,6 +380,11 @@ def fit_performer(otb, args, performer, tmp):
                     otb, args, performer, pieces, cfg, tmp)
                 if not math.isnan(r) and r > best_r:
                     best_v, best_r = v, r
+            if best_v is None:  # every grid value was NaN: keep default
+                knobs.pop(knob, None)
+                print(f"  sweep {sweep + 1} {knob:<14} -> all NaN, "
+                      f"keeping the config default")
+                continue
             knobs[knob] = best_v
             print(f"  sweep {sweep + 1} {knob:<14} -> {best_v}"
                   f"   r = {best_r:.3f}")

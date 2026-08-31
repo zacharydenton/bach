@@ -167,7 +167,7 @@ analyzeStructure ip score =
 -- perform
 
 perform :: Interp -> Score -> Either String Performance
-perform ip score@(Score tempo voices _ _ meter _) =
+perform ip score@(Score tempo voices _ _ meter _ _) =
   if totalLanes > length usableChannels
     then Left ("score needs " <> show totalLanes
                  <> " monophonic lanes; only "

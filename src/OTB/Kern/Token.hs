@@ -38,6 +38,7 @@ data Interp
   | ISplit              -- ^ @*^@
   | IMerge              -- ^ @*v@
   | IAdd                -- ^ @*+@ (unsupported; rejected in Spine)
+  | IExchange           -- ^ @*x@ (unsupported; rejected in Spine)
   | ITerminate          -- ^ @*-@
   | ITempo !Bpm         -- ^ @*MM112@
   | IMeter !Text        -- ^ @*M4/4@ — carried, not yet consumed
@@ -63,6 +64,10 @@ data Mark
   | InvMordent !Int -- ^ @W@=2 / @w@=1 semitones above (Pralltriller)
   | Turn            -- ^ @S@
   | InvTurn         -- ^ @$@
+  | GenericOrn      -- ^ @O@ — ornament with no interval stated; retained
+                    --   unrealised (realising it would need the scale
+                    --   inference this module's convention avoids)
+  | Sforzando       -- ^ @z@
   | SlurOpen        -- ^ @(@
   | SlurClose       -- ^ @)@
   deriving (Eq, Show)

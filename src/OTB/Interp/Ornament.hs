@@ -101,11 +101,17 @@ realizeNote op bpm = realize
               -- even subnote count >= 4, upper start => main-note ending;
               -- durations accelerate (opTrillAccel) so the trill spins up
               -- rather than sewing-machining; long trills close with the
-              -- Nachschlag (lower turn) when opTermination
+              -- Nachschlag (lower turn) when opTermination. The spin-up is
+              -- a fixed window (8 subnotes), not the whole trill: with a
+              -- per-subnote exponent the first/last ratio is accel^(n-1),
+              -- so a tied whole-note trill opened at a third of nominal
+              -- rate and closed in a sub-tick buzz — the steady body must
+              -- run at opTrillRate
               let n = max 4 (2 * floor (realToFrac (d / step) / 2 :: Double))
                   accel = max 1 (opTrillAccel op)
+                  spinup = min (n - 1) 8
                   weights =
-                    [ toRational (accel ** fromIntegral (n - 1 - i))
+                    [ toRational (accel ** fromIntegral (max 0 (spinup - i)))
                     | i <- [0 .. n - 1] ] :: [Rational]
                   total = sum weights
                   durs = [d * WholeNotes (w / total) | w <- weights]

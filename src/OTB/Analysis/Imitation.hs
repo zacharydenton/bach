@@ -88,8 +88,12 @@ findImitation s = Imitation
       length c == motifLen
         && Map.findWithDefault 0 c freq <= maxFreq
         && directionChanges c >= 1
+    -- turnarounds through a repeated note count too: rise-repeat-fall
+    -- (contour [2,0,-2]) changes direction once, so zeros are dropped
+    -- before looking for the sign flip
     directionChanges c =
-      length [ () | (a, b) <- zip c (drop 1 c), a * b < 0 ]
+      let dirs = filter (/= 0) c
+       in length [ () | (a, b) <- zip dirs (drop 1 dirs), a * b < 0 ]
 
     -- statement instances worth answering
     statements =

@@ -97,9 +97,12 @@ subjectEntries s =
                in ([w | hit]) <> go (drop 1 ns)
         matches (iv, rh) =
           let ivDev = [abs (a - b) | (a, b) <- zip sIv iv]
+              -- symmetric tolerance (same form as Imitation/Parallelism
+              -- post-bec2017): the old abs (a/b - 1) < 0.25 accepted +33%
+              -- but only -20% depending on which side was the numerator
               rhythmOk =
                 length rh == length sRh
-                  && and [ b > 0 && abs (a / b - 1) < 0.25
+                  && and [ a > 0 && b > 0 && max a b / min a b < 1.25
                          | (a, b) <- zip sRh rh ]
               -- tonal answers bend an interval or two by a semitone;
               -- anything larger is a different idea

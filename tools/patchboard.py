@@ -46,6 +46,8 @@ except ImportError:  # the HTTP layer is testable without the synth
 BLOCK = 32
 CHUNK_FRAMES = 4096  # ~85 ms at 48k: the broadcast unit
 MAX_OPUS_CLIENTS = 4
+MAX_PCM_CLIENTS = 4
+DEFAULT_HOST = "127.0.0.1"  # loopback unless --host opts onto the LAN
 
 
 def patch_dirs():
@@ -196,7 +198,7 @@ class Engine:
                 # channel's measured release tail (calibrate_patch.py)
                 # so breaths stay audible on pads
                 m = self._cal_for(eff.get(ch, ""))
-                comp = min(0.5 * m["releaseS"], 0.3) if m else 0.0
+                comp = min(0.5 * m.get("releaseS", 0.0), 0.3) if m else 0.0
                 durS = max(n["durS"] * 0.5, n["durS"] - comp)
                 off = max(on + 1, int((n["onS"] + durS) * self.sr))
                 end = max(end, n["onS"] + n["durS"])
@@ -304,9 +306,16 @@ class Engine:
         instead of a Python->C++ crossing per 32-sample block.
         """
         out = np.zeros((2, frames), dtype=np.float32)
+        # patch loads and piece jumps land even while paused — the state
+        # poll must report what the user just asked for, not what was
+        # playing when they hit pause; only the audio waits
+        self._apply_pending()
+        if self.jump is not None:
+            self.load_piece(self.jump)
+            self.jump = None
+            self._apply_pending()
         if not self.playing:
             return out
-        self._apply_pending()
         done = 0
         while done < frames:
             if self.jump is not None:
@@ -411,29 +420,38 @@ class Engine:
         with self.sublock:
             self.subscribers.discard(q)
 
+    def _limit(self, mix):
+        """Peak meter (pre-limiter) + a simple riding limiter: browsers
+        hard-clip anything past 0 dBFS, which sounds like ring mod."""
+        peak = float(np.max(np.abs(mix))) if mix.size else 0.0
+        self.peak = max(peak, getattr(self, "peak", 0.0) * 0.94)
+        target = min(1.0, 0.89 / peak) if peak > 0.89 else 1.0
+        # instant attack, slow release
+        self._limiter_gain = min(
+            target, getattr(self, "_limiter_gain", 1.0) * 1.02)
+        g = min(self._limiter_gain, target)
+        applied = getattr(self, "_limiter_applied", 1.0)
+        if g < applied:
+            # attack must not ramp: a loud transient right after a quiet
+            # chunk would spend most of the chunk near the OLD (higher)
+            # gain and hard-clip — exactly what the limiter exists to stop
+            applied = g
+        if g < 1.0 or applied < 1.0:
+            # ramp the release across the chunk: a per-chunk gain STEP is
+            # itself an audible discontinuity when peaks hover near the
+            # ceiling
+            mix = mix * np.linspace(applied, g, mix.shape[1],
+                                    dtype=np.float32)[None, :]
+        self._limiter_applied = g
+        return mix
+
     def broadcaster(self):
         """Wall-clock-paced render loop feeding every /pcm listener."""
         period = CHUNK_FRAMES / self.sr
         deadline = time.monotonic()
-        limiter_gain = 1.0
-        applied = 1.0
         while True:
             chunk_tag = (self.piece_i, self.sample)
-            mix = self.render(CHUNK_FRAMES)
-            # peak meter (pre-limiter) + a simple riding limiter: browsers
-            # hard-clip anything past 0 dBFS, which sounds like ring mod.
-            peak = float(np.max(np.abs(mix))) if mix.size else 0.0
-            self.peak = max(peak, getattr(self, "peak", 0.0) * 0.94)
-            target = min(1.0, 0.89 / peak) if peak > 0.89 else 1.0
-            # fast attack, slow release
-            limiter_gain = min(target, limiter_gain * 1.02)
-            g = min(limiter_gain, target)
-            if g < 1.0 or applied < 1.0:
-                # ramp across the chunk: a per-chunk gain STEP is itself an
-                # audible discontinuity when peaks hover near the ceiling
-                mix = mix * np.linspace(applied, g, mix.shape[1],
-                                        dtype=np.float32)[None, :]
-            applied = g
+            mix = self._limit(self.render(CHUNK_FRAMES))
             data = mix.T.reshape(-1).astype("<f4").tobytes()  # interleaved
             with self.sublock:
                 self.history.append((chunk_tag, data))
@@ -573,9 +591,10 @@ class Player extends AudioWorkletProcessor {
     }
     this.gc();
     if (++this.stat >= 300){ this.stat = 0;
+      // written-but-unread: total counts every frame ever pushed and
+      // read is an absolute index, so the difference is the buffer
       this.port.postMessage({underruns:this.underruns, dropped:this.dropped,
-        buffered: this.total - Math.floor(this.read - this.base) -
-                  (this.base ? 0 : 0)});
+        buffered: this.total - Math.floor(this.read)});
     }
     return true;
   }
@@ -746,7 +765,7 @@ async function refresh(){
   if (div.childElementCount != STATE.parts.length){
     div.innerHTML = STATE.parts.map((p,i)=>`
       <div class=part><div class=row>
-        <b>${p.name}</b> <span class=patch id=pn${i}>${p.patch}</span>
+        <b id=nm${i}>${p.name}</b> <span class=patch id=pn${i}>${p.patch}</span>
       </div><div class=row>
         <button onclick=step(${i},-1)>◀</button>
         <select id=sel${i} onchange=setPatch(${i},this.value)>${opts()}</select>
@@ -757,6 +776,8 @@ async function refresh(){
       </div></div>`).join('');
   }
   STATE.parts.forEach((p,i)=>{
+    // names too: two pieces with the same voice count skip the rebuild
+    document.getElementById('nm'+i).textContent = p.name;
     document.getElementById('pn'+i).textContent = p.patch;
     document.getElementById('mute'+i).className = p.mute?'on':'';
     // keep the select showing what's actually loaded (piece changes and
@@ -796,6 +817,7 @@ def serve(engine, cats, host, port):
     allowed.add("(init)")
     ffmpeg_path = shutil.which("ffmpeg")
     opus_slots = threading.BoundedSemaphore(MAX_OPUS_CLIENTS)
+    pcm_slots = threading.BoundedSemaphore(MAX_PCM_CLIENTS)
 
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -967,13 +989,23 @@ def serve(engine, cats, host, port):
                     finally:
                         opus_slots.release()
             elif self.path == "/pcm":
-                self.send_response(200)
-                self.send_header("Content-Type", "application/octet-stream")
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Transfer-Encoding", "chunked")
-                self.end_headers()
-                q = engine.subscribe()
+                # same door policy as /opus: no cross-site pulls, and a
+                # cap — raw PCM is ~384 kB/s per listener
+                if not self._stream_allowed():
+                    self._json({"err": "cross-origin stream refused"}, 403)
+                    return
+                if not pcm_slots.acquire(blocking=False):
+                    self._json({"err": "live listener limit reached"}, 503)
+                    return
+                q = None
                 try:
+                    self.send_response(200)
+                    self.send_header("Content-Type",
+                                     "application/octet-stream")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Transfer-Encoding", "chunked")
+                    self.end_headers()
+                    q = engine.subscribe()
                     while True:
                         data = q.get()
                         self.wfile.write(
@@ -982,7 +1014,9 @@ def serve(engine, cats, host, port):
                 except (BrokenPipeError, ConnectionResetError, OSError):
                     pass
                 finally:
-                    engine.unsubscribe(q)
+                    if q is not None:
+                        engine.unsubscribe(q)
+                    pcm_slots.release()
             else:
                 self._json({"err": "not found"}, 404)
 
@@ -1038,7 +1072,7 @@ def main():
     ap.add_argument("--scl")
     ap.add_argument("--sr", type=int, default=48000)
     ap.add_argument("--port", type=int, default=8766)
-    ap.add_argument("--host", default="127.0.0.1",
+    ap.add_argument("--host", default=DEFAULT_HOST,
                     help="bind address (default loopback; 0.0.0.0 exposes "
                          "the unauthenticated control page to the LAN)")
     ap.add_argument("--local", action="store_true",

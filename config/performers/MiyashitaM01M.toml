@@ -22,6 +22,10 @@ rit_curve = 2       # Friberg–Sundberg q: 2 = stopping-runner braking curve
 tempo_step = 0.125  # curve granularity (eighth notes): smooth, not steppy
 fermata_hold = 1.75
 
+open_push = 0.06    # base fit (asap_eval 2026-08-31); not refit per performer
+open_span = 4.0
+boundary_ease = 0.0 # switched off by the base fit; code default would re-enable
+subject_push = 0.0  # did not survive the base fit; code default would re-enable
 cadence_depth = 0.0
 [phrasing]
 # KTH Punctuation via Quantz's placement rules: breathe at rests, after

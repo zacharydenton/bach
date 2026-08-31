@@ -213,6 +213,9 @@ def main():
             t_ref_true = integrate(tm_ref, wn)
             errs.append(abs(t_ref_est - t_ref_true))
         errs.sort()
+        if not errs:
+            sys.exit("no frames to score: the live render never "
+                     "overlaps the truth window")
         mean = sum(errs) / len(errs)
         med = errs[len(errs) // 2]
         p95 = errs[int(len(errs) * 0.95)]

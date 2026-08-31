@@ -57,6 +57,7 @@ applyInterps is st
   where
     manipulator i = case i of
       ISplit -> True; IMerge -> True; ITerminate -> True; IAdd -> True
+      IExchange -> True
       _ -> False
     live = [(pVoice p, pLane p) | p <- st]
     go _ [] = Right ([], 0)
@@ -77,6 +78,10 @@ applyInterps is st
         vs -> Left ("*v merges paths of different voices: " <> show vs)
     go used ((ITerminate, _) : rest) = go used rest
     go _ ((IAdd, _) : _) = Left "*+ (spine add) is not supported"
+    -- an active exchange swaps two spines' contents; absorbing it would
+    -- assign every later note in both spines to the wrong voice — the
+    -- worst silent failure a counterpoint compiler can have
+    go _ ((IExchange, _) : _) = Left "*x (spine exchange) is not supported"
     go used ((_, p) : rest) = cons p <$> go used rest
     cons p (ps, n) = (p : ps, n)
 

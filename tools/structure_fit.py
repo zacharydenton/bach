@@ -277,6 +277,10 @@ def main():
                 X, _, H, ours, mid = data[p]
                 mrs += rs_against(H, model.predict(widen(X)), mid)
                 crs += rs_against(H, ours, mid)
+            if not mrs:
+                print(f"gbm {gname}: no scorable performances "
+                      f"(sparse corpus/asap checkout?)")
+                continue
             print(f"gbm {gname}: middle r = {sum(mrs)/len(mrs):.3f} | "
                   f"compiler {sum(crs)/len(crs):.3f}")
         print("(human-human middle ceiling: 0.356)")
@@ -310,6 +314,10 @@ def main():
             pred = ((X - mu) / sd) @ beta
             model_rs += rs_against(H, pred, mid)
             comp_rs += rs_against(H, ours, mid)
+        if not model_rs:
+            print(f"{name}: no scorable performances "
+                  f"(sparse corpus/asap checkout?)")
+            return
         m = sum(model_rs) / len(model_rs)
         c = sum(comp_rs) / len(comp_rs)
         print(f"{name}: structural model middle r = {m:.3f} | "

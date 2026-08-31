@@ -15,6 +15,10 @@
 set -euo pipefail
 
 OUT=${1:?usage: render_showcase.sh OUTDIR}
+# resolve OUTDIR against the caller's cwd before moving to the repo root
+case "$OUT" in /*) ;; *) OUT=$PWD/$OUT ;; esac
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+cd "$ROOT"
 SURGEPY_DIR=${SURGEPY_DIR:-$HOME/.local/share/otb/surgepy}
 VENV=${VENV:-.venv-audition}
 FP=/usr/share/surge-xt/patches_factory
@@ -31,14 +35,21 @@ PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1p01.json" \
 
 # Fugue: the canonical voicing lives in config/casting/wtc1f01.json —
 # the same file the patchboard preloads. One source, two consumers.
-CAST_ARGS=()
-while IFS= read -r line; do
-  CAST_ARGS+=(--patch-ch "$line")
-done < <("$PY" -c "
+# A plain $(...) rather than a process substitution: a failure inside
+# < <(...) is invisible to set -e and the fugue would silently render
+# on the init patch.
+CASTING=config/casting/wtc1f01.json
+[ -r "$CASTING" ] || { echo "missing casting file: $ROOT/$CASTING" >&2; exit 1; }
+CAST_LINES=$("$PY" -c "
 import json
-c = json.load(open('config/casting/wtc1f01.json'))
+c = json.load(open('$CASTING'))
 for k, v in sorted(c.items()):
     if k.isdigit():
         print(f'{k}:{v}')")
+[ -n "$CAST_LINES" ] || { echo "no channel entries in $CASTING" >&2; exit 1; }
+CAST_ARGS=()
+while IFS= read -r line; do
+  CAST_ARGS+=(--patch-ch "$line")
+done <<< "$CAST_LINES"
 PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1f01.json" \
   --scl "$OUT/w3.scl" -o "$OUT/wtc1f01_surge_cast.wav" "${CAST_ARGS[@]}"
