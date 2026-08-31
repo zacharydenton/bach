@@ -117,7 +117,9 @@ tempoMap ag arches easings subjSpans steps holds (Bpm base) end
   | otherwise = thin [(t, Bpm (base * factor t)) | t <- gridPts]
   where
     -- hold boundaries join the grid so a rest shorter than the step
-    -- still gets its span, exactly
+    -- still gets its span, exactly. (Trailing silence is not a grid
+    -- concern: the piece's full extent rides 'perfEnd' into the SMF
+    -- End-of-Track.)
     gridPts =
       sort . nub $
         takeWhile (< end) (iterate (+ agTempoStep ag) 0)
@@ -128,11 +130,13 @@ tempoMap ag arches easings subjSpans steps holds (Bpm base) end
                           * easeF t * openF t * subjF t * stepF t
                           * driftF t * holdF t * ritF t)
     -- fermata on a rest: the silence breathes — everything after is
-    -- pushed, globally, which a duration stretch cannot do
-    holdF t =
-      product
-        [ 1 / realToFrac (max 1 (agFermataHold ag))
-        | (a, d) <- holds, d > 0, t >= a, t < a + d ]
+    -- pushed, globally, which a duration stretch cannot do. ONE hold, no
+    -- matter how many spines notate it (wtc2p07's final bar carries ;
+    -- in both resting spines): covered-or-not, never a product
+    holdF t
+      | any (\(a, d) -> d > 0 && t >= a && t < a + d) holds =
+          1 / realToFrac (max 1 (agFermataHold ag))
+      | otherwise = 1
     arch depth0 a b t
       | depth <= 0 || b <= a || t < a || t > b = 1
       | otherwise =

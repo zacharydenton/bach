@@ -24,13 +24,17 @@ import OTB.Player (PerfNote (..), Performance (..))
 import OTB.Units (Bpm (..), Seconds (..), WholeNotes (..), secondsAt)
 
 renderJson :: String -> Performance -> String
-renderJson piece (Performance tmap tracks whys cads) =
+renderJson piece (Performance tmap tracks whys cads end) =
   obj
     -- through the JSON escaper, not Haskell show: show writes \233-style
     -- escapes for non-ASCII, which is not legal JSON
     [ ("piece", str piece)
     , ("cadences", arr [num (fromRational c) | WholeNotes c <- cads])
     , ("tempoMap", arr (map tempoJson tmap))
+    -- the piece's full extent — past the last note-off when a held
+    -- silence closes the piece; renderers should run out the clock
+    , ("endWn", num (fromRational (let WholeNotes e = end in e)))
+    , ("endS", num (let Seconds s = secondsAt tmap end in s))
     , ("tracks", arr (map trackJson tracks))
     ]
   where

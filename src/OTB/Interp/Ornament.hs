@@ -31,7 +31,7 @@ module OTB.Interp.Ornament
   , realizeGraceLane
   ) where
 
-import Data.Ratio (approxRational, numerator)
+import Data.Ratio (approxRational)
 import OTB.Interp.Express (setDur)
 import OTB.Kern.Token (Mark (..))
 import OTB.Score (ScoreNote (..))
@@ -113,11 +113,11 @@ realizeGraceLane op (Bpm bpm) ns
           k = length gs
           g | opGraceLong op && k == 1 =
                 -- the long appoggiatura: half the main note, two thirds
-                -- of a dotted one (numerator 3 when reduced = dotted)
-                if dotted (snDur y) then snDur y * 2 / 3 else snDur y / 2
+                -- of a dotted one — dottedness is NOTATION (snDots), not
+                -- duration: a triplet breve is also 3/2 but is not dotted
+                if snDots y >= 1 then snDur y * 2 / 3 else snDur y / 2
             | otherwise = min graceWn (snDur y / fromIntegral (2 * k))
           stolen = g * fromIntegral k
-          dotted (WholeNotes r) = numerator r == 3
       (gs, []) ->
         [ place gr (snOnset gr + graceWn * fromIntegral i) graceWn
         | (i, gr) <- zip [0 :: Int ..] gs ]

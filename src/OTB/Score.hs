@@ -41,12 +41,16 @@ data ScoreNote = ScoreNote
     -- ^ the notation behind 'snPitch', when the note came from kern
     -- (generated scores and ornament auxiliaries carry none). Never
     -- present with a contradicting 'snPitch'.
+  , snDots :: !Int
+    -- ^ the opening token's notated augmentation dots — retained
+    -- because duration cannot recover them (a dotted whole and a
+    -- triplet breve are both 3/2). The long appoggiatura reads this.
   }
   deriving (Eq, Show)
 
 -- | An untied note on lane 0: one segment carrying all the marks.
 scoreNote :: WholeNotes -> WholeNotes -> Int -> [Mark] -> ScoreNote
-scoreNote t d p ms = ScoreNote t d p ms 0 [(d, ms)] (t, p) Nothing
+scoreNote t d p ms = ScoreNote t d p ms 0 [(d, ms)] (t, p) Nothing 0
 
 data Voice = Voice
   { vIndex :: !Int -- ^ original top-level spine index

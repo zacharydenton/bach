@@ -157,21 +157,21 @@ noteTok :: Int -> Int -> WholeNotes -> PSt -> NoteTok -> PSt
 -- the Grace mark — realisation (on the beat, stealing from the main
 -- note) is interpretation and lives in the Player. A pitchless
 -- zero-duration token has nothing to realise; that loss is still counted.
-noteTok voice lane onset st (NoteTok d mpit mspell _ marks)
+noteTok voice lane onset st (NoteTok d _ mpit mspell _ marks)
   | d <= 0 = case mpit of
       Just pit
         | Grace `elem` marks ->
             let g = ScoreNote onset 0 pit marks lane [(0, marks)] (onset, pit)
-                      mspell
+                      mspell 0
              in st {psDone = Map.insertWith (<>) voice [g] (psDone st)}
       _ -> st {psGrace = psGrace st + 1}
 -- rest: clock already advanced. A fermata on a rest has no note to
 -- stretch — its (onset, dur) span is recorded for the Player, which
 -- realises the hold through the tempo map
-noteTok _ _ onset st (NoteTok d Nothing _ _ marks)
+noteTok _ _ onset st (NoteTok d _ Nothing _ _ marks)
   | Fermata `elem` marks = st {psRestHolds = (onset, d) : psRestHolds st}
   | otherwise = st
-noteTok voice lane onset st (NoteTok d (Just pit) mspell tie marks) =
+noteTok voice lane onset st (NoteTok d dots (Just pit) mspell tie marks) =
   case tie of
     TieNone -> emit fresh
     TieOpen ->
@@ -204,7 +204,8 @@ noteTok voice lane onset st (NoteTok d (Just pit) mspell tie marks) =
     -- The MIDI fallback only serves tokens without spelling, which the
     -- lexer never produces for pitched notes.
     key = (voice, maybe pit spDegree mspell)
-    fresh = ScoreNote onset d pit marks lane [(d, marks)] (onset, pit) mspell
+    fresh =
+      ScoreNote onset d pit marks lane [(d, marks)] (onset, pit) mspell dots
     ornamented = any isOrnamentMark marks
     -- a continuation/close token adds a segment with *its own* marks; the
     -- union in snMarks is for marks that describe the whole note (slurs,

@@ -57,7 +57,7 @@ lexTempo t = case TR.double t of
 
 -- | One note within a data field.
 lexNoteTok :: Text -> NoteTok
-lexNoteTok tok = NoteTok dur pit spell tie marks
+lexNoteTok tok = NoteTok dur dots pit spell tie marks
   where
     cs = T.unpack tok
     -- the duration prefix in char-bag order: digits plus the extended

@@ -722,7 +722,7 @@ review = testGroup "review regressions"
       -- the off<on sort order would emit the release BEFORE its own
       -- attack — a stuck note on the default (non-hardware) path
       let tiny = PerfNote 0 (1 / 16384) 60 96 8192 0 0 0 0
-          p = Performance [(0, Bpm 120)] [[tiny]] [] []
+          p = Performance [(0, Bpm 120)] [[tiny]] [] [] (1 / 4)
       notes <- either assertFailure pure (readSmf (BL.toStrict (renderSmf p)))
       [(smfPitch n, smfDurQ n > 0) | n <- notes] @?= [(60, True)]
   , testCase "parser: cross-spine tie continuation keeps the sound" $ do
@@ -755,29 +755,62 @@ review = testGroup "review regressions"
       -- every other agogic layer zeroed: the curve must be base tempo
       -- everywhere except the rest's span, where it divides by the hold
       let src = T.unlines ["**kern", "4c", "4r;", "4c", "*-"]
-          interp = defaultInterp
-            { iAgogics = defaultAgogicParams
-                { agRitSpan = 0, agOpenPush = 0, agCadenceDepth = 0
-                , agBoundaryEase = 0, agSubjectPush = 0 }
-            , iExpress = defaultExpressParams
-                {exExpression = 0, exEnsemble = 0}
-            }
-      case parseKern (Bpm 120) src >>= perform interp of
+      case parseKern (Bpm 120) src >>= perform calmInterp of
         Left e -> assertFailure e
         Right p -> do
           let tm = perfTempoMap p
-              at t = snd (last (takeWhile ((<= t) . fst) tm))
-              Bpm held = at (3 / 8) -- mid-rest
-              Bpm before = at (1 / 8)
-              Bpm after = at (5 / 8)
+              Bpm held = tempoAt tm (3 / 8) -- mid-rest
+              Bpm before = tempoAt tm (1 / 8)
+              Bpm after = tempoAt tm (5 / 8)
               hold = fromRational (agFermataHold defaultAgogicParams)
           assertBool ("held " <> show held) (abs (held - 120 / hold) < 0.01)
           assertBool ("before " <> show before) (abs (before - 120) < 0.01)
           assertBool ("after " <> show after) (abs (after - 120) < 0.01)
+  , testCase "rest fermata: one hold, however many spines notate it" $ do
+      -- wtc2p07's final bar carries ; in BOTH resting spines: covered-or-
+      -- not semantics, never a product of spans
+      let src = T.unlines
+            [ "**kern\t**kern", "4c\t4e", "4r;\t4r;", "4c\t4e", "*-\t*-" ]
+      case parseKern (Bpm 120) src >>= perform (calmInterp) of
+        Left e -> assertFailure e
+        Right p -> do
+          let Bpm held = tempoAt (perfTempoMap p) (3 / 8)
+              hold = fromRational (agFermataHold defaultAgogicParams)
+          assertBool ("held once, not squared: " <> show held)
+            (abs (held - 120 / hold) < 0.01)
+  , testCase "rest fermata: a concurrent note fermata is the same event" $ do
+      -- wtc1p21: 8bb-; against 8r; — the note's own hold carries it; the
+      -- global span must not double it
+      let src = T.unlines
+            [ "**kern\t**kern", "4c\t4e", "4c;\t4r;", "4c\t4e", "*-\t*-" ]
+      case parseKern (Bpm 120) src >>= perform (calmInterp) of
+        Left e -> assertFailure e
+        Right p -> do
+          let Bpm held = tempoAt (perfTempoMap p) (3 / 8)
+          assertBool ("tempo untouched (note hold owns it): " <> show held)
+            (abs (held - 120) < 0.01)
+  , testCase "rest fermata: a trailing held silence stays in the piece" $ do
+      -- wtc2p07 ends on an all-rest held bar AFTER the last sounding
+      -- note: the curve's domain must extend through it
+      let src = T.unlines ["**kern", "4c", "4r;", "*-"]
+      case parseKern (Bpm 120) src >>= perform (calmInterp) of
+        Left e -> assertFailure e
+        Right p -> do
+          let tm = perfTempoMap p
+              Bpm held = tempoAt tm (3 / 8)
+              hold = fromRational (agFermataHold defaultAgogicParams)
+          assertBool ("held in the silence: " <> show held)
+            (abs (held - 120 / hold) < 0.01)
+          -- the piece's extent includes the held silence, and the SMF
+          -- End-of-Track lands there (the file does not stop at the
+          -- last note-off)
+          perfEnd p @?= 1 / 2
   , testCase "lexer: longa and rational reciprocals" $ do
       ntDur (lexNoteTok "0c") @?= 2 -- breve
       ntDur (lexNoteTok "00c") @?= 4 -- longa, not a second breve
       ntDur (lexNoteTok "2%3c") @?= 3 / 2 -- triplet breve, not recip 23
+      ntDots (lexNoteTok "8.e") @?= 1 -- notated dots retained
+      ntDots (lexNoteTok "2%3c") @?= 0 -- same 3/2 shape, not dotted
   , testCase "lexer: O and z are retained marks, not dropped" $
       ntMarks (lexNoteTok "4cOz") @?= [GenericOrn, Sforzando]
   , testCase "trill: acceleration is a spin-up window, not a runaway" $ do
@@ -828,9 +861,13 @@ review = testGroup "review regressions"
       -- plain main: half
       run [g 0, scoreNote 0 (1 / 4) 72 []]
         @?= [(0, 1 / 8), (1 / 8, 1 / 8)]
-      -- dotted main: two thirds
-      run [g 0, scoreNote 0 (3 / 8) 72 []]
+      -- dotted main: two thirds — dottedness read from snDots (notation)
+      run [g 0, (scoreNote 0 (3 / 8) 72 []) {snDots = 1}]
         @?= [(0, 1 / 4), (1 / 4, 1 / 8)]
+      -- same 3/8 duration UNdotted (a triplet value): plain half — the
+      -- rational alone cannot distinguish, the notation must
+      run [g 0, scoreNote 0 (3 / 8) 72 []]
+        @?= [(0, 3 / 16), (3 / 16, 3 / 16)]
       -- a run of graces (slide) stays short even in long mode
       let out = run [g 0, g 0, scoreNote 0 (1 / 4) 72 []]
       sum (map snd out) @?= 1 / 4
@@ -941,6 +978,15 @@ review = testGroup "review regressions"
         Right t -> t @?= equalTable
   ]
   where
+    -- every non-fermata agogic layer zeroed, expression off: tempo maps
+    -- in these tests are base everywhere except what the test creates
+    calmInterp = defaultInterp
+      { iAgogics = defaultAgogicParams
+          { agRitSpan = 0, agOpenPush = 0, agCadenceDepth = 0
+          , agBoundaryEase = 0, agSubjectPush = 0 }
+      , iExpress = defaultExpressParams {exExpression = 0, exEnsemble = 0}
+      }
+    tempoAt tm t = snd (last (takeWhile ((<= t) . fst) tm))
     nubOrd = map head' . groupBy (==) . sort
     head' (x : _) = x
     head' [] = error "impossible"

@@ -78,6 +78,10 @@ data Mark
 
 data NoteTok = NoteTok
   { ntDur :: !WholeNotes    -- ^ from reciprocal + dots
+  , ntDots :: !Int
+    -- ^ notated augmentation dots. Retained because duration cannot
+    -- recover them: a dotted whole and a triplet breve (@2%3@) are the
+    -- same rational
   , ntPitch :: !(Maybe Int) -- ^ MIDI note number; Nothing = rest
   , ntSpell :: !(Maybe Spelled)
     -- ^ the notation behind 'ntPitch' — present exactly when the pitch is

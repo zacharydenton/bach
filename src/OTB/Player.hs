@@ -41,6 +41,7 @@ import OTB.Interp
 import OTB.Interp.Agogics (AgogicParams (..), tempoMap)
 import OTB.Interp.Express
 import OTB.Interp.Ornament (realizeGraceLane)
+import OTB.Kern.Token (Mark (Fermata))
 import OTB.Score
 import OTB.Tuning (adaptiveCents, bendValue, offsetFor)
 import OTB.Units (Cents (..))
@@ -67,6 +68,10 @@ data Performance = Performance
   , perfTracks :: [[PerfNote]] -- ^ one track per voice, onset-sorted
   , perfWhys :: [((Int, Int), [Why])] -- ^ (channel, index) -> provenance; lazy
   , perfCadences :: [WholeNotes] -- ^ V-I arrivals (harmony model), notated
+  , perfEnd :: !WholeNotes
+    -- ^ the piece's full notated extent — past the last note-off when a
+    -- held silence closes the piece (wtc2p07). The SMF End-of-Track
+    -- lands here, so trailing silence survives into the artifact.
   }
 
 -- ---------------------------------------------------------------------
@@ -222,7 +227,7 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
     else Right (assemble ip tempo tmap finalOnset melodyVi
                   (floorAt, floorAnyAt)
                   (hRootAt harm, hStabilityAt harm)
-                  (hCadences harm) tracks)
+                  (hCadences harm) fullEnd tracks)
   where
     ex = iExpress ip
     usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
@@ -316,11 +321,27 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
         go s e (x : xs) | x - e <= 1 / 2 = go s x xs
         go s e xs = (s, e + 1 / 4) : spansOf xs
 
+    -- a rest fermata that coincides with a fermata-marked NOTE is the
+    -- same musical event notated per-spine (wtc1p21: 8bb-; against 8r;):
+    -- the note's own hold carries it, so the global span is dropped.
+    -- What survives is silence-only holds — and a trailing one (wtc2p07
+    -- ends on a held all-rest bar) extends the curve's domain past the
+    -- last sounding note, so the piece ends through its held silence
+    -- rather than before it.
+    restHolds =
+      [ (a, d)
+      | (a, d) <- scRestHolds score
+      , not (any (\n -> Fermata `elem` snMarks n
+                          && snOnset n < a + d
+                          && a < snOnset n + snDur n)
+               (concatMap vNotes voices)) ]
+    fullEnd = maximum (end : [a + d | (a, d) <- restHolds])
+
     -- curve -> conductor Music -> derived map: the conductor is the
     -- carrier, deriveTempoMap the single reader
     curve = tempoMap (iAgogics ip) arches easings subjSpans noveltySteps
-              (scRestHolds score) tempo end
-    conductor = annotateConductor curve tempo end
+              restHolds tempo fullEnd
+    conductor = annotateConductor curve tempo fullEnd
     tmap = deriveTempoMap tempo conductor
 
     meanPitch v =
@@ -361,13 +382,14 @@ assemble
   :: Interp -> Bpm -> [(WholeNotes, Bpm)] -> WholeNotes -> Int
   -> (Int -> WholeNotes -> Bool, WholeNotes -> Bool)
   -> (WholeNotes -> Maybe Int, WholeNotes -> Double) -> [WholeNotes]
-  -> [[(Rational, Rational, Ev)]] -> Performance
+  -> WholeNotes -> [[(Rational, Rational, Ev)]] -> Performance
 assemble ip tempo tmap finalOnset melodyVi (floorAt, floorAny)
-         (rootAt, stabAt) cads trs =
+         (rootAt, stabAt) cads fullEnd trs =
   Performance tmap
     (map enforceMono (rollFinal perturbed))
     (concatMap (map snd) whysed)
     cads
+    fullEnd
   where
     ex = iExpress ip
     seed = seedOf (iPiece ip)

@@ -28,9 +28,11 @@ writeSmf fp = BL.writeFile fp . renderSmf
 -- | Pure render: the artifact is a function of the Performance alone, so
 -- determinism is assertable at the byte level (and a hash names a take).
 renderSmf :: Performance -> BL.ByteString
-renderSmf (Performance tmap tracks _ _) =
+renderSmf (Performance tmap tracks _ _ end) =
   toLazyByteString $
-    header (1 + length tracks) <> tempoTrack tmap <> foldMap voiceTrack tracks
+    header (1 + length tracks)
+      <> tempoTrack tmap end
+      <> foldMap voiceTrack tracks
 
 header :: Int -> Builder
 header ntrks =
@@ -40,18 +42,25 @@ header ntrks =
     <> word16BE (fromIntegral ntrks)
     <> word16BE (fromIntegral ticksPerQuarter)
 
-trackChunk :: Builder -> Builder
-trackChunk body =
+-- | @endDelta@ is the tick gap between the last event and End-of-Track:
+-- 0 for voice tracks, but the conductor's EOT lands on the piece's full
+-- extent, so a trailing held silence (wtc2p07) survives into the file.
+trackChunk :: Int -> Builder -> Builder
+trackChunk endDelta body =
   let bs = BL.toStrict (toLazyByteString (body <> endOfTrack))
    in byteString "MTrk" <> word32BE (fromIntegral (BS.length bs)) <> byteString bs
   where
-    endOfTrack = vlq 0 <> word8 0xFF <> word8 0x2F <> word8 0x00
+    endOfTrack = vlq (max 0 endDelta) <> word8 0xFF <> word8 0x2F <> word8 0x00
 
 -- | The conductor lane: one tempo meta per curve point. Track 0 is
 -- entirely generated output — agogics live here.
-tempoTrack :: [(WholeNotes, Bpm)] -> Builder
-tempoTrack tmap = trackChunk (go 0 tmap)
+tempoTrack :: [(WholeNotes, Bpm)] -> WholeNotes -> Builder
+tempoTrack tmap end = trackChunk (endT - lastT) (go 0 tmap)
   where
+    Ticks endT = toTicks end
+    lastT = case tmap of
+      [] -> 0
+      _ -> let Ticks t = toTicks (fst (last tmap)) in t
     go _ [] = mempty
     go prev ((w, Bpm bpm) : rest') =
       let Ticks t = toTicks w
@@ -68,7 +77,7 @@ tempoTrack tmap = trackChunk (go 0 tmap)
         <> word8 (fromIntegral (v .&. 0xFF))
 
 voiceTrack :: [PerfNote] -> Builder
-voiceTrack notes = trackChunk (deltas 0 events)
+voiceTrack notes = trackChunk 0 (deltas 0 events)
   where
     -- same-tick order is fixed as off (0) < bend (1) < on (2): releases
     -- clear the channel, then the new note's temperament lands, then the

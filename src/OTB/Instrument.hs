@@ -88,7 +88,7 @@ hardwareChannel voice = case voice of
 -- Provenance is rekeyed to the new (channel, index) identities; dropped
 -- notes lose theirs. More voices than seats is an error.
 hardwareTracks :: Performance -> Either String (Performance, Int)
-hardwareTracks (Performance tmap tracks whys cads) = do
+hardwareTracks (Performance tmap tracks whys cads end) = do
   seated <- sequence
     [ (\(hw, _) -> [((pnChannel n, pnIndex n), remap hw n) | n <- tr])
         <$> hardwareChannel vi
@@ -103,7 +103,7 @@ hardwareTracks (Performance tmap tracks whys cads) = do
                <> " (velocity-blind channel)")
             "CPE Bach 1753; harpsichord practice"
         | pnChannel n == 4, pnCharge n > 0 ]
-  pure (Performance tmap (map (map snd) reduced) whys' cads, sum counts)
+  pure (Performance tmap (map (map snd) reduced) whys' cads end, sum counts)
   where
     remap hw n =
       let vel = case hw of
