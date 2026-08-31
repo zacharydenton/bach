@@ -54,8 +54,11 @@ findImitation s = Imitation
       [ (t1, t2 + barLenAt t2 / 2) | (t2, _, _, t1) <- events ])
   }
   where
-    voices' = zip [0 ..] [dedupe (sortOn snOnset (vNotes v))
-                         | v <- scVoices s]
+    -- zero-duration graces are ornamental, not motivic material
+    voices' =
+      zip [0 ..]
+        [ dedupe (sortOn snOnset (filter ((> 0) . snDur) (vNotes v)))
+        | v <- scVoices s ]
     dedupe (a : b : more)
       | snOnset a == snOnset b = dedupe (a : more)
       | otherwise = a : dedupe (b : more)

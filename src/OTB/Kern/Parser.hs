@@ -148,8 +148,17 @@ dataField st (p, FData toks)
 dataField st _ = st
 
 noteTok :: Int -> Int -> WholeNotes -> PSt -> NoteTok -> PSt
--- grace notes (zero duration): not realised yet — dropped, but counted
-noteTok _ _ _ st (NoteTok d _ _ _) | d <= 0 = st {psGrace = psGrace st + 1}
+-- grace notes (zero duration): retained as zero-duration notes carrying
+-- the Grace mark — realisation (on the beat, stealing from the main
+-- note) is interpretation and lives in the Player. A pitchless
+-- zero-duration token has nothing to realise; that loss is still counted.
+noteTok voice lane onset st (NoteTok d mpit _ marks)
+  | d <= 0 = case mpit of
+      Just pit
+        | Grace `elem` marks ->
+            let g = ScoreNote onset 0 pit marks lane [(0, marks)] (onset, pit)
+             in st {psDone = Map.insertWith (<>) voice [g] (psDone st)}
+      _ -> st {psGrace = psGrace st + 1}
 -- rest: clock already advanced. A fermata on a rest cannot be realised
 -- (the model has no rests), so the dropped hold is counted, not silent
 noteTok _ _ _ st (NoteTok _ Nothing _ marks)

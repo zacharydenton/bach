@@ -44,7 +44,8 @@ subjectEntries s =
         | v <- scVoices s
         , entry <- entriesIn subj (mono v) ]
   where
-    mono v = dedupe (sortOn snOnset (vNotes v))
+    -- zero-duration graces are ornamental, not part of the subject
+    mono v = dedupe (sortOn snOnset (filter ((> 0) . snDur) (vNotes v)))
     -- sub-spine chords: keep the first note per onset — the line
     dedupe (a : b : more)
       | snOnset a == snOnset b = dedupe (a : more)

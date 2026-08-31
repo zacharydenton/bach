@@ -763,6 +763,54 @@ review = testGroup "review regressions"
       assertBool "still accelerates" (head ds > last ds)
       assertBool ("first/last ratio: " <> show (maximum ds / minimum ds))
         (maximum ds / minimum ds < 2.5)
+  , testCase "grace: lexed as a zero-duration Grace-marked note" $ do
+      let t' = lexNoteTok "cc#q/"
+      ntDur t' @?= 0
+      assertBool "carries Grace" (Grace `elem` ntMarks t')
+  , testCase "grace: parser retains it; nothing dropped" $ do
+      let src = T.unlines ["**kern", "ccq", "4c", "*-"]
+      case parseKern (Bpm 72) src of
+        Left e -> assertFailure e
+        Right s -> do
+          scGraceDropped s @?= 0
+          [ (snDur n, snPitch n, Grace `elem` snMarks n)
+            | v <- scVoices s, n <- vNotes v ]
+            @?= [(0, 72, True), (1 / 4, 60, False)]
+  , testCase "grace: realised on the beat, stealing from the main note" $ do
+      -- C.P.E. Bach: the Vorschlag falls ON the beat; 70 ms at 96 bpm
+      -- is 7/250 wn, well under half the quarter
+      let g = scoreNote (1 / 4) 0 74 [Grace]
+          m = scoreNote (1 / 4) (1 / 4) 72 []
+          out = realizeGraceLane defaultOrnamentParams (Bpm 96) [g, m]
+      [(snOnset n, snDur n, snPitch n) | n <- out]
+        @?= [ (1 / 4, 7 / 250, 74)
+            , (1 / 4 + 7 / 250, 1 / 4 - 7 / 250, 72) ]
+      sum (map snDur out) @?= 1 / 4 -- stolen, not added
+      assertBool "Grace mark consumed"
+        (all (notElem Grace . snMarks) out)
+  , testCase "grace: never takes more than half a short main note" $ do
+      let g = scoreNote 0 0 74 [Grace]
+          m = scoreNote 0 (1 / 64) 72 []
+          out = realizeGraceLane defaultOrnamentParams (Bpm 96) [g, m]
+      map snDur out @?= [1 / 128, 1 / 128]
+  , testCase "grace: dangling at lane end still speaks" $ do
+      let g = scoreNote (1 / 2) 0 74 [Grace]
+          out = realizeGraceLane defaultOrnamentParams (Bpm 96) [g]
+      [(snOnset n, snDur n) | n <- out] @?= [(1 / 2, 7 / 250)]
+  , testCase "grace: wtc2p13's four graces survive parse and perform" $ do
+      present <- doesDirectoryExist corpusDir
+      if not present then pure () else do
+        src <- TIO.readFile (corpusDir </> "wtc2p13.krn")
+        s <- either (assertFailure . ("parse: " <>)) pure
+               (parseKern (Bpm 72) src)
+        scGraceDropped s @?= 0
+        length [ n | v <- scVoices s, n <- vNotes v
+               , Grace `elem` snMarks n ] @?= 4
+        p <- either (assertFailure . ("perform: " <>)) pure
+               (perform defaultInterp s)
+        -- realised: every performed note has width
+        assertBool "no zero-duration notes reach the performance"
+          (all (\n -> pnDur n > 0) (concat (perfTracks p)))
   , testCase "scl: a bare integer is a ratio (2 = the octave)" $ do
       let scl = T.unlines $
             ["! t", "t", "12", "!"]

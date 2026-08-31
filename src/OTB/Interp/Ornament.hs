@@ -28,8 +28,11 @@ module OTB.Interp.Ornament
   , defaultOrnamentParams
   , realizeLane
   , realizeNote
+  , realizeGraceLane
   ) where
 
+import Data.Ratio (approxRational)
+import OTB.Interp.Express (setDur)
 import OTB.Kern.Token (Mark (..))
 import OTB.Score (ScoreNote (..))
 import OTB.Units (Bpm (..), WholeNotes (..))
@@ -42,6 +45,8 @@ data OrnamentParams = OrnamentParams
   , opTermination :: !Bool
     -- ^ long trills close with a Nachschlag (lower turn into the main
     -- note) per C.P.E. Bach's Versuch, Tab. IV
+  , opGraceMs :: !Double
+    -- ^ wall-clock length of a realised grace note (the short Vorschlag)
   }
   deriving (Show, Eq)
 
@@ -50,6 +55,7 @@ defaultOrnamentParams = OrnamentParams
   { opTrillRate = 12
   , opTrillAccel = 1.08
   , opTermination = True
+  , opGraceMs = 70
   }
 
 -- | One subnote's duration in whole notes, from the wall-clock rate at
@@ -60,6 +66,50 @@ stepWn op (Bpm bpm) =
 
 realizeLane :: OrnamentParams -> Bpm -> [ScoreNote] -> [ScoreNote]
 realizeLane op bpm = concatMap (realizeNote op bpm)
+
+-- | Grace realisation, C.P.E. Bach's rule (Versuch I.2): graces fall ON
+-- the beat and take their time from the note they ornament. A run of
+-- graces before a lane successor becomes short on-beat subnotes at the
+-- main note's onset; the main note is delayed and shortened by their
+-- total, never losing more than half of itself. This is the short
+-- Vorschlag only — the long appoggiatura (half the main note, Versuch
+-- I.2.§11) is a per-piece stylistic decision awaiting a config knob.
+--
+-- A grace with no lane successor keeps the wall-clock length: there is
+-- nothing to steal from, but the note was written and must speak.
+realizeGraceLane :: OrnamentParams -> Bpm -> [ScoreNote] -> [ScoreNote]
+realizeGraceLane op (Bpm bpm) ns
+  | graceWn <= 0 = filter ((> 0) . snDur) ns -- hostile rate: keep the reals
+  | otherwise = go ns
+  where
+    -- bpm/240 wholes per second (see 'stepWn'), times the grace seconds.
+    -- approxRational, not toRational: raw Double rationals carry 2^52-ish
+    -- denominators that blow up downstream arithmetic (see leanGate)
+    graceWn =
+      WholeNotes (approxRational (opGraceMs op / 1000 * bpm / 240) 1e-9)
+    isGraceNote n = snDur n <= 0 && Grace `elem` snMarks n
+    place gr t g =
+      let ms = filter (/= Grace) (snMarks gr)
+       in gr {snOnset = t, snDur = g, snMarks = ms, snSegs = [(g, ms)]}
+    go xs = case break (not . isGraceNote) xs of
+      ([], []) -> []
+      ([], y : ys) -> y : go ys
+      (gs, y : ys)
+        -- a zero-duration successor (cannot occur from the parser) has
+        -- nothing to give; drop the graces rather than emit zero widths
+        | g <= 0 -> y : go ys
+        | otherwise ->
+            [ place gr (snOnset y + g * fromIntegral i) g
+            | (i, gr) <- zip [0 :: Int ..] gs ]
+              <> ((setDur (snDur y - stolen) y) {snOnset = snOnset y + stolen}
+                    : go ys)
+        where
+          k = length gs
+          g = min graceWn (snDur y / fromIntegral (2 * k))
+          stolen = g * fromIntegral k
+      (gs, []) ->
+        [ place gr (snOnset gr + graceWn * fromIntegral i) graceWn
+        | (i, gr) <- zip [0 :: Int ..] gs ]
 
 -- | One note: identity when unornamented, subnotes when marked. The
 -- interpreter's entry point once ornaments became annotations.

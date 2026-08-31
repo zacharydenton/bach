@@ -113,7 +113,7 @@ loadConfig src = do
       where
         bad want = Just ("[" <> T.unpack sect <> "] " <> T.unpack k <> " = "
                            <> show v <> ": must be " <> want)
-    positive = ["tempo_step", "trill_rate", "bend_range", "tempo"]
+    positive = ["tempo_step", "trill_rate", "grace_ms", "bend_range", "tempo"]
     nonNegative =
       [ "rit_span", "rit_curve", "expression", "ensemble", "lead_ms", "roll_ms"
       , "jitter_ms", "jitter_vel", "dis_vel", "dis_lean", "arch_piece"
@@ -185,6 +185,7 @@ ornamentsFor cfg piece dflt =
         , opTrillAccel = maybe (opTrillAccel p) id (Map.lookup "trill_accel" m)
         , opTermination = maybe (opTermination p) (> 0.5)
             (Map.lookup "trill_termination" m)
+        , opGraceMs = maybe (opGraceMs p) id (Map.lookup "grace_ms" m)
         }
 
 -- | Dynamic parameters from @[dynamics]@ overlaid with @[piece.<name>]@.

@@ -96,10 +96,9 @@ listeners; the LAN button keeps using the uncompressed browser path.
 
 ## Status
 
-M0–M5 land (spine to sound, articulation, temperament, agogics, ornaments,
-dynamics, the expressive layer) plus the M6a/b audition path. Still open:
-M6 proper (instrument capability classes, the hardware rig) and grace-note
-realisation (the parser counts what it drops). The design document lives
-outside this repo.
+M0–M5 land (spine to sound, articulation, temperament, agogics, ornaments
+including grace notes, dynamics, the expressive layer) plus the M6a/b
+audition path. Still open: M6 proper (instrument capability classes, the
+hardware rig). The design document lives outside this repo.
 
 License: GPL-2.0-or-later.

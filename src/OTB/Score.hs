@@ -62,8 +62,10 @@ data Score = Score
     -- ^ meter map: each @*M@ record as (onset, (numerator, denominator)),
     -- onset-ascending; metrical dynamics degrade gracefully when empty
   , scGraceDropped :: !Int
-    -- ^ zero-duration (grace) tokens the parser skipped. Not realised yet;
-    -- counted so the loss is visible rather than silent.
+    -- ^ zero-duration tokens with no pitch to realise (grace rests and
+    -- malformed graces) — pitched graces are retained as zero-duration
+    -- 'Grace'-marked notes and realised by the Player. Counted so the
+    -- residual loss stays visible rather than silent.
   , scRestHolds :: !Int
     -- ^ fermatas sitting on rests. The model has no rest to hang them on,
     -- so the hold is not realised — counted so the loss is visible.

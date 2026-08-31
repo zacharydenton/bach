@@ -68,6 +68,9 @@ data Mark
                     --   unrealised (realising it would need the scale
                     --   inference this module's convention avoids)
   | Sforzando       -- ^ @z@
+  | Grace           -- ^ @q@\/@Q@ — grace note: zero notated duration,
+                    --   realised by the Player (C.P.E. Bach: on the beat,
+                    --   taking its time from the note it ornaments)
   | SlurOpen        -- ^ @(@
   | SlurClose       -- ^ @)@
   deriving (Eq, Show)

@@ -39,7 +39,7 @@ import OTB.Interp.Phrasing (boundaryStrengths)
 import OTB.Interp
 import OTB.Interp.Agogics (AgogicParams (..), tempoMap)
 import OTB.Interp.Express
-import OTB.Interp.Ornament ()
+import OTB.Interp.Ornament (realizeGraceLane)
 import OTB.Score
 import OTB.Tuning (adaptiveCents, bendValue, offsetFor)
 import OTB.Units (Cents (..))
@@ -88,17 +88,20 @@ lanes ns =
         push i = [ if j == i then (l, sn : xs) else (l, xs)
                  | (j, (l, xs)) <- zip [0 :: Int ..] ls ]
 
--- | Grid reshapers only; ornaments are annotations now and realise in
--- 'interpret'. Order: the inegales grid first (a style decision the
--- other rules should see), then the KTH micro-timing pair (double
+-- | Grace realisation and grid reshapers; the marked ornaments are
+-- annotations now and realise in 'interpret'. Order: graces first (they
+-- turn zero-duration score notes into real ones — everything downstream
+-- assumes positive durations), then the inegales grid (a style decision
+-- the other rules should see), then the KTH micro-timing pair (double
 -- duration softens 2:1, faster uphill rushes ascending runs), finger
 -- pedal last.
-prepareLane :: Interp -> [ScoreNote] -> [ScoreNote]
-prepareLane ip =
+prepareLane :: Interp -> Bpm -> [ScoreNote] -> [ScoreNote]
+prepareLane ip bpm =
   overholdLane (exOverhold ex)
     . uphillLane (exExpression ex * exUphill ex)
     . doubleDurLane (exExpression ex * exDoubleDur ex)
     . inegalLane (exInegal ex)
+    . realizeGraceLane (iOrnaments ip) bpm
   where
     ex = iExpress ip
 
@@ -149,7 +152,7 @@ analyzeStructure ip score =
     }
   where
     voiceLanes' =
-      [map (prepareLane ip) (lanes (vNotes v)) | v <- scVoices score]
+      [map (prepareLane ip (scTempo score)) (lanes (vNotes v)) | v <- scVoices score]
     sounding =
       [ (snOnset n, snDur n, snPitch n)
       | ls <- voiceLanes', l <- ls, n <- l ]
@@ -181,7 +184,7 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
     ex = iExpress ip
     usableChannels = [ch | ch <- [0 .. 15], ch /= 9] -- 9 = GM percussion
 
-    voiceLanes = [(v, map (prepareLane ip) (lanes (vNotes v))) | v <- voices]
+    voiceLanes = [(v, map (prepareLane ip tempo) (lanes (vNotes v))) | v <- voices]
     totalLanes = sum (map (length . snd) voiceLanes)
 
     -- what sounds after preparation: overheld tones charged on purpose;

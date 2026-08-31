@@ -25,6 +25,7 @@ module OTB.Interp.Express
   , doubleDurLane
   , chargesForLane
   , leanGate
+  , setDur
   , seededJitter
   , seededJitter1f
   , seedOf

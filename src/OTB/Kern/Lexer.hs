@@ -77,8 +77,10 @@ lexNoteTok tok = NoteTok dur pit tie marks
       | recip' == 0 = 2 ^ length numStr
       | otherwise = 1 / fromIntegral recip'
     dur = WholeNotes (base * (3 / 2) ^^ dots * densityFix)
-    -- 'q'/'Q' grace note: force zero duration regardless of digits
-    densityFix = if 'q' `elem` cs || 'Q' `elem` cs then 0 else 1
+    -- 'q'/'Q' grace note: force zero duration regardless of digits; the
+    -- Grace mark below carries the fact through to the Player's realiser
+    densityFix = if isGrace then 0 else 1
+    isGrace = 'q' `elem` cs || 'Q' `elem` cs
 
     letters = filter (`elem` ("abcdefgABCDEFG" :: String)) cs
     isRest = 'r' `elem` cs
@@ -110,6 +112,7 @@ lexNoteTok tok = NoteTok dur pit tie marks
         , [InvTurn | '$' `elem` cs]
         , [GenericOrn | 'O' `elem` cs]
         , [Sforzando | 'z' `elem` cs]
+        , [Grace | isGrace]
         , [SlurOpen | '(' `elem` cs]
         , [SlurClose | ')' `elem` cs]
         ]

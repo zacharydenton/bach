@@ -52,7 +52,11 @@ findSequences s = Sequences
   , sqNovelty = novelty
   }
   where
-    lines' = [dedupe (sortOn snOnset (vNotes v)) | v <- scVoices s]
+    -- graces are ornamental, not structural: zero-duration notes would
+    -- inject zero inter-onset intervals into the ratio math
+    lines' =
+      [ dedupe (sortOn snOnset (filter ((> 0) . snDur) (vNotes v)))
+      | v <- scVoices s ]
     dedupe (a : b : more)
       | snOnset a == snOnset b = dedupe (a : more)
       | otherwise = a : dedupe (b : more)

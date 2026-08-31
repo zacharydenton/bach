@@ -55,6 +55,8 @@ vel_accent = 14     # kern ^ marks: the score's own emphasis
 [ornaments]
 trill_rate = 12   # trill subnotes per second — C.P.E. Bach ties rate to
                   # tempo and affect; 10–14 covers keyboard practice
+grace_ms = 70     # short Vorschlag length: on the beat, stolen from the
+                  # main note (C.P.E. Bach, Versuch I.2)
 
 [tuning]
 bend_range = 2    # receiver's pitch-bend range in ± semitones. 2 is the
