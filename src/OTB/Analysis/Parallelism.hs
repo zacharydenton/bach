@@ -67,13 +67,23 @@ findSequences s = Sequences
       -- short figures need three statements to mean anything; a longer
       -- figure restated once is already a sequence
       , if m >= 5 then k >= 2 else k >= 3 ]
-    chainLen ns i m = go 1
+    chainLen ns i m = go 1 Nothing
       where
-        go k
+        go k step0
           | (i + (k + 1) * m) <= length ns
-          , iterates (slice ns (i + (k - 1) * m) m)
-                     (slice ns (i + k * m) m) = go (k + 1)
+          , let a = slice ns (i + (k - 1) * m) m
+                b = slice ns (i + k * m) m
+          , iterates a b
+          , Just st <- stepOf a b
+          -- the transposition must be CONSISTENT across the chain:
+          -- +3 then +6 is two coincidences, not one sequence (diatonic
+          -- steps may flex a semitone)
+          , maybe True (\s0 -> abs (st - s0) <= 1) step0 =
+              go (k + 1) (Just (maybe st id step0))
           | otherwise = k
+        stepOf a b = case (a, b) of
+          (x : _, y : _) -> Just (snPitch y - snPitch x)
+          _ -> Nothing
     slice ns i m = take (m + 1) (drop i ns) -- m intervals need m+1 notes
     iterates a b
       | length a < 2 || length b < length a = False
@@ -83,12 +93,15 @@ findSequences s = Sequences
               contourOK = and
                 [ signum x == signum y || x == y
                 | (x, y) <- zip (iv a) (iv b) ]
+              -- rhythm means ATTACK rhythm: inter-onset intervals,
+              -- which see rests and spacing where note lengths do not
+              iois xs = zipWith
+                (\x y -> let WholeNotes d = snOnset y - snOnset x
+                          in fromRational d :: Double)
+                xs (drop 1 xs)
               rOK = and
-                [ db' > 0 && abs (da' / db' - 1) < 0.25
-                | (x, y) <- zip a b
-                , let WholeNotes da = snDur x; WholeNotes db = snDur y
-                      da' = fromRational da :: Double
-                      db' = fromRational db :: Double ]
+                [ y > 0 && abs (x / y - 1) < 0.25
+                | (x, y) <- zip (iois a) (iois b) ]
            -- diatonic transposition bends interval QUALITY freely (a
            -- major second becomes minor): every interval may deviate a
            -- semitone, but the contour must hold and rhythm persist

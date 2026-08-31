@@ -26,6 +26,7 @@ import OTB.Interp.Phrasing
 import OTB.Explain (Why (..), renderWhys)
 import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony, melodicCharge)
 import OTB.Analysis.Imitation (Imitation (..), findImitation)
+import OTB.Analysis.Parallelism (Sequences (..), findSequences)
 import OTB.Analysis.Subject (subjectEntries)
 import OTB.Instrument (hardwareTracks)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
@@ -783,6 +784,33 @@ sota = testGroup "sota"
   , testProperty "reshapers never produce non-positive durations, any k" $
       forAll ((,) <$> choose (0, 3.0) <*> genLane) $ \(k, l) ->
         all ((> 0) . snDur) (uphillLane k (doubleDurLane k l))
+  , testCase "sequences: a real sequence detected, invariants enforced" $ do
+      let line ps step k =
+            -- figure of 4 notes restated k times, transposed by step
+            [ scoreNote (fromIntegral (it * 4 + j) / 8) (1 / 8)
+                (p + it * step) []
+            | it <- [0 .. k - 1], (j, p) <- zip [0 ..] ps ]
+          mkS ns = Score (Bpm 96) [Voice 0 ns] 0 0 [(0, (4, 4))] 0
+          figure = [60, 64, 62, 65] -- direction changes, distinctive
+          seqS = mkS (line figure (-2) 4)
+      assertBool "descending sequence detected"
+        (not (null (sqSpans (findSequences seqS))))
+      -- inconsistent transposition (+3 then +6) is two coincidences
+      let jumpy = mkS (line figure 3 2
+                        <> [ scoreNote ((8 + fromIntegral j) / 8) (1 / 8)
+                               (p + 9) []
+                           | (j, p) <- zip [0 ..] figure ])
+      sqSpans (findSequences jumpy) @?= []
+      -- stretched onset gaps break attack rhythm even with equal durs
+      let stretched = mkS
+            (line figure (-2) 1
+              <> [ scoreNote (1 / 2 + fromIntegral j / 4) (1 / 8)
+                     (p - 2) []
+                 | (j, p) <- zip [0 ..] figure ]
+              <> [ scoreNote (3 / 2 + fromIntegral j / 8) (1 / 8)
+                     (p - 4) []
+                 | (j, p) <- zip [0 ..] figure ])
+      sqSpans (findSequences stretched) @?= []
   , testCase "imitation: an echoed distinctive motif is a take" $ do
       let mk vi ons ps =
             Voice vi [scoreNote o (1 / 8) p [] | (o, p) <- zip ons ps]

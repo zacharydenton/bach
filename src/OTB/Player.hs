@@ -16,9 +16,11 @@
 module OTB.Player
   ( PerfNote (..)
   , Performance (..)
+  , Structure (..)
   , Interp (..)
   , defaultInterp
   , perform
+  , analyzeStructure
   , lanes
   , prepareLane
   ) where
@@ -124,6 +126,44 @@ voiceEvents :: [Music Ev] -> [(Rational, Rational, Ev)]
 voiceEvents = musicEvents 1 0 . foldr (:=:) (Prim (Rest 0))
 
 -- ---------------------------------------------------------------------
+-- structural analysis, shared verbatim between 'perform' and
+-- @otb analyze@ — what gets exported for fitting IS what gets played
+
+data Structure = Structure
+  { stSounding :: [(WholeNotes, WholeNotes, Int)]
+    -- ^ every prepared note (post-reshaper onsets and durations)
+  , stEnd :: WholeNotes
+  , stBounds :: [(WholeNotes, Double)]
+    -- ^ per-lane boundary strengths > 0.3, aggregated across the
+    -- texture, computed with the CONFIGURED phrasing on PREPARED lanes
+  , stTree :: [(WholeNotes, WholeNotes, Int)]
+  }
+
+analyzeStructure :: Interp -> Score -> Structure
+analyzeStructure ip score =
+  Structure
+    { stSounding = sounding
+    , stEnd = end
+    , stBounds = bounds
+    , stTree = groupSpans 3 (2 * barLen0) bounds 0 end
+    }
+  where
+    voiceLanes' =
+      [map (prepareLane ip) (lanes (vNotes v)) | v <- scVoices score]
+    sounding =
+      [ (snOnset n, snDur n, snPitch n)
+      | ls <- voiceLanes', l <- ls, n <- l ]
+    end = maximum (0 : [o + d | (o, d, _) <- sounding])
+    bounds =
+      [ (snOnset n + snDur n, str)
+      | ls <- voiceLanes', lane <- ls
+      , (n, str) <- zip lane (boundaryStrengths (iPhrasing ip) lane)
+      , str > 0.3 ]
+    barLen0 = case scMeter score of
+      ((_, (n, d)) : _) -> WholeNotes (fromIntegral n / fromIntegral d)
+      [] -> 1
+
+-- ---------------------------------------------------------------------
 -- perform
 
 perform :: Interp -> Score -> Either String Performance
@@ -133,7 +173,8 @@ perform ip score@(Score tempo voices _ _ meter _) =
                  <> " monophonic lanes; only "
                  <> show (length usableChannels)
                  <> " MIDI channels available")
-    else Right (assemble ip tempo tmap finalOnset melodyVi floorAt
+    else Right (assemble ip tempo tmap finalOnset melodyVi
+                  (floorAt, floorAnyAt)
                   (hRootAt harm, hStabilityAt harm)
                   (hCadences harm) tracks)
   where
@@ -146,10 +187,9 @@ perform ip score@(Score tempo voices _ _ meter _) =
     -- what sounds after preparation: overheld tones charged on purpose;
     -- ornament subnotes NOT — a trill is heard as its parent's pitch for
     -- dissonance purposes (the annotation change, accepted)
-    allSounding =
-      [ (snOnset n, snDur n, snPitch n)
-      | (_, ls) <- voiceLanes, l <- ls, n <- l ]
-    end = maximum (0 : [o + d | (o, d, _) <- allSounding])
+    st = analyzeStructure ip score
+    allSounding = stSounding st
+    end = stEnd st
 
     exN = exExpression ex
 
@@ -163,18 +203,12 @@ perform ip score@(Score tempo voices _ _ meter _) =
     floorAt vi t =
       any (\(t0, v, sp) -> v == vi && t0 <= t && t < t0 + sp)
         (imTakes imit)
+    floorAnyAt t =
+      any (\(t0, _, sp) -> t0 <= t && t < t0 + sp) (imTakes imit)
 
-    -- the grouping tree: per-lane boundary strengths aggregated across
-    -- the texture, split recursively (Todd's arches nest over it)
-    allBounds =
-      [ (snOnset n + snDur n, str)
-      | (_, ls) <- voiceLanes, lane <- ls
-      , (n, str) <- zip lane (boundaryStrengths (iPhrasing ip) lane)
-      , str > 0.3 ]
-    barLen0 = case meter of
-      ((_, (n, d)) : _) -> WholeNotes (fromIntegral n / fromIntegral d)
-      [] -> 1
-    tree = groupSpans 3 (2 * barLen0) allBounds 0 end
+    -- the grouping tree: from the shared structural analysis
+    allBounds = stBounds st
+    tree = stTree st
 
     -- one arch per node: piece level, tree levels decaying by depth,
     -- and the metrical bar groups as the innermost uniform layer
@@ -278,11 +312,11 @@ perform ip score@(Score tempo voices _ _ meter _) =
 
 assemble
   :: Interp -> Bpm -> [(WholeNotes, Bpm)] -> WholeNotes -> Int
-  -> (Int -> WholeNotes -> Bool)
+  -> (Int -> WholeNotes -> Bool, WholeNotes -> Bool)
   -> (WholeNotes -> Maybe Int, WholeNotes -> Double) -> [WholeNotes]
   -> [[(Rational, Rational, Ev)]] -> Performance
-assemble ip tempo tmap finalOnset melodyVi floorAt (rootAt, stabAt)
-         cads trs =
+assemble ip tempo tmap finalOnset melodyVi (floorAt, floorAny)
+         (rootAt, stabAt) cads trs =
   Performance tmap
     (map enforceMono (rollFinal perturbed))
     (concatMap (map snd) whysed)
@@ -309,10 +343,13 @@ assemble ip tempo tmap finalOnset melodyVi floorAt (rootAt, stabAt)
               i = evIndex ev
               leadMs = exEnsemble ex * exLeadMs ex
               isMelody = vi == melodyVi
-              -- Klangrede: whoever takes the floor leads the ensemble
-              -- for that motif, exactly as the melody otherwise does
+              -- Klangrede: whoever takes the floor leads — and the
+              -- standing melody YIELDS while any voice holds it, or a
+              -- two-voice exchange would shift both parts identically
+              -- and produce no asynchrony at all
               hasFloor = floorAt vi (evSrcOn ev)
-              lead = if isMelody || hasFloor
+              melodyLeads = isMelody && not (floorAny (evSrcOn ev))
+              lead = if hasFloor || melodyLeads
                        then msToWnAt (fromRational t) leadMs else 0
               jms = exEnsemble ex * exJitterMs ex
                       * seededJitter1f seed (ch * 2) i
@@ -338,7 +375,7 @@ assemble ip tempo tmap finalOnset melodyVi floorAt (rootAt, stabAt)
                 <> [ why "melody-lead"
                        ("-" <> show (round leadMs :: Int) <> " ms (leads)")
                        "Palmer 1996; Rasch 1979 (asynchrony aids voice streaming)"
-                   | isMelody, leadMs > 0 ]
+                   | melodyLeads, leadMs > 0 ]
                 <> [ why "dialogue-lead"
                        ("-" <> show (round leadMs :: Int)
                           <> " ms (has the floor)")

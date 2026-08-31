@@ -588,12 +588,20 @@ function listenRemote(){
   const tok = Math.random().toString(36).slice(2);
   const a = new Audio('opus?tok=' + tok);
   a.preload = 'auto';
-  setTimeout(() => fetch('anchor?tok=' + tok).then(r=>r.json())
-    .then(x=>{ if (!x.err) OPUS.anchor = x; }), 300);
+  setTimeout(pollAnchor, 300);
   // the server records an exact anchor (engine position + true banked
   // history) when it assembles this listener's burst; fetch it so the
   // why-subtitles track OUR ears, not the engine's now
   OPUS = { el: a, anchor: null };
+  // the server mints the anchor when /opus reaches subscription setup,
+  // which can lag media startup: poll by token, bounded, until it lands
+  let anchorTries = 0;
+  const pollAnchor = () => {
+    if (OPUS.anchor || anchorTries++ > 20) return;
+    fetch('anchor?tok=' + tok).then(r=>r.json())
+      .then(x => { if (!x.err) OPUS.anchor = x; else setTimeout(pollAnchor, 500); })
+      .catch(() => setTimeout(pollAnchor, 500));
+  };
   const b = document.getElementById('listenr');
   b.classList.add('on');
   const stat = s => { b.textContent = s; };

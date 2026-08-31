@@ -32,7 +32,7 @@ import OTB.Analysis.Parallelism (Sequences (..), findSequences)
 import OTB.Analysis.Subject (subjectEntries)
 import OTB.Interp.Express (chargesForLane)
 import OTB.Interp.Phrasing (boundaryStrengths)
-import OTB.Player (lanes)
+
 import OTB.Kern.Token (Mark (..))
 import OTB.Emit.Json (renderJson)
 import OTB.Explain (renderWhys)
@@ -43,7 +43,9 @@ import OTB.Interp.Express (defaultExpressParams)
 import OTB.Interp.Ornament (defaultOrnamentParams)
 import OTB.Interp.Phrasing (defaultPhraseParams)
 import OTB.Kern.Parser (parseKern)
-import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
+import OTB.Player
+  ( Interp (..), PerfNote (..), Performance (..), Structure (..)
+  , analyzeStructure, defaultInterp, perform )
 import OTB.Score (Score (..), ScoreNote (..), Voice (..))
 import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
 import OTB.Units (Bpm (..), WholeNotes (..))
@@ -187,7 +189,7 @@ badBpm b
 checkBpm :: String -> Double -> IO ()
 checkBpm ctx b = mapM_ (die . ((ctx <> ": ") <>)) (badBpm b)
 
-load :: Common -> IO (String, Score, Performance, TuningTable, Bool)
+load :: Common -> IO (String, Score, Performance, TuningTable, Bool, Interp)
 load com = do
   checkBpm "--tempo" (cTempo com)
   src <- TIO.readFile (cInput com)
@@ -219,14 +221,14 @@ load com = do
         , iBendRange = tuningBendRange cfg
         }
   p <- either (die . ("perform: " <>)) pure (perform interp score)
-  pure (T.unpack piece, score, p, table, haveCfg)
+  pure (T.unpack piece, score, p, table, haveCfg, interp)
 
 runCompile :: Common -> FilePath -> Maybe FilePath -> Maybe FilePath -> String -> IO ()
 runCompile com out mscl mjson tgt = do
   when (cTemperament com == "adaptive" && mscl /= Nothing)
     (die ("adaptive temperament is bend-carried per chord; no static "
             <> ".scl can express it — drop --emit-scl"))
-  (piece, score, p0, table, haveCfg) <- load com
+  (piece, score, p0, table, haveCfg, _) <- load com
   (p, hwClips) <- case tgt of
     "hardware" -> either die pure (hardwareTracks p0)
     _ -> pure (p0, 0)
@@ -258,7 +260,7 @@ runCompile com out mscl mjson tgt = do
 
 runExplain :: Common -> Maybe Int -> Maybe (Int, Int) -> IO ()
 runExplain com mbar mnote = do
-  (piece, score, p, _, _) <- load com
+  (piece, score, p, _, _, _) <- load com
   let whys = perfWhys p
       notes = sortOn pnSrcOn (concat (perfTracks p))
       -- bar N's notated span, walked through the FULL meter map (meter
@@ -445,22 +447,15 @@ runGround bass nvar tempo temp out mscl mjson = do
 
 runAnalyze :: Common -> IO ()
 runAnalyze com = do
-  (_, score, _, _, _) <- load com
-  let voices = scVoices score
-      pp = defaultPhraseParams
-      voiceLanes = [lanes (vNotes v) | v <- voices]
-      allBounds =
-        [ (snOnset n + snDur n, str)
-        | ls <- voiceLanes, l <- ls
-        , (n, str) <- zip l (boundaryStrengths pp l) ]
-      notes = [ (snOnset n, snDur n, snPitch n)
-              | v <- voices, n <- vNotes v ]
-      end = maximum (0 : [o + d | (o, d, _) <- notes])
-      harm = analyzeHarmony (scMeter score) notes end
-      barLen0 = case scMeter score of
-        ((_, (n, d)) : _) -> WholeNotes (fromIntegral n / fromIntegral d)
-        [] -> 1
-      tree = groupSpans 3 (2 * barLen0) allBounds 0 end
+  (_, score, _, _, _, interp) <- load com
+  -- the SAME analysis perform runs: configured interpretation,
+  -- prepared lanes, filtered boundaries — what gets exported for
+  -- fitting is what gets played
+  let st = analyzeStructure interp score
+      allBounds = stBounds st
+      end = stEnd st
+      harm = analyzeHarmony (scMeter score) (stSounding st) end
+      tree = stTree st
       subj = subjectEntries score
       sq = findSequences score
       im = findImitation score
@@ -487,5 +482,5 @@ runAnalyze com = do
     <> ",\"exchanges\":" <> arr [ pair (wn a) (wn b) | (a, b) <- imSpans im ]
     <> ",\"novelty\":" <> arr [ pair (wn o) (show v)
                               | (o, v) <- sqNovelty sq ]
-    <> ",\"onsets\":" <> arr (map (wn . (\(o, _, _) -> o)) notes)
+    <> ",\"onsets\":" <> arr (map (wn . (\(o, _, _) -> o)) (stSounding st))
     <> "}"

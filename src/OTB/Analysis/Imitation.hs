@@ -51,7 +51,7 @@ findImitation :: Score -> Imitation
 findImitation s = Imitation
   { imTakes = takes
   , imSpans = mergeSpans (sortOn fst
-      [ (t1, t2 + halfBar) | (t2, _, _, t1) <- events ])
+      [ (t1, t2 + barLenAt t2 / 2) | (t2, _, _, t1) <- events ])
   }
   where
     voices' = zip [0 ..] [dedupe (sortOn snOnset (vNotes v))
@@ -61,11 +61,19 @@ findImitation s = Imitation
       | otherwise = a : dedupe (b : more)
     dedupe xs = xs
 
-    barLen = case scMeter s of
-      ((_, (n, d)) : _) -> WholeNotes (fromIntegral n / fromIntegral d)
-      [] -> 1
-    window = 2 * barLen
-    halfBar = barLen / 2
+    -- bar length at a POSITION: the two-bar answer window and the
+    -- span-merge gap must follow the local meter (wtc2p03 moves from
+    -- 4/4 to 3/8; two whole notes there is five bars, not two)
+    barLenAt t = case takeWhile ((<= t) . fst) meter' of
+      [] -> firstBar
+      ms -> let (_, (n, d)) = last ms
+             in WholeNotes (fromIntegral n / fromIntegral d)
+      where
+        meter' = scMeter s
+        firstBar = case scMeter s of
+          ((_, (n, d)) : _) -> WholeNotes (fromIntegral n / fromIntegral d)
+          [] -> 1
+    windowAt t = 2 * barLenAt t
 
     grams ns i = zipWith (\a b -> clamp (snPitch b - snPitch a))
                    (drop i ns) (drop (i + 1) ns)
@@ -98,7 +106,7 @@ findImitation s = Imitation
         , (v2, ns2) <- voices', v2 /= v1
         , j <- candidateIx ns2 t1
         , let t2 = snOnset (ns2 !! j)
-        , t2 > t1, t2 - t1 <= window
+        , t2 > t1, t2 - t1 <= windowAt t1
         , let c2 = contour ns2 j
         , length c2 == motifLen
         , matches (voiceLine v1) i1 ns2 j c1 c2 ]
@@ -106,23 +114,28 @@ findImitation s = Imitation
         voiceLine v = head [ns | (v', ns) <- voices', v' == v]
     candidateIx ns t1 =
       [ j | (j, n) <- zip [0 ..] ns
-      , snOnset n > t1, snOnset n - t1 <= window ]
+      , snOnset n > t1, snOnset n - t1 <= windowAt t1 ]
     matches ns1 i ns2 j c1 c2 =
       let devs = [abs (a - b) | (a, b) <- zip c1 c2]
           contourOK = and [signum a == signum b || a == b
                           | (a, b) <- zip c1 c2]
-          d1 = durs ns1 i
-          d2 = durs ns2 j
+          -- ATTACK rhythm: inter-onset intervals see the rests and
+          -- spacing that note lengths ignore
           rOK = and [ y > 0 && abs (x / y - 1) < 0.25
-                    | (x, y) <- zip d1 d2 ]
+                    | (x, y) <- zip (iois ns1 i) (iois ns2 j) ]
        in and [d <= 1 | d <- devs] && contourOK && rOK
-    durs ns i =
+    iois ns i =
       [ fromRational r :: Double
-      | n <- take (motifLen + 1) (drop i ns)
-      , let WholeNotes r = snDur n ]
+      | (a, b) <- zip seg (drop 1 seg)
+      , let WholeNotes r = snOnset b - snOnset a ]
+      where
+        seg = take (motifLen + 1) (drop i ns)
+    -- span from the first onset THROUGH the final note's end — a
+    -- duration sum expires early whenever the motif has any daylight
     motifSpan ns j =
-      let seg = take (motifLen + 1) (drop j ns)
-       in sum (map snDur seg)
+      case take (motifLen + 1) (drop j ns) of
+        [] -> 0
+        seg -> snOnset (last seg) + snDur (last seg) - snOnset (head seg)
 
     -- one take per (voice, onset): the earliest statement claims it
     dedupeTakes evs =
@@ -136,6 +149,6 @@ findImitation s = Imitation
       [ (t2, v2, sp) | (t2, v2, sp, _) <- events ]
 
     mergeSpans ((a1, b1) : (a2, b2) : more)
-      | a2 <= b1 + halfBar = mergeSpans ((a1, max b1 b2) : more)
+      | a2 <= b1 + barLenAt b1 / 2 = mergeSpans ((a1, max b1 b2) : more)
       | otherwise = (a1, b1) : mergeSpans ((a2, b2) : more)
     mergeSpans xs = xs

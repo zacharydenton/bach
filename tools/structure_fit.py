@@ -29,8 +29,9 @@ already implemented. The middle frontier needs new ANALYSIS — melodic
 parallelism/sequence detection, harmonic rhythm, phrase structure at
 finer grain — not better optimization over the current features.
 
-  tools/structure_fit.py          # ridge (linear baseline)
+  tools/structure_fit.py          # ridge (linear baseline; numpy only)
   tools/structure_fit.py --gbm    # gradient boosting, +/-4 beat window
+                                  # (needs scikit-learn in the venv)
 
 SECOND FINDING (--gbm, same day): the features are NOT exhausted, only
 linearly. Gradient boosting over a +/-4-beat context window reaches
@@ -208,12 +209,25 @@ def rs_against(H, pred, mask):
     return out
 
 
+def shifted(X, lag):
+    """Shift rows by lag with ZERO padding — np.roll wraps the piece's
+    end onto its beginning, poisoning the margins."""
+    Y = np.zeros_like(X)
+    if lag > 0:
+        Y[lag:] = X[:-lag]
+    elif lag < 0:
+        Y[:lag] = X[-lag:]
+    else:
+        Y = X.copy()
+    return Y
+
+
 def widen(X):
     """+/-4 beats of context per feature: temporal shapes in tree reach."""
     cols = [X]
     for lag in (1, 2, 3, 4):
-        cols.append(np.roll(X, lag, axis=0))
-        cols.append(np.roll(X, -lag, axis=0))
+        cols.append(shifted(X, lag))
+        cols.append(shifted(X, -lag))
     return np.hstack(cols)
 
 
@@ -234,7 +248,12 @@ def main():
             data[p] = piece_data(otb, p, tmp)
 
     if "--gbm" in sys.argv:
-        from sklearn.ensemble import GradientBoostingRegressor
+        try:
+            from sklearn.ensemble import GradientBoostingRegressor
+        except ImportError:
+            sys.exit("--gbm needs scikit-learn: "
+                     "uv pip install --python .venv-audition/bin/python "
+                     "scikit-learn  (numpy alone covers the ridge path)")
         Xs, ys = [], []
         for p in train:
             X, y, _, _, mid = data[p]

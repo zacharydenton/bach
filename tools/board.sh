@@ -13,6 +13,14 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DATA=$HOME/.local/share/otb
 SURGEPY=${SURGEPY_DIR:-$HOME/code/surge-src/ignore/bpy/src/surge-python}
 LOG=$DATA/patchboard.log
+# the venv may live in the repo or in $HOME (the README's location)
+if [ -x "$ROOT/.venv-audition/bin/python" ]; then
+  PY=$ROOT/.venv-audition/bin/python
+elif [ -x "$HOME/.venv-audition/bin/python" ]; then
+  PY=$HOME/.venv-audition/bin/python
+else
+  echo "no .venv-audition found in $ROOT or \$HOME (see README)"; exit 1
+fi
 
 pid() {
   # match the python itself, not shells whose cmdline quotes the same text
@@ -29,7 +37,7 @@ case "${1:-status}" in
     if [ -n "$(pid)" ]; then echo "already running (pid $(pid))"; exit 0; fi
     cd "$ROOT"
     setsid nohup env PYTHONPATH="$SURGEPY" \
-      .venv-audition/bin/python tools/patchboard.py "$DATA/perf" \
+      "$PY" tools/patchboard.py "$DATA/perf" \
       --scl "$DATA/w3.scl" --port 8766 \
       --calibration config/calibration.json \
       > "$LOG" 2>&1 < /dev/null &
