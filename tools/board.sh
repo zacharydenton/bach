@@ -11,7 +11,15 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DATA=$HOME/.local/share/otb
-SURGEPY=${SURGEPY_DIR:-$HOME/code/surge-src/ignore/bpy/src/surge-python}
+# surgepy resolution: explicit env, the stable copy under DATA, or a
+# surge-src build tree (either layout)
+if [ -n "${SURGEPY_DIR:-}" ]; then
+  SURGEPY=$SURGEPY_DIR
+elif [ -d "$HOME/.local/share/otb/surgepy" ]; then
+  SURGEPY=$HOME/.local/share/otb/surgepy
+else
+  SURGEPY=$(dirname "$(find $HOME/code/surge-src -name 'surgepy*.so' 2>/dev/null | head -1)" 2>/dev/null || true)
+fi
 LOG=$DATA/patchboard.log
 # the venv may live in the repo or in $HOME (the README's location)
 if [ -x "$ROOT/.venv-audition/bin/python" ]; then
