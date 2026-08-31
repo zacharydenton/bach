@@ -133,10 +133,13 @@ realizeNote op bpm = realize
       _ -> False
 
     -- subdivide sn into (pitch, dur) subnotes: legato marks stripped from
-    -- all but the last, which keeps the parent's residual marks
+    -- all but the last, which keeps the parent's residual marks. The
+    -- parent's spelling survives only on subnotes at the parent's pitch —
+    -- auxiliaries are unnotated and must not carry a contradicting one
     subdivide sn pairs =
       [ sn { snOnset = t, snDur = d, snPitch = p
-           , snMarks = ms, snSegs = [(d, ms)] }
+           , snMarks = ms, snSegs = [(d, ms)]
+           , snSpell = if p == snPitch sn then snSpell sn else Nothing }
       | ((p, d), t, lastOne) <-
           zip3 pairs (scanl (+) (snOnset sn) (map snd pairs))
             (map (const False) (drop 1 pairs) <> [True])

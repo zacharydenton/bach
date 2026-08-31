@@ -22,6 +22,7 @@ module OTB.Score
   ) where
 
 import OTB.Kern.Token (Mark)
+import OTB.Pitch (Spelled)
 import OTB.Units (Bpm, WholeNotes)
 
 data ScoreNote = ScoreNote
@@ -36,12 +37,16 @@ data ScoreNote = ScoreNote
     -- ^ notated (onset, pitch) of the score note this came from. Ornament
     -- realisation keeps it on every subnote, so a rule that asks "which
     -- notes were struck together?" (the final-chord roll) can still tell.
+  , snSpell :: !(Maybe Spelled)
+    -- ^ the notation behind 'snPitch', when the note came from kern
+    -- (generated scores and ornament auxiliaries carry none). Never
+    -- present with a contradicting 'snPitch'.
   }
   deriving (Eq, Show)
 
 -- | An untied note on lane 0: one segment carrying all the marks.
 scoreNote :: WholeNotes -> WholeNotes -> Int -> [Mark] -> ScoreNote
-scoreNote t d p ms = ScoreNote t d p ms 0 [(d, ms)] (t, p)
+scoreNote t d p ms = ScoreNote t d p ms 0 [(d, ms)] (t, p) Nothing
 
 data Voice = Voice
   { vIndex :: !Int -- ^ original top-level spine index

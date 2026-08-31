@@ -1,8 +1,8 @@
 -- | Drives lexed records through the spine machine into a 'Score'.
 --
 -- Tie resolution strategy: an open tie is held aside keyed by
--- (voice, pitch) and grows by each continuation's duration; only on
--- @]@ does it land in the note list. Kern ties stay within a voice in
+-- (voice, staff position) and grows by each continuation's duration; only
+-- on @]@ does it land in the note list. Kern ties stay within a voice in
 -- this corpus; a tie left open at end of file is surfaced as an error.
 --
 -- License: GPL-2.0-or-later.
@@ -21,6 +21,7 @@ import Data.Text.Read qualified as TR
 import OTB.Kern.Lexer (lexRecord)
 import OTB.Kern.Spine
 import OTB.Kern.Token
+import OTB.Pitch (spDegree)
 import OTB.Score
 import OTB.Units (Bpm (..), WholeNotes)
 
@@ -35,9 +36,11 @@ data PSt = PSt
   , psRestHolds :: !Int -- ^ fermatas on rests (unrealisable; counted)
   , psDone :: Map Int [ScoreNote] -- ^ per voice, reverse order
   , psTies :: Map (Int, Int) [ScoreNote]
-    -- ^ open ties by (voice, pitch) — a FIFO, because two sub-spines of one
-    -- voice can hold overlapping ties on the same pitch (wtc2p02 has
-    -- simultaneous C5 ties in two lanes); close pops the earliest open
+    -- ^ open ties by (voice, staff position) — spelled degree, so a
+    -- continuation that drops the accidental still finds its open — a
+    -- FIFO, because two sub-spines of one voice can hold overlapping ties
+    -- on the same position (wtc2p02 has simultaneous C5 ties in two
+    -- lanes); close pops the earliest open
   }
 
 parseKern :: Bpm -> Text -> Either ParseError Score
@@ -152,19 +155,20 @@ noteTok :: Int -> Int -> WholeNotes -> PSt -> NoteTok -> PSt
 -- the Grace mark — realisation (on the beat, stealing from the main
 -- note) is interpretation and lives in the Player. A pitchless
 -- zero-duration token has nothing to realise; that loss is still counted.
-noteTok voice lane onset st (NoteTok d mpit _ marks)
+noteTok voice lane onset st (NoteTok d mpit mspell _ marks)
   | d <= 0 = case mpit of
       Just pit
         | Grace `elem` marks ->
             let g = ScoreNote onset 0 pit marks lane [(0, marks)] (onset, pit)
+                      mspell
              in st {psDone = Map.insertWith (<>) voice [g] (psDone st)}
       _ -> st {psGrace = psGrace st + 1}
 -- rest: clock already advanced. A fermata on a rest cannot be realised
 -- (the model has no rests), so the dropped hold is counted, not silent
-noteTok _ _ _ st (NoteTok _ Nothing _ marks)
+noteTok _ _ _ st (NoteTok _ Nothing _ _ marks)
   | Fermata `elem` marks = st {psRestHolds = psRestHolds st + 1}
   | otherwise = st
-noteTok voice lane onset st (NoteTok d (Just pit) tie marks) =
+noteTok voice lane onset st (NoteTok d (Just pit) mspell tie marks) =
   case tie of
     TieNone -> emit fresh
     TieOpen ->
@@ -189,8 +193,15 @@ noteTok voice lane onset st (NoteTok d (Just pit) tie marks) =
             -- counted in scTieLeftovers.
             (Nothing, _) -> emit fresh
   where
-    key = (voice, pit)
-    fresh = ScoreNote onset d pit marks lane [(d, marks)] (onset, pit)
+    -- ties are grouped by STAFF POSITION (letter + octave): kern law
+    -- respells the accidental on every token, and the corpus occasionally
+    -- drops it on a continuation or close ([2a- … 2a_) — under MIDI
+    -- keying such a tie broke into a stray close plus an EOF leftover.
+    -- Within the group, 'pick' still prefers the exact chromatic match.
+    -- The MIDI fallback only serves tokens without spelling, which the
+    -- lexer never produces for pitched notes.
+    key = (voice, maybe pit spDegree mspell)
+    fresh = ScoreNote onset d pit marks lane [(d, marks)] (onset, pit) mspell
     ornamented = any isOrnamentMark marks
     -- a continuation/close token adds a segment with *its own* marks; the
     -- union in snMarks is for marks that describe the whole note (slurs,
@@ -202,9 +213,22 @@ noteTok voice lane onset st (NoteTok d (Just pit) tie marks) =
            , snSegs = snSegs open <> [(d, marks)] }
     emitIn s sn = s {psDone = Map.insertWith (<>) voice [sn] (psDone s)}
     emit = emitIn st
-    -- pop the earliest open tie on this key
-    popOpen s = case Map.lookup key (psTies s) of
-      Just (open : rest') ->
+    -- Which open does this token continue/close? The earliest exact
+    -- chromatic match (the old FIFO — wtc2p02's overlapping same-pitch
+    -- ties depend on it); failing that, an open at the same staff
+    -- position whose accumulated end lands exactly on this token's onset
+    -- — a real tie is temporally adjacent, so this is the dropped-
+    -- accidental lapse and nothing else. Adjacency is what keeps a stray
+    -- @]@ on a passing tone (wtc1p07:150's 32an]) from swallowing an
+    -- A-flat tie open since another beat.
+    pick opens =
+      case break ((== pit) . snPitch) opens of
+        (before, o : after) -> Just (o, before <> after)
+        _ -> case break (\o -> snOnset o + snDur o == onset) opens of
+          (before, o : after) -> Just (o, before <> after)
+          _ -> Nothing
+    popOpen s = case Map.lookup key (psTies s) >>= pick of
+      Just (open, rest') ->
         ( Just open
         , s {psTies = if null rest' then Map.delete key (psTies s)
                       else Map.insert key rest' (psTies s)} )
@@ -213,14 +237,15 @@ noteTok voice lane onset st (NoteTok d (Just pit) tie marks) =
     restruck = case popOpen st of
       (Just open, s) -> emitIn s open
       (Nothing, s) -> s
-    extendEarliest = case Map.lookup key (psTies st) of
-      Just (open : rest') ->
+    extendEarliest = case Map.lookup key (psTies st) >>= pick of
+      Just (open, rest') ->
         st {psTies = Map.insert key (extend open : rest') (psTies st)}
-      -- no open on this key: a stray continuation. The corpus ties across
-      -- top-level spines a few times (e.g. wtc1p04:240's 2.cc#_ continues a
-      -- [4cc# opened in the neighbouring spine), which the (voice, pitch)
-      -- key cannot match — keep the sound, exactly like the stray close
-      -- below; the abandoned open still flushes at EOF into scTieLeftovers.
+      -- no open for this token: a stray continuation. The corpus ties
+      -- across top-level spines a few times (e.g. wtc1p04:240's 2.cc#_
+      -- continues a [4cc# opened in the neighbouring spine), which the
+      -- per-voice key cannot match — keep the sound, exactly like the
+      -- stray close below; the abandoned open still flushes at EOF into
+      -- scTieLeftovers.
       _ -> emit fresh
 
 isOrnamentMark :: Mark -> Bool

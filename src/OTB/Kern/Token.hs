@@ -16,6 +16,7 @@ module OTB.Kern.Token
   ) where
 
 import Data.Text (Text)
+import OTB.Pitch (Spelled)
 import OTB.Units (Bpm, WholeNotes)
 
 data Record = Record
@@ -78,6 +79,8 @@ data Mark
 data NoteTok = NoteTok
   { ntDur :: !WholeNotes    -- ^ from reciprocal + dots
   , ntPitch :: !(Maybe Int) -- ^ MIDI note number; Nothing = rest
+  , ntSpell :: !(Maybe Spelled)
+    -- ^ the notation behind 'ntPitch' — present exactly when the pitch is
   , ntTie :: !Tie
   , ntMarks :: ![Mark]
   }

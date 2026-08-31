@@ -29,6 +29,7 @@ library
     default-extensions: OverloadedStrings LambdaCase DerivingStrategies
     exposed-modules:
         OTB.Units
+        OTB.Pitch
         OTB.Kern.Token
         OTB.Kern.Lexer
         OTB.Kern.Spine

@@ -15,11 +15,14 @@ module OTB.Kern.Lexer
   , lexNoteTok
   ) where
 
-import Data.Char (isDigit)
+import Data.Char (isDigit, toLower)
+import Data.List (elemIndex)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Read qualified as TR
 import OTB.Kern.Token
+import OTB.Pitch (Spelled (..), spMidi)
 import OTB.Units (Bpm (..), WholeNotes (..))
 
 lexRecord :: Int -> Text -> Record
@@ -54,7 +57,7 @@ lexTempo t = case TR.double t of
 
 -- | One note within a data field.
 lexNoteTok :: Text -> NoteTok
-lexNoteTok tok = NoteTok dur pit tie marks
+lexNoteTok tok = NoteTok dur pit spell tie marks
   where
     cs = T.unpack tok
     -- the duration prefix in char-bag order: digits plus the extended
@@ -86,9 +89,12 @@ lexNoteTok tok = NoteTok dur pit tie marks
     isRest = 'r' `elem` cs
     sharps = length (filter (== '#') cs)
     flats = length (filter (== '-') cs)
-    pit
+    -- spelling is retained (kern states every accidental explicitly);
+    -- the MIDI number is derived from it, never computed separately
+    spell
       | isRest || null letters = Nothing
-      | otherwise = Just (kernPitch letters + sharps - flats)
+      | otherwise = Just (kernSpelled letters (sharps - flats))
+    pit = spMidi <$> spell
 
     tie
       | '[' `elem` cs = TieOpen
@@ -117,17 +123,13 @@ lexNoteTok tok = NoteTok dur pit tie marks
         , [SlurClose | ')' `elem` cs]
         ]
 
--- | Kern pitch: lowercase ascends from middle C (@c@=C4, @cc@=C5),
--- uppercase descends (@C@=C3, @CC@=C2).
-kernPitch :: String -> Int
-kernPitch ls@(l : _)
-  | l `elem` ("abcdefg" :: String) = 60 + off l + 12 * (length ls - 1)
-  | otherwise = 60 + off l - 12 * length ls
+-- | Kern spelling: lowercase ascends from middle C (@c@=C4, @cc@=C5),
+-- uppercase descends (@C@=C3, @CC@=C2); the letter run's case and length
+-- give the octave, the accidental count is the alteration.
+kernSpelled :: String -> Int -> Spelled
+kernSpelled ls@(l : _) alter
+  | l `elem` ("abcdefg" :: String) = Spelled (idx l) alter (3 + length ls)
+  | otherwise = Spelled (idx l) alter (4 - length ls)
   where
-    -- semitone offset within the octave, case-insensitive: "c"=60, "C"=48,
-    -- "B"=59 (the B just below middle C), "CC"=36.
-    off ch = case ch of
-      'c' -> 0; 'd' -> 2; 'e' -> 4; 'f' -> 5; 'g' -> 7; 'a' -> 9; 'b' -> 11
-      'C' -> 0; 'D' -> 2; 'E' -> 4; 'F' -> 5; 'G' -> 7; 'A' -> 9; 'B' -> 11
-      _ -> 0
-kernPitch [] = 60
+    idx ch = fromMaybe 0 (elemIndex (toLower ch) "cdefgab")
+kernSpelled [] alter = Spelled 0 alter 4

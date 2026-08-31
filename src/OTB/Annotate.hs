@@ -385,7 +385,13 @@ annEvents = go 1 0 0
   where
     go f dt tr m = case m of
       Prim (Note d (sn, ws)) ->
-        [(dt, d / f, (sn {snPitch = snPitch sn + tr}, ws))]
+        -- a chromatic shift cannot keep the notation: respelling needs
+        -- key context, so a nonzero transpose clears snSpell rather than
+        -- carry a contradicting one (the Score.hs invariant)
+        let sn' | tr == 0 = sn
+                | otherwise =
+                    sn {snPitch = snPitch sn + tr, snSpell = Nothing}
+         in [(dt, d / f, (sn', ws))]
       Prim (Rest _) -> []
       a :+: b -> go f dt tr a <> go f (dt + dur a / f) tr b
       a :=: b -> go f dt tr a <> go f dt tr b

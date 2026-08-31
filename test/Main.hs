@@ -29,6 +29,8 @@ import OTB.Analysis.Imitation (Imitation (..), findImitation)
 import OTB.Analysis.Parallelism (Sequences (..), findSequences)
 import OTB.Analysis.Subject (subjectEntries)
 import OTB.Instrument (hardwareTracks)
+import OTB.Annotate (annEvents)
+import OTB.Pitch (Spelled (..), spMidi, spName)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..), scoreNote)
 import OTB.Tuning
@@ -568,6 +570,9 @@ genScore = do
 transposeScore :: Int -> Score -> Score
 transposeScore n s =
   s { scVoices = [ v { vNotes = [ sn { snPitch = snPitch sn + n
+                                     , snSpell =
+                                         if n == 0 then snSpell sn
+                                         else Nothing
                                      , snSource =
                                          (fst (snSource sn),
                                           snd (snSource sn) + n) }
@@ -811,6 +816,69 @@ review = testGroup "review regressions"
         -- realised: every performed note has width
         assertBool "no zero-duration notes reach the performance"
           (all (\n -> pnDur n > 0) (concat (perfTracks p)))
+  , testCase "spelling: retained from the lexer, MIDI derived from it" $ do
+      ntSpell (lexNoteTok "cc#") @?= Just (Spelled 0 1 5)
+      ntPitch (lexNoteTok "cc#") @?= Just 73
+      ntSpell (lexNoteTok "DD--") @?= Just (Spelled 1 (-2) 2)
+      ntPitch (lexNoteTok "DD--") @?= Just 36
+      spName (Spelled 0 1 5) @?= "C#5"
+      spMidi (Spelled 5 (-2) 4) @?= 67 -- Abb4 sounds as G4, spelled apart
+  , testCase "tie: dropped accidental on an adjacent close still merges" $ do
+      -- kern law respells the accidental on every token; an encoder lapse
+      -- ([4c# … 4c]) is the same staff position starting exactly where
+      -- the open ends — one held note, not a stray close + EOF leftover
+      let src = T.unlines ["**kern", "[4c#", "4c]", "*-"]
+      case parseKern (Bpm 72) src of
+        Left e -> assertFailure e
+        Right s -> do
+          scTieLeftovers s @?= 0
+          [ (snDur n, snPitch n) | v <- scVoices s, n <- vNotes v ]
+            @?= [(1 / 2, 61)] -- the open's pitch is authoritative
+  , testCase "tie: a stray ] on a passing tone steals nothing" $ do
+      -- wtc1p07:150 in miniature: 32an] mid-run while an a-flat tie is
+      -- open from another beat. Same staff position, but NOT temporally
+      -- adjacent — the passing tone must survive and the open must not
+      -- be consumed by it
+      let src = T.unlines ["**kern", "[2c#", "4d", "4c]", "*-"]
+      case parseKern (Bpm 72) src of
+        Left e -> assertFailure e
+        Right s -> do
+          scTieLeftovers s @?= 1 -- the c# open still flushes at EOF
+          sort [ (snOnset n, snPitch n) | v <- scVoices s, n <- vNotes v ]
+            @?= [(0, 61), (1 / 2, 62), (3 / 4, 60)]
+  , testCase "counterpoint: a diminished sixth is not a fifth" $ do
+      let sp l a o m t = (scoreNote t (1 / 4) m []) {snSpell = Just (Spelled l a o)}
+          mkS v1 v2 =
+            Score (Bpm 96) [Voice 0 v1, Voice 1 v2] 0 0 [(0, (4, 4))] 0 0
+          -- C4->D4 under Abb4->Bbb4: seven semitones both times, but a
+          -- sixth by letter — similar motion, and not parallel fifths
+          dim6 = mkS [sp 0 0 4 60 0, sp 1 0 4 62 (1 / 4)]
+                     [sp 5 (-2) 4 67 0, sp 6 (-2) 4 69 (1 / 4)]
+          -- the genuine article still counts
+          p5 = mkS [sp 0 0 4 60 0, sp 1 0 4 62 (1 / 4)]
+                   [sp 4 0 4 67 0, sp 5 0 4 69 (1 / 4)]
+      parallelPerfects dim6 @?= 0
+      parallelPerfects p5 @?= 1
+  , testCase "counterpoint: mixed spelling still pairs up" $ do
+      -- a spelled P5 slice followed by the same P5 with spelling absent
+      -- (generated notes, ornament auxiliaries) must still count: the
+      -- chromatic class pairs the slices; spelling only vetoes quality
+      let sp l a o m t = (scoreNote t (1 / 4) m []) {snSpell = Just (Spelled l a o)}
+          bare m t = scoreNote t (1 / 4) m []
+          mixed =
+            Score (Bpm 96)
+              [ Voice 0 [sp 0 0 4 60 0, bare 62 (1 / 4)]
+              , Voice 1 [sp 4 0 4 67 0, bare 69 (1 / 4)] ]
+              0 0 [(0, (4, 4))] 0 0
+      parallelPerfects mixed @?= 1
+  , testCase "transpose clears spelling (it cannot keep the notation)" $ do
+      let sn = (scoreNote 0 (1 / 4) 60 []) {snSpell = Just (Spelled 0 0 4)}
+          out k = [ s | (_, _, (s, _)) <-
+                          annEvents (E.Modify (E.Transpose k)
+                                       (E.Prim (E.Note (1 / 4) (sn, [])))) ]
+      map snPitch (out 3) @?= [63]
+      map snSpell (out 3) @?= [Nothing]
+      map snSpell (out 0) @?= [Just (Spelled 0 0 4)] -- identity keeps it
   , testCase "scl: a bare integer is a ratio (2 = the octave)" $ do
       let scl = T.unlines $
             ["! t", "t", "12", "!"]
