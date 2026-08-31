@@ -27,6 +27,7 @@ import OTB.Generate (generateScore)
 import Data.List (intercalate)
 import OTB.Analysis.Grouping (groupSpans)
 import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony)
+import OTB.Analysis.Imitation (Imitation (..), findImitation)
 import OTB.Analysis.Parallelism (Sequences (..), findSequences)
 import OTB.Analysis.Subject (subjectEntries)
 import OTB.Interp.Express (chargesForLane)
@@ -462,6 +463,7 @@ runAnalyze com = do
       tree = groupSpans 3 (2 * barLen0) allBounds 0 end
       subj = subjectEntries score
       sq = findSequences score
+      im = findImitation score
       wn (WholeNotes r) = show (fromRational r :: Double)
       arr xs = "[" <> intercalate "," xs <> "]"
       pair a b = "[" <> a <> "," <> b <> "]"
@@ -480,6 +482,9 @@ runAnalyze com = do
     <> ",\"subject\":" <> arr (map (wn . fst) subj)
     <> ",\"sequences\":" <> arr [ pair (wn a) (wn b) | (a, b) <- sqSpans sq ]
     <> ",\"seams\":" <> arr (map wn (sqSeams sq))
+    <> ",\"takes\":" <> arr [ "[" <> wn t <> "," <> show v <> "," <> wn sp <> "]"
+                            | (t, v, sp) <- imTakes im ]
+    <> ",\"exchanges\":" <> arr [ pair (wn a) (wn b) | (a, b) <- imSpans im ]
     <> ",\"novelty\":" <> arr [ pair (wn o) (show v)
                               | (o, v) <- sqNovelty sq ]
     <> ",\"onsets\":" <> arr (map (wn . (\(o, _, _) -> o)) notes)

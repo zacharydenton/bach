@@ -75,6 +75,7 @@ FEATURES = [
     "pos", "arch",
     "seq-active[k]", "seam[k]", "seam[k+1]", "seam[k-1]",
     "novelty[k]", "novelty[k-1]",
+    "exchange[k]", "take[k]", "take[k+1]",
 ]
 
 
@@ -102,6 +103,8 @@ def design(piece, ana, positions, kinds):
     charge = ana["charge"]
     tree_ends = [(b, 1.0 / d) for a, b, d in ana["tree"]]
     seq_spans = ana.get("sequences", [])
+    ex_spans = ana.get("exchanges", [])
+    takes = [(t, 1.0) for t, _, _ in ana.get("takes", [])]
     seams = [(t, 1.0) for t in ana.get("seams", [])]
     nov = ana.get("novelty", [])
 
@@ -126,9 +129,11 @@ def design(piece, ana, positions, kinds):
     # boundary feature lets the model say "mostly nothing, here a lot"
     thresh = np.quantile(bnd[bnd > 0], 0.9) if (bnd > 0).any() else 1e9
     strong[bnd >= thresh] = 1.0
+    take_next = np.zeros(n + 1)
     for k in range(n):
         lo, hi = beat_span(k)
         seam[k + 1] = in_beat(seams, lo, hi)
+        take_next[k - 1 if k > 0 else 0] += in_beat(takes, lo, hi)
         tot = in_beat(nov, lo, hi, val=lambda x: 1.0)
         novb[k + 1] = (in_beat(nov, lo, hi) / tot) if tot > 0 else 0.0
     for k in range(n):
@@ -149,6 +154,8 @@ def design(piece, ana, positions, kinds):
             1.0 if any(a <= positions[k] < b for a, b in seq_spans) else 0.0,
             seam[k + 1], seam[k + 2], seam[k],
             novb[k + 1], novb[k],
+            1.0 if any(a <= positions[k] < b for a, b in ex_spans) else 0.0,
+            in_beat(takes, lo, hi), take_next[k],
         ]
     return rows
 

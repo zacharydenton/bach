@@ -58,6 +58,10 @@ data ExpressParams = ExpressParams
   , exLeapDur :: !Double -- ^ KTH leap tone duration: hold the arrival
   , exUphill :: !Double -- ^ KTH faster uphill: rushing ascending runs
   , exDoubleDur :: !Double -- ^ KTH double duration: soften 2:1 contrast
+  , exDialogueVel :: !Double
+    -- ^ presence for the voice that takes the floor in cross-voice
+    -- imitation (Harnoncourt's Klangrede: polyphony is dialogue;
+    -- Czerny marks emphasis at every entry, not only the subject's)
   }
   deriving (Show, Eq)
 
@@ -84,6 +88,7 @@ defaultExpressParams = ExpressParams
   , exLeapDur = 0.05
   , exUphill = 0.03
   , exDoubleDur = 0.07
+  , exDialogueVel = 4
   }
 
 -- | Notes inégales (Quantz XI): conjunct equal-duration pairs on the

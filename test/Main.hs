@@ -23,8 +23,9 @@ import OTB.Interp.Dynamics
 import OTB.Interp.Express
 import OTB.Interp.Ornament
 import OTB.Interp.Phrasing
-import OTB.Explain (renderWhys)
+import OTB.Explain (Why (..), renderWhys)
 import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony, melodicCharge)
+import OTB.Analysis.Imitation (Imitation (..), findImitation)
 import OTB.Analysis.Subject (subjectEntries)
 import OTB.Instrument (hardwareTracks)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
@@ -782,6 +783,33 @@ sota = testGroup "sota"
   , testProperty "reshapers never produce non-positive durations, any k" $
       forAll ((,) <$> choose (0, 3.0) <*> genLane) $ \(k, l) ->
         all ((> 0) . snDur) (uphillLane k (doubleDurLane k l))
+  , testCase "imitation: an echoed distinctive motif is a take" $ do
+      let mk vi ons ps =
+            Voice vi [scoreNote o (1 / 8) p [] | (o, p) <- zip ons ps]
+          motif = [60, 64, 62, 67, 65, 69] -- direction changes galore
+          a = mk 0 [fromIntegral i / 8 | i <- [0 :: Int ..]] motif
+          b = mk 1 [1/2 + fromIntegral i / 8 | i <- [0 :: Int ..]] (map (+ 5) motif)
+          s = Score (Bpm 96) [a, b] 0 0 [(0, (4, 4))] 0
+          im = findImitation s
+      map (\(t', v, _) -> (t', v)) (imTakes im) @?= [(1 / 2, 1)]
+  , testCase "imitation: a scale run is figuration, not speech" $ do
+      let mk vi ons ps =
+            Voice vi [scoreNote o (1 / 8) p [] | (o, p) <- zip ons ps]
+          run = [60, 62, 64, 65, 67, 69]
+          s = Score (Bpm 96)
+                [mk 0 [fromIntegral i / 8 | i <- [0 :: Int ..]] run, mk 1 [1/2 + fromIntegral i / 8 | i <- [0 :: Int ..]] run]
+                0 0 [(0, (4, 4))] 0
+      imTakes (findImitation s) @?= []
+  , testCase "dialogue: the fugue converses, the prelude does not" $ do
+      present <- doesDirectoryExist corpusDir
+      if not present then pure () else do
+        pf <- performOf "wtc1f01"
+        pp <- performOf "wtc1p01"
+        let dialogues q =
+              length [ () | (_, ws) <- perfWhys q, w <- ws
+                     , "dialogue" `isInfixOf` whyRule w ]
+        assertBool "fugue has dialogue whys" (dialogues pf > 20)
+        dialogues pp @?= 0
   , testProperty "uphill reshaper preserves lane duration sum" $
       forAll genLane $ \l ->
         sum (map snDur (uphillLane 0.05 l)) === sum (map snDur l)
@@ -811,3 +839,7 @@ sota = testGroup "sota"
     scoreOf f = do
       src <- TIO.readFile (corpusDir </> f <> ".krn")
       either (assertFailure . ("parse: " <>)) pure (parseKern (Bpm 72) src)
+    performOf f = do
+      s <- scoreOf f
+      either (assertFailure . ("perform: " <>)) pure
+        (perform defaultInterp s)

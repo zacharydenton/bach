@@ -28,6 +28,7 @@ import Data.Ratio (approxRational)
 import EuterpeaLite.Music (Control (..), Music (..), Primitive (..))
 import OTB.Analysis.Grouping (groupSpans)
 import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony)
+import OTB.Analysis.Imitation (Imitation (..), findImitation)
 import OTB.Analysis.Parallelism (Sequences (..), findSequences)
 import OTB.Analysis.Subject (subjectEntries)
 import OTB.Annotate
@@ -132,7 +133,7 @@ perform ip score@(Score tempo voices _ _ meter _) =
                  <> " monophonic lanes; only "
                  <> show (length usableChannels)
                  <> " MIDI channels available")
-    else Right (assemble ip tempo tmap finalOnset melodyVi
+    else Right (assemble ip tempo tmap finalOnset melodyVi floorAt
                   (hRootAt harm, hStabilityAt harm)
                   (hCadences harm) tracks)
   where
@@ -156,6 +157,12 @@ perform ip score@(Score tempo voices _ _ meter _) =
     harm = analyzeHarmony meter allSounding end
     subjSet = subjectEntries score
     inSubject src = src `elem` subjSet
+
+    -- the conversation: who holds the floor when (Klangrede)
+    imit = findImitation score
+    floorAt vi t =
+      any (\(t0, v, sp) -> v == vi && t0 <= t && t < t0 + sp)
+        (imTakes imit)
 
     -- the grouping tree: per-lane boundary strengths aggregated across
     -- the texture, split recursively (Todd's arches nest over it)
@@ -248,21 +255,22 @@ perform ip score@(Score tempo voices _ _ meter _) =
       | fst (snSource sn) == finalOnset = Just (snd (snSource sn))
       | otherwise = Nothing
 
-    ctx ch = Ctx { cSounding = allSounding
-                 , cMeters = meter
-                 , cFinalTag = finalTag
-                 , cChannel = ch
-                 , cRootAt = hRootAt harm
-                 , cChargeAt = hChargeAt harm
-                 , cCadences = hCadences harm
-                 , cSubject = inSubject }
+    ctx vi ch = Ctx { cSounding = allSounding
+                    , cMeters = meter
+                    , cFinalTag = finalTag
+                    , cChannel = ch
+                    , cRootAt = hRootAt harm
+                    , cChargeAt = hChargeAt harm
+                    , cCadences = hCadences harm
+                    , cSubject = inSubject
+                    , cFloor = floorAt vi }
 
-    tracks = snd (foldl deal (usableChannels, []) voiceLanes)
-    deal (chans, acc) (_, ls) =
+    tracks = snd (foldl deal (usableChannels, []) (zip [0 ..] voiceLanes))
+    deal (chans, acc) (vi, (_, ls)) =
       let (mine, more) = splitAt (length ls) chans
        in ( more
           , acc <> [voiceEvents
-                      [ interpret ip tempo ch (annotateLane ip (ctx ch) l)
+                      [ interpret ip tempo ch (annotateLane ip (ctx vi ch) l)
                       | (ch, l) <- zip mine ls ]] )
 
 -- ---------------------------------------------------------------------
@@ -270,9 +278,11 @@ perform ip score@(Score tempo voices _ _ meter _) =
 
 assemble
   :: Interp -> Bpm -> [(WholeNotes, Bpm)] -> WholeNotes -> Int
+  -> (Int -> WholeNotes -> Bool)
   -> (WholeNotes -> Maybe Int, WholeNotes -> Double) -> [WholeNotes]
   -> [[(Rational, Rational, Ev)]] -> Performance
-assemble ip tempo tmap finalOnset melodyVi (rootAt, stabAt) cads trs =
+assemble ip tempo tmap finalOnset melodyVi floorAt (rootAt, stabAt)
+         cads trs =
   Performance tmap
     (map enforceMono (rollFinal perturbed))
     (concatMap (map snd) whysed)
@@ -299,7 +309,11 @@ assemble ip tempo tmap finalOnset melodyVi (rootAt, stabAt) cads trs =
               i = evIndex ev
               leadMs = exEnsemble ex * exLeadMs ex
               isMelody = vi == melodyVi
-              lead = if isMelody then msToWnAt (fromRational t) leadMs else 0
+              -- Klangrede: whoever takes the floor leads the ensemble
+              -- for that motif, exactly as the melody otherwise does
+              hasFloor = floorAt vi (evSrcOn ev)
+              lead = if isMelody || hasFloor
+                       then msToWnAt (fromRational t) leadMs else 0
               jms = exEnsemble ex * exJitterMs ex
                       * seededJitter1f seed (ch * 2) i
               jit = msToWnAt (fromRational t) jms
@@ -325,6 +339,11 @@ assemble ip tempo tmap finalOnset melodyVi (rootAt, stabAt) cads trs =
                        ("-" <> show (round leadMs :: Int) <> " ms (leads)")
                        "Palmer 1996; Rasch 1979 (asynchrony aids voice streaming)"
                    | isMelody, leadMs > 0 ]
+                <> [ why "dialogue-lead"
+                       ("-" <> show (round leadMs :: Int)
+                          <> " ms (has the floor)")
+                       "Harnoncourt, Musik als Klangrede"
+                   | hasFloor, not isMelody, leadMs > 0 ]
                 <> [ why "jitter"
                        (showMs jms <> " ms, " <> showD jv <> " vel (seeded 1/f)")
                        "KTH noise rules; Gilden 1995" | exEnsemble ex > 0 ]

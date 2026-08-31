@@ -119,7 +119,7 @@ loadConfig src = do
       , "jitter_ms", "jitter_vel", "dis_vel", "dis_lean", "arch_piece"
       , "breath_threshold", "w_gap", "w_dur", "w_leap"
       , "w_cadence", "cadence_span", "open_span", "mel_charge", "harm_charge"
-      , "subject_vel", "leap_dur", "trill_termination" ]
+      , "subject_vel", "leap_dur", "trill_termination", "dialogue_vel" ]
     gates = ["base", "staccato", "tenuto", "legato", "repeated", "cantabile"
             , "min_gate", "rit_floor"]
     -- these scale a duration or tempo multiplicatively: >= 1 would
@@ -243,6 +243,7 @@ expressFor cfg piece dflt =
         , exLeapDur = g "leap_dur" (exLeapDur p)
         , exUphill = g "uphill" (exUphill p)
         , exDoubleDur = g "double_dur" (exDoubleDur p)
+        , exDialogueVel = g "dialogue_vel" (exDialogueVel p)
         }
       where
         g k dflt' = maybe dflt' id (Map.lookup k m)

@@ -64,6 +64,9 @@ data Ctx = Ctx
   , cChargeAt :: WholeNotes -> Double -- ^ harmonic charge at a position
   , cCadences :: [WholeNotes] -- ^ V-I arrival onsets
   , cSubject :: (WholeNotes, Int) -> Bool -- ^ fugue subject membership
+  , cFloor :: WholeNotes -> Bool
+    -- ^ does THIS voice hold the floor (cross-voice imitation) at the
+    -- notated onset — the dialogue rule's question
   }
 
 -- | The interpreter's output payload, plus provenance.
@@ -163,7 +166,10 @@ annotateLane ip ctx l = Annotated (go 0 decided)
         sBump = if cSubject ctx (snSource sn)
                   then round (exExpression ex * exSubjectVel ex)
                   else 0 :: Int
-        vOut = v + mcBump + hcBump + sBump
+        dBump = if cFloor ctx (fst (snSource sn))
+                  then round (exEnsemble ex * exDialogueVel ex)
+                  else 0 :: Int
+        vOut = v + mcBump + hcBump + sBump + dBump
         attrs = concat
           [ [Art (if gate < 1 then Staccato gate else Legato gate)]
           , [Art Breath | isJust mBreath]
@@ -201,6 +207,10 @@ annotateLane ip ctx l = Annotated (go 0 decided)
           , [ why "subject-entry"
                 ("+" <> show sBump <> " vel across the statement")
                 "fugal practice; Czerny's WTC edition" | sBump > 0 ]
+          , [ why "dialogue"
+                ("+" <> show dBump <> " vel — takes the floor")
+                "Harnoncourt, Musik als Klangrede; Czerny's WTC edition"
+            | dBump > 0 ]
           , [ why "ornament" (ornName m) "Bach's Explication; CPE Bach 1753"
             | m <- snMarks sn, isJust (ornAttr m) ]
           , [ why "final-chord" "member: rolled bass-upward in assembly"
