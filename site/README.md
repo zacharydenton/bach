@@ -8,19 +8,23 @@ ffmpeg, no surgepy — a dumb file host is the whole deployment.
 What ships here (committed):
 
 - `index.html`, `app.css`, `app.js` — the board UI, ported from
-  `tools/patchboard.py`'s PAGE. Same register-role routing, casting
-  resolution, calibration compensation and why-ledger; the progress
-  rail additionally **seeks**, which the streamed board never could,
-  and the ledger works while paused — seek anywhere and study the
-  moment.
-- `board-processor.js` — an AudioWorkletProcessor hosting one
-  `SurgeWasm` instance per MIDI channel (the live board's
-  one-surgepy-instance-per-channel design), walking the pre-built
-  event list in 32-frame engine blocks with the live board's riding
-  limiter on the mix.
-- `routing.js` + `routing.test.js` — the pure logic, mirrored from
-  `tools/test_patchboard.py`'s cases; run with
-  `node --test site/routing.test.js`.
+  `tools/patchboard.py`'s PAGE and recast as a **fixed four-voice
+  rig**: bass, tenor, alto, soprano, shown at all times, each with its
+  own preset, mute and gain. Every piece's channels are distributed
+  among the four by register rank (a slot with nothing to play reads
+  *tacet*), and because the slots persist, the live board's role-stable
+  routing falls out by construction — a preset you pick stands until a
+  piece's own casting file overrides it. The progress rail **seeks**,
+  which the streamed board never could, and the ledger works while
+  paused — seek anywhere and study the moment.
+- `board-processor.js` — an AudioWorkletProcessor hosting four
+  `SurgeWasm` instances (several score lanes share a voice's synth;
+  native SCL tuning is what makes that safe — no per-note bends to
+  fight over), walking the pre-built event list in 32-frame engine
+  blocks with the live board's riding limiter on the mix.
+- `routing.js` + `routing.test.js` — the pure logic (slot
+  distribution, casting-to-slot resolution, calibration, event build);
+  run with `node --test site/routing.test.js`.
 
 What the bake produces (gitignored — regenerate, don't commit):
 
@@ -49,7 +53,8 @@ correct `application/wasm` MIME type (python's http.server and GitHub
 Pages both comply). AudioWorklets need a secure context: https or
 localhost.
 
-Verified end-to-end with Playwright (12 wasm synth instances at ~14%
-engine load; default rig seeds; wtc1f01's casting file overrides the
-role carry; seek, pause/resume and the ledger all behave; console
-clean).
+Verified end-to-end with Playwright over the tailnet mount (four wasm
+synths at ~6–8% engine load; the default rig seeds; wtc1f01's casting
+lands one patch per slot; a hand-picked preset survives piece changes;
+the two-voice fugue shows tenor and alto tacet; seek, pause/resume and
+the ledger all behave; console clean).

@@ -1,24 +1,28 @@
 /*
  * The static patchboard's main thread: fetches the baked album, owns the
- * patch/gain/mute state and the role-stable routing, and drives the worklet
- * (board-processor.js) with pre-built event lists. The UI is the live
- * board's page (tools/patchboard.py PAGE) minus everything server-born —
- * and the progress rail seeks, which the streamed board never could.
+ * four-voice rig — bass, tenor, alto, soprano, one Surge instance each,
+ * shown at all times — and drives the worklet (board-processor.js) with
+ * pre-built event lists. Each piece's channels are distributed among the
+ * four slots by register (routing.js slotMap); the rig persists across
+ * pieces, so a casting you dial in stands until a piece's own casting
+ * file overrides it. The progress rail seeks, and the ledger reads while
+ * paused — seek anywhere and study the moment.
  */
 import {
-  partsOf, carryRoles, resolveCasting, buildEvents,
+  SLOTS, slotMap, resolveSlots, buildEvents,
   whyIndex, whysAt, pieceTitle,
 } from "./routing.js";
 
 let MANIFEST, CASTINGS, CAL, CATS;
 let ctx, node, SR;
 let PLAYING = false;
-let PIECE = null; // {idx, name, parts, whyIdx, loopFrames}
+let PIECE = null; // {idx, name, chToSlot, slotChannels, whyIdx, loopFrames}
 let POS = { frame: 0, t: Date.now(), playing: false };
 let STAT = { peak: 0, riding: false, load: 0 };
-const chState = { gain: {}, mute: {}, patchPath: {}, patchName: {} };
+const slotPatch = ["(init)", "(init)", "(init)", "(init)"];
+const slotGain = [0.25, 0.25, 0.25, 0.25]; // summing headroom (live default)
+const slotMute = [false, false, false, false];
 const castState = { defaultDone: false };
-let rankChannels = null;
 const patchCache = new Map();
 
 const $ = (id) => document.getElementById(id);
@@ -44,8 +48,9 @@ async function init() {
   $("title").textContent = t.main;
   $("idx").textContent = `${t.bwv ? t.bwv + " · " : ""}1 / ${MANIFEST.pieces.length}`;
   $("stats").textContent =
-    `${MANIFEST.pieces.length} pieces baked · ${MANIFEST.nInstances} Surge` +
-    ` instances will render in this tab — press Start`;
+    `${MANIFEST.pieces.length} pieces baked · four Surge voices` +
+    ` will render in this tab — press Start`;
+  renderRig();
 
   $("start").addEventListener("click", start);
   $("play").addEventListener("click", playToggle);
@@ -80,7 +85,7 @@ async function start() {
       numberOfInputs: 0,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { wasmBinary, nInstances: MANIFEST.nInstances },
+      processorOptions: { wasmBinary, nInstances: SLOTS.length },
     });
     const ready = new Promise((res, rej) => {
       node.port.onmessage = (e) => {
@@ -125,36 +130,18 @@ async function loadPiece(idx) {
   const p = MANIFEST.pieces[idx];
   node.port.postMessage({ type: "pause" });
   const perf = await (await fetch(encUrl(p.url))).json();
-  const { parts, order } = partsOf(perf);
-  for (const part of parts) {
-    for (const ch of part.channels) {
-      chState.gain[ch] ??= 0.25; // summing headroom (live board default)
-      chState.mute[ch] ??= false;
-      chState.patchPath[ch] ??= "(init)";
-    }
-  }
+  const { chToSlot, slotChannels } = slotMap(perf);
 
-  // role-stable routing: snapshot outgoing roles BEFORE the map changes
-  const prevRoles = rankChannels
-    ? rankChannels.map((ch) => ({
-        patch: chState.patchPath[ch] ?? "(init)",
-        gain: chState.gain[ch] ?? 0.25,
-        mute: chState.mute[ch] ?? false,
-      }))
-    : null;
-  const carried = carryRoles(prevRoles, parts, order, chState);
-  rankChannels = carried.rankChannels;
-  const eff = resolveCasting(CASTINGS, p.name, parts, carried.roleBase,
-    chState.patchPath, castState, MANIFEST.nInstances);
-  for (const [chS, url] of Object.entries(eff)) {
-    if (url !== chState.patchPath[+chS]) await applyPatch(+chS, url);
-    else chState.patchPath[+chS] = url;
+  const eff = resolveSlots(CASTINGS, p.name, slotChannels, slotPatch,
+    castState);
+  for (let s = 0; s < SLOTS.length; s++) {
+    if (eff[s] !== slotPatch[s]) await applyPatch(s, eff[s]);
   }
 
   // calibration compensation sees the patches that will play
-  const score = buildEvents(perf, SR, eff, CAL, true);
+  const score = buildEvents(perf, SR, chToSlot, eff, CAL, true);
   PIECE = {
-    idx, name: p.name, parts,
+    idx, name: p.name, chToSlot, slotChannels,
     whyIdx: whyIndex(perf), loopFrames: score.loopFrames,
   };
   node.port.postMessage({ type: "score", ...score }, [
@@ -162,23 +149,20 @@ async function loadPiece(idx) {
     score.a.buffer, score.b.buffer,
     score.tempoFrames.buffer, score.tempoBpm.buffer,
   ]);
-  for (const part of parts) {
-    for (const ch of part.channels) {
-      node.port.postMessage({ type: "gain", ch, v: chState.gain[ch] });
-      node.port.postMessage({ type: "mute", ch, v: !!chState.mute[ch] });
-    }
+  for (let s = 0; s < SLOTS.length; s++) {
+    node.port.postMessage({ type: "gain", ch: s, v: slotGain[s] });
+    node.port.postMessage({ type: "mute", ch: s, v: slotMute[s] });
   }
   POS = { frame: 0, t: Date.now(), playing: PLAYING };
   renderHeader();
-  renderParts();
+  refreshRig();
   if (PLAYING) node.port.postMessage({ type: "play" });
 }
 
-async function applyPatch(ch, url) {
-  chState.patchPath[ch] = url;
-  chState.patchName[ch] = patchDisplay(url);
+async function applyPatch(slot, url) {
+  slotPatch[slot] = url;
   // "(init)" is the booted state; once a patch is loaded there is nothing
-  // to reload, so it only means "leave this instance alone" (as live)
+  // to reload, so it only means "leave this voice alone" (as live)
   if (url === "(init)" || !node) return;
   let bytes = patchCache.get(url);
   if (!bytes) {
@@ -187,7 +171,7 @@ async function applyPatch(ch, url) {
   }
   const copy = new Uint8Array(bytes.slice(0)); // transfer must not eat the cache
   node.port.postMessage(
-    { type: "patch", ch, bytes: copy, name: chState.patchName[ch] },
+    { type: "patch", ch: slot, bytes: copy, name: patchDisplay(url) },
     [copy.buffer],
   );
 }
@@ -250,87 +234,85 @@ function opts() {
   return h;
 }
 
-function renderParts() {
+// The four voices, shown at all times. Built once; pieces only change
+// which slots are sounding (tacet) and what the casting put on them.
+function renderRig() {
   const div = $("parts");
-  div.innerHTML = PIECE.parts.map((p, i) => `
-    <div class=part id=part${i} style="--vc:var(--v${i % 6})">
+  div.innerHTML = SLOTS.map((name, s) => `
+    <div class=part id=part${s} style="--vc:var(--v${s})">
      <div class=head>
-      <b id=nm${i}>${esc(p.name)}</b>
-      <span class=patch id=pn${i}></span>
+      <b>${name}</b>
+      <span class=patch id=pn${s}></span>
+      <span class=tacet id=tc${s}></span>
      </div>
      <div class=row>
-      <button data-step=-1 data-part=${i} aria-label="previous patch">◀</button>
-      <select id=sel${i} data-part=${i} style="flex:1">${opts()}</select>
-      <button data-step=1 data-part=${i} aria-label="next patch">▶</button>
-      <button id=mute${i} data-mute=${i}>Mute</button>
-      <input type=range min=0 max=1.5 step=0.05 id=gain${i}
-        data-gain=${i} aria-label="gain">
+      <button data-step=-1 data-slot=${s} aria-label="previous patch">◀</button>
+      <select id=sel${s} data-slot=${s} style="flex:1">${opts()}</select>
+      <button data-step=1 data-slot=${s} aria-label="next patch">▶</button>
+      <button id=mute${s} data-mute=${s}>Mute</button>
+      <input type=range min=0 max=1.5 step=0.05 id=gain${s}
+        data-gain=${s} aria-label="gain">
      </div>
     </div>`).join("");
   div.querySelectorAll("[data-step]").forEach((b) =>
     b.addEventListener("click", () =>
-      stepPatch(+b.dataset.part, +b.dataset.step)));
-  div.querySelectorAll("select[data-part]").forEach((s) =>
-    s.addEventListener("change", () => setPatch(+s.dataset.part, s.value)));
+      stepPatch(+b.dataset.slot, +b.dataset.step)));
+  div.querySelectorAll("select[data-slot]").forEach((sel) =>
+    sel.addEventListener("change", () => setPatch(+sel.dataset.slot, sel.value)));
   div.querySelectorAll("[data-mute]").forEach((b) =>
     b.addEventListener("click", () => muteToggle(+b.dataset.mute)));
   div.querySelectorAll("[data-gain]").forEach((r) =>
     r.addEventListener("input", () =>
       setGain(+r.dataset.gain, parseFloat(r.value))));
-  refreshPartRows();
+  refreshRig();
 }
 
-function refreshPartRows() {
-  PIECE.parts.forEach((p, i) => {
-    const ch0 = p.channels[0];
-    const path = chState.patchPath[ch0] ?? "(init)";
-    $(`pn${i}`).textContent = patchDisplay(path);
-    const sel = $(`sel${i}`);
-    if (document.activeElement !== sel && sel.value !== path) sel.value = path;
-    const muted = !!chState.mute[ch0];
-    $(`mute${i}`).className = muted ? "on" : "";
-    $(`part${i}`).classList.toggle("muted", muted);
-    $(`gain${i}`).value = chState.gain[ch0] ?? 0.25;
+function refreshRig() {
+  SLOTS.forEach((_, s) => {
+    $(`pn${s}`).textContent = patchDisplay(slotPatch[s]);
+    const sel = $(`sel${s}`);
+    if (document.activeElement !== sel && sel.value !== slotPatch[s])
+      sel.value = slotPatch[s];
+    $(`mute${s}`).className = slotMute[s] ? "on" : "";
+    $(`part${s}`).classList.toggle("muted", slotMute[s]);
+    $(`gain${s}`).value = slotGain[s];
+    $(`tc${s}`).textContent =
+      PIECE && !PIECE.slotChannels[s].length ? "tacet" : "";
   });
-  $("cast").textContent = PIECE.parts.map((p) => {
-    const path = chState.patchPath[p.channels[0]] ?? "(init)";
-    if (path === "(init)") return "";
-    return p.channels.map((c) => `--patch-ch "${c}:${bankTail(path)}"`).join(" ");
+  $("cast").textContent = !PIECE ? "" : SLOTS.map((_, s) => {
+    if (slotPatch[s] === "(init)") return "";
+    return PIECE.slotChannels[s]
+      .map((c) => `--patch-ch "${c}:${bankTail(slotPatch[s])}"`).join(" ");
   }).filter(Boolean).join(" \\\n");
 }
 
-async function setPatch(i, url) {
-  for (const ch of PIECE.parts[i].channels) await applyPatch(ch, url);
-  refreshPartRows();
+async function setPatch(s, url) {
+  await applyPatch(s, url);
+  refreshRig();
 }
 
-function stepPatch(i, d) {
-  const s = $(`sel${i}`);
-  s.selectedIndex = Math.max(0, Math.min(s.length - 1, s.selectedIndex + d));
-  setPatch(i, s.value);
+function stepPatch(s, d) {
+  const sel = $(`sel${s}`);
+  sel.selectedIndex = Math.max(0, Math.min(sel.length - 1, sel.selectedIndex + d));
+  setPatch(s, sel.value);
 }
 
-function muteToggle(i) {
-  const v = !chState.mute[PIECE.parts[i].channels[0]];
-  for (const ch of PIECE.parts[i].channels) {
-    chState.mute[ch] = v;
-    node.port.postMessage({ type: "mute", ch, v });
-  }
-  refreshPartRows();
+function muteToggle(s) {
+  slotMute[s] = !slotMute[s];
+  if (node) node.port.postMessage({ type: "mute", ch: s, v: slotMute[s] });
+  refreshRig();
 }
 
-function setGain(i, v) {
-  for (const ch of PIECE.parts[i].channels) {
-    chState.gain[ch] = v;
-    node.port.postMessage({ type: "gain", ch, v });
-  }
+function setGain(s, v) {
+  slotGain[s] = v;
+  if (node) node.port.postMessage({ type: "gain", ch: s, v });
 }
 
 function renderStats() {
   const bits = [
     `peak ${STAT.peak.toFixed(3)}`,
     `engine load ${(STAT.load * 100).toFixed(0)}%`,
-    `${MANIFEST.nInstances} synths`,
+    `${SLOTS.length} synths`,
   ];
   $("stats").innerHTML = bits.join(" · ") +
     (STAT.riding ? ' · <span class=clip>limiter riding</span>' : "");
@@ -351,19 +333,10 @@ function tick() {
 }
 
 // The ledger: keyed per-line DOM. A rule that keeps applying HOLDS STILL;
-// only entering lines rise in and departing lines fade out. Unlike the live
-// board this also works paused — seek anywhere and study the moment.
+// only entering lines rise in and departing lines fade out. Chips wear the
+// slot the note sounds on; rules are deduped per slot.
 const WHY_RE = /^([^:]+): (.*?)(?:\s*\[(.*)\])?$/;
-function partIndexOf(ch) {
-  if (!PIECE) return 0;
-  for (let i = 0; i < PIECE.parts.length; i++)
-    if (PIECE.parts[i].channels.includes(ch)) return i;
-  return 0;
-}
-function chipName(ch) {
-  const i = partIndexOf(ch);
-  return PIECE ? PIECE.parts[i].name.split(" ")[0] : "ch" + ch;
-}
+const slotOf = (ch) => (PIECE && PIECE.chToSlot[ch]) ?? 3;
 function refreshWhys() {
   if (!PIECE) return;
   const box = $("whys");
@@ -371,12 +344,14 @@ function refreshWhys() {
   const seen = new Map();
   for (const w of ws) {
     const m = WHY_RE.exec(w.why) || [null, w.why, "", ""];
-    const key = w.ch + "|" + m[1];
+    const s = slotOf(w.ch);
+    const key = s + "|" + m[1];
     if (!seen.has(key))
-      seen.set(key, { ch: w.ch, rule: m[1], delta: m[2] || "", cite: m[3] || "" });
+      seen.set(key, { slot: s, rule: m[1], delta: m[2] || "", cite: m[3] || "" });
   }
   const want = [...seen.entries()].sort(
-    (a, b) => a[1].ch - b[1].ch || a[1].rule.localeCompare(b[1].rule)).slice(0, 6);
+    (a, b) => a[1].slot - b[1].slot
+      || a[1].rule.localeCompare(b[1].rule)).slice(0, 6);
   const wantKeys = new Set(want.map(([k]) => k));
   for (const el of [...box.children]) {
     if (!wantKeys.has(el.dataset.key) && !el.classList.contains("out")) {
@@ -391,8 +366,8 @@ function refreshWhys() {
     const el = document.createElement("div");
     el.className = "why in";
     el.dataset.key = key;
-    el.style.setProperty("--vc", `var(--v${partIndexOf(w.ch) % 6})`);
-    el.innerHTML = `<span class=chip>${esc(chipName(w.ch))}</span>`
+    el.style.setProperty("--vc", `var(--v${w.slot})`);
+    el.innerHTML = `<span class=chip>${esc(SLOTS[w.slot])}</span>`
       + `<span><b>${esc(w.rule)}</b> <span class=delta>${esc(w.delta)}</span>`
       + (w.cite ? ` <span class=cite>${esc(w.cite)}</span>` : "") + "</span>";
     box.appendChild(el);

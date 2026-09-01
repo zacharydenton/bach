@@ -1,89 +1,66 @@
 /*
- * Pure logic for the static patchboard, ported line-for-line from the live
- * board (tools/patchboard.py) so the two agree note-for-note. Everything here
- * is data-in/data-out — no DOM, no audio — and runs under `node --test`
- * (routing.test.js) as well as in the browser.
+ * Pure logic for the static patchboard. The board is a fixed four-voice
+ * rig — bass, tenor, alto, soprano — and every piece's channels are
+ * distributed among those four slots by register. The slots persist
+ * across pieces (they ARE the register roles the live board carried), so
+ * patches, gains and mutes survive piece changes by construction.
+ * Everything here is data-in/data-out — no DOM, no audio — and runs
+ * under `node --test` (routing.test.js) as well as in the browser.
  */
 
-// kern orders spines bass-first: name parts by register from the notes,
-// so nobody casts a lead onto the bass again (patchboard.load_piece).
-export const REGNAMES = {
-  1: ["solo"],
-  2: ["bass", "soprano"],
-  3: ["bass", "alto", "soprano"],
-  4: ["bass", "tenor", "alto", "soprano"],
-  5: ["bass", "tenor", "alto", "mezzo", "soprano"],
-};
+export const SLOTS = ["bass", "tenor", "alto", "soprano"];
 
-export function partsOf(perf) {
-  const tracks = perf.tracks;
-  const means = tracks.map(
-    (tr) => tr.reduce((s, n) => s + n.pitch, 0) / Math.max(1, tr.length),
-  );
-  const order = means.map((_, i) => i).sort((a, b) => means[a] - means[b]);
-  const names = REGNAMES[means.length];
-  const labels = {};
-  order.forEach((vi, rank) => {
-    labels[vi] = names ? names[rank] : `voice ${vi}`;
+// Rank a piece's channels bass-first by mean pitch (kern orders spines
+// bass-first, but the notes are the ground truth) and spread the ranks
+// across the four slots. A single-channel piece takes the TOP slot —
+// the solo carries the lead, the live board's rule.
+export function slotMap(perf) {
+  const sum = {};
+  const cnt = {};
+  for (const tr of perf.tracks) {
+    for (const n of tr) {
+      sum[n.ch] = (sum[n.ch] || 0) + n.pitch;
+      cnt[n.ch] = (cnt[n.ch] || 0) + 1;
+    }
+  }
+  const chans = Object.keys(sum).map(Number).sort(
+    (a, b) => sum[a] / cnt[a] - sum[b] / cnt[b] || a - b);
+  const n = chans.length;
+  const chToSlot = {};
+  const slotChannels = [[], [], [], []];
+  chans.forEach((ch, r) => {
+    const s = n === 1 ? 3 : Math.round((r * 3) / (n - 1));
+    chToSlot[ch] = s;
+    slotChannels[s].push(ch);
   });
-  const parts = tracks.map((tr, vi) => ({
-    name: `${labels[vi]} (voice ${vi})`,
-    channels: [...new Set(tr.map((n) => n.ch))].sort((a, b) => a - b),
-  }));
-  return { parts, order };
+  return { chToSlot, slotChannels };
 }
 
-// ROLE-STABLE routing: the outgoing piece's settings, snapshotted in register
-// order (bass..soprano), map onto the new parts by register rank — equal
-// ranks match, differing voice counts interpolate, and a single-part piece
-// inherits the TOP role (the solo carries the lead). Gains/mutes apply
-// directly; patches become the base the casting resolution starts from.
-export function carryRoles(prevRoles, parts, order, chState) {
-  const rankParts = order.map((vi) => parts[vi]);
-  let roleBase = null;
-  if (prevRoles && prevRoles.length) {
-    const m = prevRoles.length;
-    const n = rankParts.length;
-    roleBase = { ...chState.patchPath };
-    rankParts.forEach((part, r) => {
-      let src;
-      if (n === 1) src = prevRoles[m - 1];
-      else if (m === 1) src = prevRoles[0];
-      else src = prevRoles[Math.round((r * (m - 1)) / (n - 1))];
-      for (const ch of part.channels) {
-        chState.gain[ch] = src.gain;
-        chState.mute[ch] = src.mute;
-        roleBase[ch] = src.patch;
+// Effective patch per slot for a piece about to load: current slot
+// patches survive (the rig is standing); on the very first load the
+// "default" casting seeds it; a piece with its own casting overrides.
+// Castings are keyed by source channel (bass-first, as cast on the live
+// board) — a slot wears the entry of its bass-most cast channel.
+export function resolveSlots(castings, name, slotChannels, current,
+                             castState) {
+  const eff = [...current];
+  const apply = (cast) => {
+    if (!cast) return;
+    slotChannels.forEach((chs, s) => {
+      for (const ch of chs) {
+        const url = cast[String(ch)];
+        if (url) {
+          eff[s] = url;
+          break;
+        }
       }
     });
-  }
-  return { roleBase, rankChannels: rankParts.map((p) => p.channels[0]) };
-}
-
-// Effective patch per channel for a piece about to load: current patches
-// survive (auditioning continuity); on the very first load the "default"
-// casting seeds the standing rig; a piece with its own casting overrides,
-// its per-part entries expanded to every channel of the part.
-// `castings` is the baked data/casting.json: {name: {ch: url}}.
-export function resolveCasting(castings, name, parts, base, chPatchPath,
-                               castState, nInstances) {
-  const eff = { ...(base ?? chPatchPath) };
+  };
   if (!castState.defaultDone) {
     castState.defaultDone = true;
-    const dflt = castings["default"];
-    if (dflt) {
-      for (const [ch, url] of Object.entries(dflt)) {
-        if (+ch < nInstances) eff[+ch] = url;
-      }
-    }
+    apply(castings["default"]);
   }
-  const cast = castings[name];
-  if (cast) {
-    for (const part of parts) {
-      const url = cast[String(part.channels[0])];
-      if (url) for (const ch of part.channels) eff[ch] = url;
-    }
-  }
+  apply(castings[name]);
   return eff;
 }
 
@@ -101,26 +78,30 @@ export function calFor(calibration, url) {
 
 export const BLOCK = 32;
 
-// The event list the worklet plays: patchboard.load_piece's build, packed
-// into transferable typed arrays. kind 0=bend 1=on 2=off; same-frame order
-// off < bend < on. `sclActive` drops per-note bends (native SCL tuning
-// applies the temperament; bends would tune twice).
-export function buildEvents(perf, sr, eff, calibration, sclActive) {
+// The event list the worklet plays: patchboard.load_piece's build, with
+// each note routed to its register slot and packed into transferable
+// typed arrays. kind 0=bend 1=on 2=off; same-frame order off < bend < on.
+// `sclActive` drops per-note bends (native SCL tuning applies the
+// temperament; bends would tune twice) — which is also what lets several
+// lanes share one synth instance without fighting over the bend wheel.
+export function buildEvents(perf, sr, chToSlot, slotUrls, calibration,
+                            sclActive) {
   const evs = [];
   let end = 0;
   for (const tr of perf.tracks) {
     for (const n of tr) {
+      const slot = chToSlot[n.ch] ?? 3;
       const on = Math.floor(n.onS * sr);
-      // timbre-aware articulation: subtract part of the channel's measured
+      // timbre-aware articulation: subtract part of the slot's measured
       // release tail so breaths stay audible on pads
-      const m = calFor(calibration, eff[n.ch] ?? "");
+      const m = calFor(calibration, slotUrls[slot] ?? "");
       const comp = m ? Math.min(0.5 * (m.releaseS || 0), 0.3) : 0;
       const durS = Math.max(n.durS * 0.5, n.durS - comp);
       const off = Math.max(on + 1, Math.floor((n.onS + durS) * sr));
       end = Math.max(end, n.onS + n.durS);
-      if (!sclActive) evs.push({ frame: on, kind: 0, ch: n.ch, a: n.bend, b: 0 });
-      evs.push({ frame: on, kind: 1, ch: n.ch, a: n.pitch, b: n.vel });
-      evs.push({ frame: off, kind: 2, ch: n.ch, a: n.pitch, b: 0 });
+      if (!sclActive) evs.push({ frame: on, kind: 0, ch: slot, a: n.bend, b: 0 });
+      evs.push({ frame: on, kind: 1, ch: slot, a: n.pitch, b: n.vel });
+      evs.push({ frame: off, kind: 2, ch: slot, a: n.pitch, b: 0 });
     }
   }
   const KO = { 2: 0, 0: 1, 1: 2 };

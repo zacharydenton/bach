@@ -40,6 +40,7 @@ select:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
 .part .head{display:flex;align-items:baseline;gap:.6rem;margin-bottom:.4rem}
 .part b{font:600 14px system-ui;letter-spacing:.01em}
 .part .patch{font:12px var(--mono);color:var(--vc,var(--dim))}
+.part .tacet{font:italic 11px var(--mono);color:var(--faint);margin-left:auto}
 .part.muted{opacity:.45}
 input[type=range]{width:7.5rem;accent-color:var(--brass)}
 .ledger{margin:1.6rem 0 0}
