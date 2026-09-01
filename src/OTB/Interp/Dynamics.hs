@@ -92,6 +92,12 @@ dynamicsLane' dp meters bounds ns =
 
     -- the meter in force at the note: last change at or before its onset,
     -- with bar positions counted from that change
+    -- ADDITIVE residuals, not an exclusive pick: a downbeat is also a
+    -- half-bar point and a beat, so it accrues every level it sits on.
+    -- With the old select-one semantics, fitting vel_bar to 0 while
+    -- vel_beat stayed positive INVERTED the hierarchy (ordinary beats
+    -- louder than downbeats) — "no extra bar accent" and "no bar
+    -- accent at all" must be different configurations.
     metrical n = case takeWhile ((<= snOnset n) . fst) meters of
       [] -> 0
       ms ->
@@ -99,10 +105,12 @@ dynamicsLane' dp meters bounds ns =
             bar = WholeNotes (fromIntegral num / fromIntegral den)
             beat = WholeNotes (1 / fromIntegral den)
             pos = wmod (snOnset n - start) bar
-         in if pos == 0 then dyBar dp
-            else if even num && pos == bar / 2 then dyHalfBar dp
-            else if wmod pos beat == 0 then dyBeat dp
-            else 0
+            onBar = pos == 0
+            onHalf = even num && (onBar || pos == bar / 2)
+            onBeat = wmod pos beat == 0
+         in sum [ dyBar dp | onBar ]
+              + sum [ dyHalfBar dp | onHalf ]
+              + sum [ dyBeat dp | onBeat ]
     wmod (WholeNotes a) (WholeNotes b)
       | b <= 0 = WholeNotes a
       | otherwise = WholeNotes (a - b * fromIntegral (floor (a / b) :: Integer))

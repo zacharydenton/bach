@@ -51,16 +51,19 @@ w_dur = 0.7         # long note arriving after shorter ones
 w_leap = 0.5        # leap away from the note
 
 [dynamics]
-# NOTE-LEVEL FIT (vel_fit --fit-defaults vs 166 ASAP performances,
-# 2026-09-01): held-out Book II velocity r 0.161 -> 0.421. Register is
-# what humans actually voice by — vel_highloud triples and dominates;
-# read the zeros below with that in mind: rules whose contribution is
-# invisible beside register got switched off, not disproven at zero
-# register-contrast. All remain per-piece knobs.
+# NOTE-LEVEL FIT (vel_fit --fit-defaults --from-prefit vs 166 ASAP
+# performances, 2026-09-01, under ADDITIVE metrical semantics): held-out
+# Book II velocity r 0.132 -> 0.423. Register is what humans actually
+# voice by — vel_highloud triples and dominates; read the zeros below
+# with that in mind: rules whose contribution is invisible beside
+# register got switched off, not disproven at zero register-contrast.
+# All remain per-piece knobs. (An earlier run under the old select-one
+# accent semantics appeared to keep vel_beat; that was an inversion
+# artifact — additive levels retract it.)
 vel_base = 84       # centre velocity (unfittable: r is affine-invariant)
-vel_bar = 0         # FITTED (was 12): Sloboda's barline accent does not
-vel_halfbar = 0     # survive contact with WTC velocities...
-vel_beat = 3        # ...but the beat level does, exactly at its hand value
+vel_bar = 0         # FITTED (was 12): the whole Sloboda metrical
+vel_halfbar = 0     # hierarchy — bar, half-bar, beat — leaves no
+vel_beat = 0        # velocity trace beside register in the WTC
 vel_arch = 0        # FITTED (was 8): no Todd loudness arch in the keys
 vel_highloud = 0.8  # FITTED (was 0.25): the dominant driver — melodic
                     # height IS the human loudness map here

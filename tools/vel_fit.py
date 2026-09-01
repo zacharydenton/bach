@@ -31,12 +31,15 @@ an OFF value; a knob that only helps train keeps its default and the
 veto is recorded. Regeneration: run the commands above from the repo
 root with corpus/asap and corpus/bach-wtc present and otb built.
 
-Committed run (2026-09-01, 58-piece overlap): baseline train r = 0.164,
-test 0.161; fitted train 0.408, TEST 0.421. Winners: vel_highloud 0.8
-(the dominant driver), vel_beat 3 and subject_vel 5 (at their hand
-values), dialogue_vel 2. Vetoed beside register: vel_bar, vel_halfbar,
-vel_arch, dis_vel, sus_soft, mel_charge, harm_charge, dialogue_yield,
-seq_echo. --measure committed lead_ms 20 -> 2 and repeated 0.60 -> 0.45.
+Committed run (2026-09-01, 58-piece overlap, --from-prefit, ADDITIVE
+metrical semantics): baseline train r = 0.119, test 0.132; fitted train
+0.401, TEST 0.423. Winners: vel_highloud 0.8 (the dominant driver),
+subject_vel 5 (at its hand value), dialogue_vel 2. Vetoed beside
+register: the whole metrical hierarchy (vel_bar/halfbar/beat — an
+earlier select-one-semantics run appeared to keep vel_beat; that was an
+inversion artifact), vel_arch, dis_vel, sus_soft, mel_charge,
+harm_charge, dialogue_yield, seq_echo. --measure committed lead_ms
+20 -> 2 and repeated 0.60 -> 0.45 (staff-aware voice grouping).
 
 License: GPL-2.0-or-later.
 """
@@ -64,6 +67,16 @@ VEL_KNOB_SECTIONS = {
     "mel_charge": "performance", "harm_charge": "performance",
     "subject_vel": "performance", "dialogue_vel": "performance",
     "dialogue_yield": "performance", "seq_echo": "performance",
+}
+
+# the PRE-FIT hand values (also the Haskell code defaults): the
+# committed fit numbers are regenerated from THIS baseline, not from
+# the already-fitted default.toml — vel_fit --fit-defaults --from-prefit
+PREFIT = {
+    "vel_bar": 12, "vel_halfbar": 6, "vel_beat": 3, "vel_arch": 8,
+    "vel_highloud": 0.25, "dis_vel": 10, "sus_soft": 4,
+    "mel_charge": 0.4, "harm_charge": 0.3, "subject_vel": 5,
+    "dialogue_vel": 4, "dialogue_yield": 2, "seq_echo": 2,
 }
 
 VEL_KNOB_GRIDS = {
@@ -120,8 +133,14 @@ def fit_defaults(otb, args, pieces, tmp):
     train = [p for p in pieces if p.startswith("wtc1")]
     test = [p for p in pieces if p.startswith("wtc2")]
     print(f"train: {len(train)} Book I | test: {len(test)} Book II (held out)")
-    base_tr = mean_piece_r(otb, train, args.config, tmp, args.exclude_orn)
-    base_te = mean_piece_r(otb, test, args.config, tmp, args.exclude_orn)
+    base_cfg = args.config
+    if args.from_prefit:
+        base_cfg = ae.with_knobs(args.config, PREFIT, tmp,
+                                 sections=VEL_KNOB_SECTIONS)
+        print("baseline: PRE-FIT hand values (reproducible from HEAD)")
+    args.config = base_cfg
+    base_tr = mean_piece_r(otb, train, base_cfg, tmp, args.exclude_orn)
+    base_te = mean_piece_r(otb, test, base_cfg, tmp, args.exclude_orn)
     print(f"defaults: train r = {base_tr:.3f}, test r = {base_te:.3f}")
     knobs = {}
     for sweep in range(2):
@@ -228,6 +247,9 @@ def main():
     ap.add_argument("--knobs", metavar="K1,K2")
     ap.add_argument("--measure", action="store_true")
     ap.add_argument("--exclude-orn", action="store_true")
+    ap.add_argument("--from-prefit", action="store_true",
+                    help="seed the fit from the pre-fit hand values "
+                         "instead of the (already fitted) config")
     args = ap.parse_args()
 
     otb = args.otb

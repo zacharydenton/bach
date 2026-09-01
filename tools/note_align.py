@@ -114,11 +114,16 @@ def parse_match(path):
             mp.pitch_mismatch += 1  # trust the note's own midi field
         if float(on_beats) == float(off_beats):
             mp.grace_snotes += 1
+        # voice identity must include the staff: 147/169 WTC matches
+        # reuse a voice number across staves, and a gate measured
+        # against a different staff's next note is meaningless
+        tag_bits = tags.split(",") if tags else []
+        voice_id = ",".join(tag_bits[:2]) if len(tag_bits) >= 2 else tags
         mp.rows.append((
             None,  # key filled below once den is known
             xml_id, midi_pitch,
             int(on_t), int(off_t), int(vel),
-            tags.split(",")[0] if tags else "",
+            voice_id,
             tags,
             float(on_beats)))
     mp.extra_timesigs = max(0, len(tsigs) - 1)
