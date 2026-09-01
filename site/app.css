@@ -1,0 +1,75 @@
+/* The live board's token system (tools/patchboard.py PAGE), verbatim. */
+:root{
+  --bg:#14120f; --panel:#1c1915; --line:#2b2620; --ink:#e8e2d4;
+  --dim:#8a8274; --faint:#5c564a; --brass:#c8a24b; --brass-dim:#8a7134;
+  --v0:#d9a866; --v1:#8fb573; --v2:#c98ba5; --v3:#7fb2c9; --v4:#a68fc9;
+  --v5:#c9c07f;
+  --serif:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink);
+     max-width:44rem;margin:0 auto;padding:2.2rem 1.2rem 3rem}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.22em;color:var(--dim);
+     text-transform:uppercase}
+h1{font:400 34px/1.15 var(--serif);margin:.35rem 0 .2rem;letter-spacing:.01em}
+h1 .idx{font:400 15px var(--mono);color:var(--faint);margin-left:.6rem}
+.rail{position:relative;height:2px;background:var(--line);margin:.9rem 0 .3rem;
+     border-radius:1px;cursor:pointer;padding:6px 0;background-clip:content-box}
+.rail .fill{position:absolute;top:6px;bottom:6px;left:0;width:0%;
+     background:var(--brass);border-radius:1px}
+.rail:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.times{display:flex;justify-content:space-between;font:11px var(--mono);
+     color:var(--faint);font-variant-numeric:tabular-nums}
+.row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.transport{margin:.9rem 0 1.4rem}
+button{background:transparent;color:var(--ink);border:1px solid var(--line);
+     border-radius:6px;padding:.35rem .8rem;cursor:pointer;font:inherit;
+     transition:border-color .15s,background .15s}
+button:hover{border-color:var(--brass-dim)}
+button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+button.primary{border-color:var(--brass-dim);color:var(--brass);
+     font-weight:600;padding:.45rem 1.1rem}
+button.on{background:#241f14;border-color:var(--brass);color:var(--brass)}
+select{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+     padding:.35rem .5rem;border-radius:6px;font:inherit;min-width:0}
+select:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+#piecesel{flex:1}
+.part{background:var(--panel);border:1px solid var(--line);border-left:3px solid
+     var(--vc,var(--dim));border-radius:8px;padding:.6rem .8rem;margin:.5rem 0}
+.part .head{display:flex;align-items:baseline;gap:.6rem;margin-bottom:.4rem}
+.part b{font:600 14px system-ui;letter-spacing:.01em}
+.part .patch{font:12px var(--mono);color:var(--vc,var(--dim))}
+.part.muted{opacity:.45}
+input[type=range]{width:7.5rem;accent-color:var(--brass)}
+.ledger{margin:1.6rem 0 0}
+.ledger .eyebrow{margin-bottom:.5rem;display:block}
+#whys{min-height:9.2em;max-height:9.2em;overflow:hidden;position:relative;
+     border-left:2px solid var(--brass-dim);padding:.15rem 0 .15rem .8rem;
+     font:12px/1.62 var(--mono)}
+#whys:after{content:'';position:absolute;left:0;right:0;bottom:0;height:1.6em;
+     background:linear-gradient(transparent,var(--bg));pointer-events:none}
+.why{display:flex;gap:.55em;align-items:baseline;opacity:1;
+     transition:opacity .24s ease}
+.why.in{animation:rise .24s ease}
+.why.out{opacity:0}
+@keyframes rise{from{opacity:0;transform:translateY(3px)}to{opacity:1}}
+.why .chip{flex:none;font-size:10px;letter-spacing:.06em;color:var(--bg);
+     background:var(--vc,var(--dim));border-radius:3px;padding:0 .45em;
+     font-weight:700;transform:translateY(-1px)}
+.why b{color:var(--ink);font-weight:600}
+.why .delta{color:var(--dim)}
+.why .cite{color:var(--faint);font-style:italic}
+details{margin:1.6rem 0 0}
+summary{cursor:pointer;color:var(--dim);font:600 11px/1 var(--mono);
+     letter-spacing:.22em;text-transform:uppercase}
+#cast{background:var(--panel);color:#b7ab8a;border:1px solid var(--line);
+     border-radius:8px;font:12px/1.6 var(--mono);padding:.7rem .8rem;
+     white-space:pre-wrap;margin-top:.6rem}
+.stats{margin-top:1.4rem;font:11px var(--mono);color:var(--faint);
+     font-variant-numeric:tabular-nums}
+.stats .clip{color:#d98c66;font-weight:700}
+@media (prefers-reduced-motion:reduce){
+  .why,.why.in{animation:none;transition:none}
+}
+@media (max-width:520px){ h1{font-size:26px} input[type=range]{width:100%} }
