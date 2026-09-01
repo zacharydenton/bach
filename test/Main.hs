@@ -510,7 +510,7 @@ units = testGroup "otb"
           have <- doesFileExist corpusF
           if not have then pure () else do
             raw <- TIO.readFile corpusF
-            ed <- readKernSource "config/default.toml" corpusF
+            ed <- readKernSource "config/editions" corpusF
             assertBool "edition not applied to its corpus source" (ed /= raw)
             assertBool "m36 appoggiatura absent from the edition"
               ("4.g-p" `T.isInfixOf` ed)
@@ -521,7 +521,7 @@ units = testGroup "otb"
             createDirectoryIfMissing True dir
             TIO.writeFile stranger
               (T.unlines ["**kern", "4c", "*-", "!!!KEY: 12345"])
-            kept <- readKernSource "config/default.toml" stranger
+            kept <- readKernSource "config/editions" stranger
             assertBool "stranger file was replaced by the edition"
               ("!!!KEY: 12345" `T.isInfixOf` kept)
       ]

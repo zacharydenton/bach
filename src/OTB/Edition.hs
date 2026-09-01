@@ -6,9 +6,9 @@
 --
 -- Two guards keep the substitution honest:
 --
---   * the lookup is anchored to the CONFIG's directory, not the process
---     working directory — the config path is already the run's one
---     repo-anchored input;
+--   * the lookup dir is explicit (otb --editions; defaults to
+--     editions/ next to the config file) — never the process working
+--     directory, and temp-dir configs can keep the real editions;
 --   * an edition names the exact source it replaces via an
 --     @!!!EDITION-OF-KEY:@ record matching the corpus file's own CCARH
 --     @!!!KEY:@ checksum, so a stranger's file that merely shares the
@@ -16,7 +16,7 @@
 --     applies to — is left untouched.
 --
 -- License: GPL-2.0-or-later.
-module OTB.Edition (readKernSource) where
+module OTB.Edition (editionsFor, readKernSource) where
 
 import Data.Maybe (listToMaybe)
 import Data.Text (Text)
@@ -29,12 +29,16 @@ recordOf :: Text -> Text -> Maybe Text
 recordOf name t = listToMaybe
   [T.strip r | l <- T.lines t, Just r <- [T.stripPrefix name l]]
 
--- | Read a kern source, substituting the config-adjacent edition when
--- one exists AND names this exact file's @!!!KEY:@ checksum.
+-- | The default editions root for a given config path.
+editionsFor :: FilePath -> FilePath
+editionsFor cfgPath = takeDirectory cfgPath </> "editions"
+
+-- | Read a kern source, substituting the edition from @dir@ when one
+-- exists AND names this exact file's @!!!KEY:@ checksum.
 readKernSource :: FilePath -> FilePath -> IO Text
-readKernSource cfgPath path = do
+readKernSource dir path = do
   src <- TIO.readFile path
-  let edition = takeDirectory cfgPath </> "editions" </> takeFileName path
+  let edition = dir </> takeFileName path
   hasEdition <- doesFileExist edition
   if not hasEdition
     then pure src

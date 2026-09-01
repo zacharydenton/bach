@@ -22,7 +22,7 @@ import OTB.Config
   ( agogicsFor, artParamsFor, dynamicsFor, expressFor, emptyConfig, loadConfig
   , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
 import OTB.Config qualified
-import OTB.Edition (readKernSource)
+import OTB.Edition (editionsFor, readKernSource)
 import OTB.Emit.Midi (renderSmf, writeSmf)
 import OTB.Generate (generateScore)
 import Data.List (intercalate)
@@ -61,6 +61,7 @@ data Common = Common
   , cConfig :: FilePath
   , cTempo :: TempoOpt
   , cTemperament :: String
+  , cEditions :: Maybe FilePath
   }
 
 -- | @--tempo@: a number is the fallback for scores with no @*MM@;
@@ -72,7 +73,7 @@ data TempoOpt = TempoDefault | TempoGiusto | TempoBpm Double
 data Cmd
   = Compile Common FilePath (Maybe FilePath) (Maybe FilePath) String
   | Explain Common (Maybe Int) (Maybe (Int, Int))
-  | Album FilePath FilePath FilePath TempoOpt String
+  | Album FilePath FilePath FilePath TempoOpt String (Maybe FilePath)
   | Stats FilePath FilePath Double
   | Ground String Int Double String FilePath (Maybe FilePath) (Maybe FilePath)
   | Analyze Common
@@ -93,6 +94,9 @@ common =
     <*> strOption (long "temperament" <> metavar "NAME|FILE.scl"
           <> value "werckmeister3"
           <> help "werckmeister3 (default), equal, or a Scala .scl file")
+    <*> optional (strOption (long "editions" <> metavar "DIR"
+          <> help ("edition-override directory (default: editions/ "
+                     <> "next to the config file)")))
 
 compileCmd :: Parser Cmd
 compileCmd =
@@ -131,6 +135,7 @@ albumCmd =
     <*> option (eitherReader tempoR)
           (long "tempo" <> metavar "BPM|giusto" <> value TempoDefault)
     <*> strOption (long "temperament" <> value "werckmeister3")
+    <*> optional (strOption (long "editions" <> metavar "DIR"))
 
 groundCmd :: Parser Cmd
 groundCmd =
@@ -184,7 +189,7 @@ main = do
   case c of
     Compile com out mscl mjson tgt -> runCompile com out mscl mjson tgt
     Explain com mbar mnote -> runExplain com mbar mnote
-    Album corpus outDir cfgPath tempo temp -> runAlbum corpus outDir cfgPath tempo temp
+    Album corpus outDir cfgPath tempo temp eds -> runAlbum corpus outDir cfgPath tempo temp eds
     Stats corpus cfgPath tempo -> runStats corpus cfgPath tempo
     Ground bass nvar tempo temp out mscl mjson ->
       runGround bass nvar tempo temp out mscl mjson
@@ -225,7 +230,8 @@ applyTempoOpt opt s = case opt of
 
 load :: Common -> IO (String, Score, Performance, TuningTable, Bool, Interp)
 load com = do
-  src <- readKernSource (cConfig com) (cInput com)
+  let eds = maybe (editionsFor (cConfig com)) id (cEditions com)
+  src <- readKernSource eds (cInput com)
   score0 <- either (die . ("parse: " <>)) pure
               (parseKern (tempoFallback (cTempo com)) src)
   haveCfg <- doesFileExist (cConfig com)
@@ -386,13 +392,15 @@ mkInterp cfg table adaptive piece0 =
         , iBendRange = tuningBendRange cfg
         }
 
-runAlbum :: FilePath -> FilePath -> FilePath -> TempoOpt -> String -> IO ()
-runAlbum corpus outDir cfgPath tempo temp = do
+runAlbum :: FilePath -> FilePath -> FilePath -> TempoOpt -> String
+         -> Maybe FilePath -> IO ()
+runAlbum corpus outDir cfgPath tempo temp meds = do
+  let eds = maybe (editionsFor cfgPath) id meds
   cfg <- loadCfg cfgPath
   let adaptive = temp == "adaptive"
   table <- resolveTemperament (if adaptive then "werckmeister3" else temp)
   files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
-  srcs <- mapM (\f -> (,) f <$> readKernSource cfgPath (corpus </> f)) (sort files)
+  srcs <- mapM (\f -> (,) f <$> readKernSource eds (corpus </> f)) (sort files)
   createDirectoryIfMissing True outDir
   -- the pure pipeline fans out across cores; IO stays sequential
   let one (f, src) =
@@ -433,7 +441,7 @@ runStats corpus cfgPath tempo = do
   files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
   parsed <- mapM
     (\f -> do
-        src <- readKernSource cfgPath (corpus </> f)
+        src <- readKernSource (editionsFor cfgPath) (corpus </> f)
         pure (takeBaseName f, parseKern (Bpm tempo) src))
     (sort files)
   let scores = [(n, s) | (n, Right s) <- parsed]
