@@ -26,6 +26,16 @@ import OTB.Interp.Express
 import OTB.Interp.Ornament
 import OTB.Interp.Phrasing
 import OTB.Explain (Why (..), renderWhys)
+import OTB.BakeSite qualified as Bake
+import OTB.Bridge qualified as B
+import OTB.Fit qualified as F
+import OTB.Json qualified as J
+import OTB.Maestro qualified as M
+import OTB.MaestroAlign qualified as MA
+import OTB.PieceFit qualified as PF
+import OTB.Smf qualified as Smf
+import Data.Vector qualified as BV
+import Data.Word (Word8)
 import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony, melodicCharge)
 import OTB.Analysis.Imitation (Imitation (..), findImitation)
 import OTB.Analysis.Parallelism (Sequences (..), findSequences)
@@ -525,13 +535,286 @@ units = testGroup "otb"
             assertBool "stranger file was replaced by the edition"
               ("!!!KEY: 12345" `T.isInfixOf` kept)
       ]
-  , testGroup "tools"
-      [ testCase "site bake contracts (python3 -m unittest)" $ do
-          (code, out, err) <- readProcessWithExitCode "python3"
-            ["-m", "unittest", "-q", "tools/test_bake_site.py"] ""
-          case code of
-            ExitSuccess -> pure ()
-            _ -> assertFailure (out <> err)
+  , testGroup "bake"
+      [ testCase "book order: prelude before fugue, extras last" $ do
+          let paths = [ "wtc2f01.json", "wtc1f01.json", "wtc1p02.json"
+                      , "wtc1p01.json", "xtra-ground-folia.json"
+                      , "wtc2p01.json" ]
+          sortOn Bake.albumKey paths @?=
+            [ "wtc1p01.json", "wtc1f01.json", "wtc1p02.json"
+            , "wtc2p01.json", "wtc2f01.json"
+            , "xtra-ground-folia.json" ]
+      , testCase "patch url is the bank tail" $
+          Bake.patchUrl
+            "/usr/share/surge-xt/patches_factory/Leads/DNA.fxp"
+            @?= "data/patches/Leads/DNA.fxp"
+      , testCase "windows separators normalised" $
+          Bake.patchUrl "C:\\lib\\Pads\\Warm.fxp"
+            @?= "data/patches/Pads/Warm.fxp"
+      , testCase "piece_instances mirrors JS half-up rounding" $
+          -- seven ranked channels: ranks 1 and 5 sit exactly on .5 —
+          -- JS Math.round goes UP; per-slot [1,2,2,2] -> 4
+          Bake.pieceInstances [(c, 40 + c) | c <- [0 .. 6]] @?= 4
+      , testCase "casting + calibration rewritten to bank urls" $ do
+          let tmp = "/tmp/otb-bake-test"
+              castdir = tmp </> "casting"
+              dat = tmp </> "data"
+          forM_ [castdir, dat] (createDirectoryIfMissing True)
+          writeFile (castdir </> "default.json")
+            ("{\"_\": \"a comment, not a channel\", "
+               <> "\"0\": \"/mac/Leads/Deep.fxp\", "
+               <> "\"soprano\": \"/mac/Leads/Lera.fxp\"}")
+          writeFile (castdir </> "wtc1f01.json")
+            "{\"0\": \"/other/Pads/Warm.fxp\"}"
+          writeFile (tmp </> "calibration.json")
+            "{\"/mac/Leads/Deep.fxp\": {\"releaseS\": 0.4}}"
+          Bake.bakeCasting dat castdir (tmp </> "calibration.json")
+          cast <- either error id . J.parseJson
+                    <$> TIO.readFile (dat </> "casting.json")
+          (J.jLookup "0" =<< J.jLookup "default" cast) @?=
+            Just (J.JStr "data/patches/Leads/Deep.fxp")
+          (J.jLookup "soprano" =<< J.jLookup "default" cast) @?=
+            Just (J.JStr "data/patches/Leads/Lera.fxp")
+          (J.jLookup "0" =<< J.jLookup "wtc1f01" cast) @?=
+            Just (J.JStr "data/patches/Pads/Warm.fxp")
+          cal <- either error id . J.parseJson
+                   <$> TIO.readFile (dat </> "calibration.json")
+          (J.jNum =<< J.jLookup "releaseS"
+             =<< J.jLookup "data/patches/Leads/Deep.fxp" cal) @?=
+            Just 0.4
+      , testCase "manifest orders, measures, counts instances" $ do
+          let tmp = "/tmp/otb-manifest-test"
+              perf = tmp </> "perf"
+          createDirectoryIfMissing True perf
+          writeFile (perf </> "wtc1p01.json")
+            ("{\"piece\": \"wtc1p01\", \"endS\": 9.0, \"tracks\": [["
+               <> "{\"onS\": 0.0, \"durS\": 1.0, \"ch\": 0, \"pitch\": 40},"
+               <> "{\"onS\": 1.0, \"durS\": 1.0, \"ch\": 2, \"pitch\": 70}"
+               <> "]]}")
+          writeFile (perf </> "wtc1f01.json")
+            ("{\"piece\": \"wtc1f01\", \"tracks\": [["
+               <> "{\"onS\": 0.0, \"durS\": 4.0, \"ch\": 0, \"pitch\": 60}"
+               <> "]]}")
+          Bake.bakeManifest tmp
+          man <- either error id . J.parseJson
+                   <$> TIO.readFile (tmp </> "manifest.json")
+          let pieces = J.jArrOf (maybe (J.JArr []) id
+                (J.jLookup "pieces" man))
+          map (J.jLookup "name") pieces @?=
+            [Just (J.JStr "wtc1p01"), Just (J.JStr "wtc1f01")]
+          (J.jNum =<< J.jLookup "endS" (head pieces)) @?= Just 9.0
+          (J.jNum =<< J.jLookup "maxCh" (head pieces)) @?= Just 3
+          (J.jNum =<< J.jLookup "endS" (pieces !! 1)) @?= Just 4.0
+          -- chans 0,2 -> bass+soprano -> 2 instances; one chan -> 1
+          (J.jNum =<< J.jLookup "nInstances" man) @?= Just 2
+          (J.jLookup "scl" man) @?= Just (J.JStr "data/w3.scl")
+      , testCase "baked site honours client contracts (if baked)" $ do
+          let dat = "site" </> "data"
+          baked <- doesFileExist (dat </> "manifest.json")
+          if not baked then pure () else do
+            man <- either error id . J.parseJson
+                     <$> TIO.readFile (dat </> "manifest.json")
+            let pieces = J.jArrOf (maybe (J.JArr []) id
+                  (J.jLookup "pieces" man))
+            assertBool "no pieces" (not (null pieces))
+            forM_ (take 3 pieces <> drop (length pieces - 3) pieces)
+              $ \p -> forM_ (J.jStr =<< J.jLookup "url" p) $ \u -> do
+                ok <- doesFileExist ("site" </> T.unpack u)
+                assertBool ("missing " <> T.unpack u) ok
+            ok <- doesFileExist (dat </> "init.fxp")
+            assertBool "init.fxp missing" ok
+            cast <- either error id . J.parseJson
+                      <$> TIO.readFile (dat </> "casting.json")
+            case cast of
+              J.JObj kvs -> forM_ kvs $ \(_, entry) ->
+                case entry of
+                  J.JObj es -> forM_ es $ \(_, v) ->
+                    forM_ (J.jStr v) $ \u -> do
+                      exists <- doesFileExist ("site" </> T.unpack u)
+                      assertBool ("casting url gone: " <> T.unpack u)
+                        exists
+                  _ -> pure ()
+              _ -> assertFailure "casting.json not an object"
+      ]
+  , testGroup "piece fit"
+      [ testCase "shrink pulls toward the global (n=5, k=2)" $
+          PF.shrinkKnobs [("cadence_depth", 0.07)] (const 0) 5 2
+            @?= [("cadence_depth", 0.05)]
+      , testCase "n=1 is strongly shrunk toward the base" $
+          PF.shrinkKnobs [("open_push", 0.12)] (const 0.06) 1 2
+            @?= [("open_push", 0.08)]
+      , testCase "sections carry only kept fits, all marked" $ do
+          let secs = PF.buildSections "2026-01-01" [fitRec]
+          case lookup "wtc1p03" secs of
+            Nothing -> assertFailure "no section"
+            Just lns -> do
+              let keys = [k | (k, _, _) <- lns]
+              assertBool "tempo missing" ("tempo" `elem` keys)
+              assertBool "kept timing missing"
+                ("cadence_depth" `elem` keys)
+              assertBool "rejected velocity leaked"
+                ("vel_highloud" `notElem` keys)
+              forM_ lns $ \(_, _, c) ->
+                assertBool "unmarked" ("# PIECE-FIT" `isInfixOf` c)
+      , testCase "hand keys survive and win" $ do
+          let toml = T.unlines
+                [ "[agogics]", "rit_span = 2.0", ""
+                , "[piece.wtc1p03]"
+                , "cadence_depth = 0.09 # by ear, veto" ]
+              out = T.unpack (PF.applyFits "2026-01-01" [fitRec] toml)
+          assertBool "hand veto gone"
+            ("cadence_depth = 0.09 # by ear, veto" `isInfixOf` out)
+          countOf "cadence_depth" out @?= 1
+          assertBool "tempo not added"
+            ("tempo = 84.0 # PIECE-FIT" `isInfixOf` out)
+      , testCase "new piece lands under the banner" $ do
+          let out = T.unpack (PF.applyFits "2026-01-01" [fitRec]
+                "[agogics]\nrit_span = 2.0\n")
+          assertBool "no section" ("[piece.wtc1p03]" `isInfixOf` out)
+          assertBool "no banner" ("fitted per piece" `isInfixOf` out)
+          assertBool "no shrunk value"
+            ("cadence_depth = 0.04 # PIECE-FIT" `isInfixOf` out)
+      , testCase "idempotent regeneration" $ do
+          let once = PF.applyFits "2026-01-01" [fitRec]
+                "[agogics]\nrit_span = 2.0\n"
+              twice = PF.applyFits "2026-01-01" [fitRec] once
+          countOf "tempo = 84.0" (T.unpack once) @?= 1
+          countOf "tempo = 84.0" (T.unpack twice) @?= 1
+          countOf "[piece.wtc1p03]" (T.unpack twice) @?= 1
+      , testCase "edits are positional, not lexical" $ do
+          let recFor p f = PF.PieceRec p 3
+                (Just (fromIntegral (10 * f), 100.0
+                      , fromIntegral (10 * f) + 1))
+                Nothing Nothing
+              recs = [ recFor "wtc1f04" 4, recFor "wtc1f03" 3
+                     , recFor "wtc1f05" 5 ]
+              toml = T.unlines
+                [ "[agogics]", "rit_span = 2.0", ""
+                , "[piece.wtc1f05]", "overhold = 0.5 # hand", ""
+                , "[piece.wtc1f03]", "inegal = 0.1 # hand", ""
+                , "[piece.wtc1f04]", "base = 0.8 # hand" ]
+              out = PF.applyFits "2026-01-01" recs toml
+          forM_ [ ("wtc1f03", "31.0"), ("wtc1f04", "41.0")
+                , ("wtc1f05", "51.0") ] $ \(p, want) -> do
+            let body = sectionBody p (T.unpack out)
+            assertBool (p <> " got: " <> body)
+              (("tempo = " <> want) `isInfixOf` body)
+      , testCase "prefit strips PIECE-FIT, keeps hand + global priors" $ do
+          cfg <- TIO.readFile "config/default.toml"
+          let stripped = T.unpack (F.prefitStrip cfg)
+          assertBool "PIECE-FIT survived strip"
+            (not ("# PIECE-FIT" `isInfixOf` stripped))
+          assertBool "banner survived strip"
+            (not ("fitted per piece" `isInfixOf` stripped))
+          assertBool "global prior comment stripped"
+            ("FITTED (was" `isInfixOf` stripped)
+          assertBool "global rit_span gone"
+            ("rit_span = 2.0" `isInfixOf` stripped)
+          assertBool "global vel_highloud gone"
+            ("vel_highloud = 0.8" `isInfixOf` stripped)
+          assertBool "hand section gone"
+            ("[piece.wtc1p01]" `isInfixOf` stripped)
+          assertBool "hand overhold gone"
+            ("overhold" `isInfixOf` stripped)
+      ]
+  , testGroup "maestro"
+      [ testCase "smf: tempo map + running status" $ do
+          case Smf.parseSmf synthSmf of
+            Left e -> assertFailure e
+            Right notes -> do
+              length notes @?= 2
+              let [c4, e4] = notes
+              (Smf.snPitch c4, Smf.snVel c4) @?= (0x3C, 0x50)
+              assertClose "c4 on" (Smf.snOnS c4) 0.0
+              assertClose "c4 off" (Smf.snOffS c4) 0.5
+              -- 2 qn at 120 + 1 qn at 240 = 1.0 + 0.25
+              assertClose "e4 on" (Smf.snOnS e4) 1.25
+              assertClose "e4 off" (Smf.snOffS e4) 1.5
+      , testCase "piece names across the books" $ do
+          M.pieceNames 846 @?= ("wtc1p01", "wtc1f01")
+          M.pieceNames 853 @?= ("wtc1p08", "wtc1f08")
+          M.pieceNames 870 @?= ("wtc2p01", "wtc2f01")
+          M.pieceNames 893 @?= ("wtc2p24", "wtc2f24")
+      , testCase "subsequence DTW recovers a warped performance" $ do
+          let (score, notes) = synthPerf (\i -> 0.4 + 0.15 * (i / 64))
+              notesV = BV.fromList notes
+              pc = MA.perfChords notesV
+              path = MA.dtwPath score pc notesV
+              (pairs, _dels, _ins) = MA.pairNotes score pc notesV path
+              total = sum (map (length . snd) score)
+          assertBool ("rate " <> show (length pairs) <> "/"
+                        <> show total)
+            (fromIntegral (length pairs) / fromIntegral total
+               >= (0.97 :: Double))
+          let (grid, Just times) =
+                MA.beatGridTimes pairs notesV (fst (last score))
+              Just mid = lookup (32 * 480) (zip grid [0 :: Int ..])
+              expect = 3.0 + sum [ 0.4 + 0.15 * (i / 64)
+                                 | i <- [0 .. 31] ]
+          assertBool ("beat grid off: " <> show (times !! mid))
+            (abs (times !! mid - expect) < 0.05)
+      , testCase "emitted .match round-trips through parseMatch" $ do
+          let (score, notes) = synthPerf (const 0.5)
+              notesV = BV.fromList notes
+              pc = MA.perfChords notesV
+              path = MA.dtwPath score pc notesV
+              (pairs, dels, ins) = MA.pairNotes score pc notesV path
+              ao = MA.AlignOutcome False pairs dels ins [] [] score
+                     (MA.AlignStats 0 0 0 0 0 Nothing Nothing)
+              mp = B.parseMatch (MA.matchText "t" "m" ao notesV)
+          length (B.mpRows mp) @?= length pairs
+          sort [ (B.mrKey r, B.mrPitch r) | r <- B.mpRows mp ] @?=
+            sort [ (t, p) | (t, p, _c, _x) <- pairs ]
+          B.mpDeletions mp @?= length dels
+          B.mpInsertions mp @?= length ins
+      , testCase "rolled chords still match after recovery" $ do
+          let score =
+                [ ( i * 960
+                  , if even i
+                      then [(40 + i + j * 3, 0) | j <- [0 .. 5]]
+                      else [(80 + (i * 7) `mod` 12, 0)] )
+                | i <- [0 .. 23] ]
+              notes =
+                [ Smf.SmfNote p 70 (t + 0.06 * fromIntegral k) (t + 0.8)
+                    0 0
+                | ((_, ps), t) <- zip score [2.0, 3.1 ..]
+                , (k, (p, _c)) <- zip [0 :: Int ..] ps ]
+              notesV = BV.fromList notes
+              pc = MA.perfChords notesV
+              path = MA.dtwPath score pc notesV
+              (pairs0, dels0, ins0) =
+                MA.pairNotes score pc notesV path
+              (grid, Just times) =
+                MA.beatGridTimes pairs0 notesV (fst (last score))
+              (pairs, _d, _i) =
+                MA.recover notesV pairs0 dels0 ins0 grid times
+              total = sum (map (length . snd) score)
+          assertBool ("rate " <> show (length pairs) <> "/"
+                        <> show total)
+            (fromIntegral (length pairs) / fromIntegral total
+               >= (0.95 :: Double))
+      , testCase "smf reader reproduces .match ground truth (if corpus)"
+          $ do
+          let mid = "corpus/asap/Bach/Fugue/bwv_846/Shi05M.mid"
+              mtch = "corpus/asap/Bach/Fugue/bwv_846/Shi05M.match"
+          have <- doesFileExist mid
+          if not have then pure () else do
+            notes <- Smf.readSmf mid
+            mp <- B.parseMatch <$> TIO.readFile mtch
+            let byPitch = foldr
+                  (\n m -> insertWithList (Smf.snPitch n) n m) []
+                  notes
+                lookupP p = maybe [] id (lookup p byPitch)
+                oks =
+                  [ ( abs (Smf.snOnS best - B.mrOnS r) < 0.002
+                    , Smf.snVel best == B.mrVel r )
+                  | r <- B.mpRows mp
+                  , let cands = lookupP (B.mrPitch r)
+                  , not (null cands)
+                  , let best = minimumOn
+                          (\n -> abs (Smf.snOnS n - B.mrOnS r)) cands ]
+            length [() | (True, _) <- oks] @?= length (B.mpRows mp)
+            length [() | (_, True) <- oks] @?= length (B.mpRows mp)
       ]
   , testGroup "phrasing"
       [ testCase "a written rest is a boundary (Quantz)" $ do
@@ -1531,3 +1814,95 @@ sota = testGroup "sota"
       s <- scoreOf f
       either (assertFailure . ("perform: " <>)) pure
         (perform defaultInterp s)
+
+
+-- ---------------------------------------------------------------------
+-- ported tool-test helpers (bake / piece fit / maestro)
+
+fitRec :: PF.PieceRec
+fitRec = PF.PieceRec "wtc1p03" 4 (Just (80.0, 100.0, 84.0))
+  (Just (PF.FitLayer [("cadence_depth", 0.04)] 0.1 0.3 (Just 0.05)
+           True))
+  (Just (PF.FitLayer [("vel_highloud", 1.0)] 0.3 0.35 (Just (-0.02))
+           False))
+
+countOf :: String -> String -> Int
+countOf needle hay = length
+  [ () | s <- suffixesS hay, needle `isPrefixOfS` s ]
+  where
+    isPrefixOfS a b = take (length a) b == a
+    suffixesS s = s : case s of
+      [] -> []
+      (_ : rest) -> suffixesS rest
+
+sectionBody :: String -> String -> String
+sectionBody piece out =
+  let ls = lines out
+      after = drop 1 (dropWhile (/= ("[piece." <> piece <> "]")) ls)
+   in unlines (takeWhile (not . ("[" `isPrefixOfL`)) after)
+  where isPrefixOfL a b = take (length a) b == a
+
+assertClose :: String -> Double -> Double -> Assertion
+assertClose lbl got want =
+  assertBool (lbl <> ": " <> show got <> " /= " <> show want)
+    (abs (got - want) < 1e-9)
+
+vlq :: Int -> [Word8]
+vlq n0 = go (n0 `div` 128) [fromIntegral (n0 `mod` 128)]
+  where
+    go 0 acc = acc
+    go n acc = go (n `div` 128)
+      (fromIntegral (n `mod` 128 + 128) : acc)
+
+-- | Format-1 file: a tempo change mid-way, running status, two notes.
+synthSmf :: BS.ByteString
+synthSmf = BS.pack (mthd <> chunk trk0 <> chunk trk1)
+  where
+    division = 480
+    be32 n = [ fromIntegral (n `div` 16777216)
+             , fromIntegral (n `div` 65536 `mod` 256)
+             , fromIntegral (n `div` 256 `mod` 256)
+             , fromIntegral (n `mod` 256) ]
+    be16 n = [fromIntegral (n `div` 256), fromIntegral (n `mod` 256)]
+    be24 n = drop 1 (be32 n)
+    mthd = map (fromIntegral . fromEnum) ("MThd" :: String)
+             <> be32 (6 :: Int) <> be16 (1 :: Int) <> be16 (2 :: Int)
+             <> be16 division
+    chunk body = map (fromIntegral . fromEnum) ("MTrk" :: String)
+                   <> be32 (length body) <> body
+    trk0 = vlq 0 <> [0xFF, 0x51, 0x03] <> be24 (500000 :: Int)
+             <> vlq (division * 2) <> [0xFF, 0x51, 0x03]
+             <> be24 (250000 :: Int)
+             <> vlq 0 <> [0xFF, 0x2F, 0x00]
+    trk1 = vlq 0 <> [0x90, 0x3C, 0x50]
+             <> vlq division <> [0x3C, 0x00] -- running status off
+             <> vlq (division * 2) <> [0x90, 0x40, 0x40]
+             <> vlq division <> [0x80, 0x40, 0x00]
+             <> vlq 0 <> [0xFF, 0x2F, 0x00]
+
+-- | A synthetic score + a warped "performance" of it, starting
+-- mid-file at t=3.
+synthPerf :: (Double -> Double)
+          -> ([(Int, [(Int, Int)])], [Smf.SmfNote])
+synthPerf curve = (score, notes)
+  where
+    score =
+      [ ( i * 480
+        , (60 + i `mod` 12, 0)
+            : [(48 + i `mod` 12, 1) | i `mod` 4 == 0] )
+      | i <- [0 .. 63] ]
+    starts = scanl (\t i -> t + curve (fromIntegral i)) 3.0 [0 .. 62]
+    notes =
+      [ Smf.SmfNote p (60 + i `mod` 20) (t + 0.004 * fromIntegral k)
+          (t + 0.3) 0 0
+      | ((i, (_, ps)), t) <- zip (zip [0 :: Int ..] score) starts
+      , (k, (p, _c)) <- zip [0 :: Int ..] ps ]
+
+insertWithList :: Eq k => k -> v -> [(k, [v])] -> [(k, [v])]
+insertWithList k v [] = [(k, [v])]
+insertWithList k v ((k2, vs) : rest)
+  | k == k2 = (k2, vs <> [v]) : rest
+  | otherwise = (k2, vs) : insertWithList k v rest
+
+minimumOn :: Ord b => (a -> b) -> [a] -> a
+minimumOn f = foldr1 (\a b -> if f a <= f b then a else b)

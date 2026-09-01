@@ -1,4 +1,3 @@
-# the audition/analysis venv, pinned to the versions behind the
-# committed research numbers (structure_fit, asap_eval)
+# the audition venv (audition.py, calibrate_patch.py, oracle.py —
+# the surgepy-bound tools; everything else lives in otb itself)
 numpy==2.4.3
-scikit-learn==1.9.0

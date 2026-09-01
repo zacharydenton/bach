@@ -59,7 +59,7 @@ a build step.
 
 The board lives in `site/` and renders the whole album with the Surge
 engine compiled to WebAssembly — all audio synthesized client-side, any
-dumb static host is the whole deployment. `python3 tools/bake_site.py`
+dumb static host is the whole deployment. `otb bake-site`
 fills it; `site/README.md` has the details. (An earlier server-rendered
 patchboard streamed Opus from surgepy; it was retired 2026-09-01 once
 the static board reached parity and beyond — seeking, per-lane
@@ -90,6 +90,30 @@ Patch library discovery: installed Surge XT locations are searched
 automatically; a bare checkout works too, or set
 `SURGE_PATCHES=/path/to/patches_factory`. Vendored pybind11 caps the
 venv at Python 3.11.
+
+## The research loop (all in-process)
+
+The fitting rigs live in the compiler itself — one process, pieces in
+parallel, no JSON round trips (the Python research stack they replaced
+was retired 2026-09-01 after golden parity gates):
+
+```sh
+stack exec otb -- eval corpus/bach-wtc/kern              # beat-tempo scoreboard vs humans
+stack exec otb -- eval corpus/bach-wtc/kern --velocity   # note-velocity scoreboard
+stack exec otb -- fit corpus/bach-wtc/kern --dry-run     # per-piece hierarchical fits
+stack exec otb -- landscape corpus/bach-wtc/kern         # multi-start knob landscape
+stack exec otb -- maestro-fetch                          # MAESTRO v3 archive + WTC catalog
+stack exec otb -- maestro-align --validate               # aligner vs ASAP ground truth
+stack exec otb -- maestro-align                          # emit corpus/maestro-wtc
+stack exec otb -- bridge-dump SCORE.krn PERF.match       # score<->performance note pairs
+```
+
+Human data: `corpus/asap` (clone of the ASAP dataset) plus
+`corpus/maestro-wtc`, a derived mirror the aligner builds from MAESTRO v3
+(subsequence DTW; validated 110/114 against ASAP's own alignments, note
+agreement median 0.996, beat |Δ| median 9.5 ms). `config/default.toml`
+carries the fitted per-piece sections with `# PIECE-FIT` provenance; hand
+keys always win and are never touched by `fit --apply`.
 
 ## Status
 

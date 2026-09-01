@@ -40,6 +40,13 @@ library
         OTB.Edition
         OTB.Eval
         OTB.Bridge
+        OTB.Fit
+        OTB.PieceFit
+        OTB.Smf
+        OTB.Maestro
+        OTB.MaestroAlign
+        OTB.Json
+        OTB.BakeSite
         OTB.Config
         OTB.Explain
         OTB.Interp
@@ -71,13 +78,15 @@ library
         bytestring,
         containers,
         directory,
-        filepath
+        filepath,
+        process,
+        vector
 
 executable otb
     import:           warnings
     hs-source-dirs:   app
     main-is:          Main.hs
-    ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+    ghc-options:      -threaded -rtsopts "-with-rtsopts=-N -A64m"
     default-language: GHC2021
     default-extensions: OverloadedStrings LambdaCase DerivingStrategies
     build-depends:
@@ -90,7 +99,9 @@ executable otb
         directory,
         filepath,
         optparse-applicative,
-        parallel
+        parallel,
+        process,
+        vector
 
 test-suite otb-test
     import:           warnings
@@ -109,6 +120,7 @@ test-suite otb-test
         filepath,
         process,
         EuterpeaLite,
+        vector,
         tasty,
         tasty-hunit,
         tasty-quickcheck

@@ -11,10 +11,16 @@
 module Main (main) where
 
 import Control.DeepSeq (force)
-import Control.Monad (forM, forM_, when)
+import Control.Concurrent
+  ( MVar, forkIO, getNumCapabilities, modifyMVar, newEmptyMVar, newMVar
+  , putMVar, readMVar, takeMVar )
+import Control.Concurrent.QSem (QSem, newQSem, signalQSem, waitQSem)
+import Control.Exception
+  (SomeException, bracket_, evaluate, throwIO, try)
+import Control.Monad (foldM, forM, forM_, unless, void, when, (<=<))
 import Control.Parallel.Strategies (parMap, rdeepseq)
 import Data.ByteString.Lazy qualified as BL
-import Data.List (isSuffixOf, sort, sortOn)
+import Data.List (foldl', isSuffixOf, sort, sortOn)
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
@@ -24,8 +30,18 @@ import OTB.Config
 import OTB.Config qualified
 import OTB.Edition (editionsFor, readKernSource)
 import OTB.Eval
-  (PerfR (..), loadDirAnnotations, pearson, scorePerformances)
+  ( PerfR (..), loadDirAnnotations, pearson, perfBeatTimes
+  , scoreBeatPositions, scorePerformances )
 import OTB.Bridge qualified as B
+import OTB.Fit qualified as F
+import OTB.PieceFit qualified as PF
+import OTB.Maestro qualified as M
+import OTB.BakeSite qualified as BS
+import OTB.MaestroAlign qualified as MA
+import OTB.Smf (readSmf)
+import Data.Vector qualified as BV
+import Data.IORef
+  (atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import OTB.Emit.Midi (renderSmf, writeSmf)
 import OTB.Generate (generateScore)
 import Data.List (intercalate)
@@ -58,9 +74,13 @@ import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
 import OTB.Units (Bpm (..), WholeNotes (..))
 import Options.Applicative
 import System.Directory
-  (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, listDirectory)
+  ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist
+  , getHomeDirectory, listDirectory )
+import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath (takeBaseName, (</>))
+import System.IO (hPutStrLn, stderr)
+import System.Process (readProcess)
+import System.FilePath (takeBaseName, takeFileName, (</>))
 
 data Common = Common
   { cInput :: FilePath
@@ -82,6 +102,11 @@ data Cmd
   | Album FilePath FilePath FilePath TempoOpt String (Maybe FilePath)
   | Eval FilePath FilePath TempoOpt String (Maybe FilePath) [FilePath] [String] Bool
   | BridgeDump FilePath FilePath FilePath
+  | Landscape FilePath FilePath String Int Int Double
+  | Fit FilePath FilePath Double [String] Bool Bool
+  | MaestroFetch Bool
+  | MaestroAlign Bool (Maybe String) (Maybe Int)
+  | BakeSite BS.BakeOpts
   | Stats FilePath FilePath Double
   | Ground String Int Double String FilePath (Maybe FilePath) (Maybe FilePath)
   | Analyze Common
@@ -133,6 +158,61 @@ explainCmd =
     <*> optional
           ((,) <$> option auto (long "ch" <> metavar "C")
                <*> option auto (long "note" <> metavar "I"))
+
+fitCmd :: Parser Cmd
+fitCmd =
+  Fit
+    <$> argument str (metavar "CORPUS_DIR")
+    <*> strOption (long "config" <> value "config/default.toml")
+    <*> option auto (long "shrink-k" <> value 2.0)
+    <*> many (strOption (long "piece" <> metavar "NAME"))
+    <*> switch (long "apply"
+          <> help "write the fitted [piece.X] sections into the config")
+    <*> switch (long "dry-run"
+          <> help "print the config diff instead of writing")
+
+bakeSiteCmd :: Parser Cmd
+bakeSiteCmd = fmap BakeSite $
+  BS.BakeOpts
+    <$> strOption (long "site" <> value "site")
+    <*> strOption (long "surge-dir" <> value ""
+          <> help "surge fork checkout (default: $SURGE_DIR or ~/code/surge)")
+    <*> strOption (long "emscripten-bin" <> value "/usr/lib/emscripten"
+          <> help "prepended to PATH for emcmake (empty to skip)")
+    <*> optional (strOption (long "perf-dir"
+          <> help "copy IRs from here instead of running the album"))
+    <*> strOption (long "casting-dir"
+          <> value ("config" </> "casting"))
+    <*> strOption (long "calibration"
+          <> value ("config" </> "calibration.json"))
+    <*> switch (long "skip-wasm")
+    <*> switch (long "skip-perf")
+    <*> switch (long "skip-patches")
+
+maestroFetchCmd :: Parser Cmd
+maestroFetchCmd =
+  MaestroFetch
+    <$> switch (long "catalog"
+          <> help "rebuild the catalog from cached files only")
+
+maestroAlignCmd :: Parser Cmd
+maestroAlignCmd =
+  MaestroAlign
+    <$> switch (long "validate"
+          <> help "score the aligner against ASAP ground truth")
+    <*> optional (strOption (long "piece" <> metavar "NAME"))
+    <*> optional (option auto (long "limit" <> metavar "N"))
+
+landscapeCmd :: Parser Cmd
+landscapeCmd =
+  Landscape
+    <$> argument str (metavar "CORPUS_DIR")
+    <*> strOption (long "config" <> value "config/default.toml")
+    <*> strOption (long "family" <> value "timing"
+          <> help "timing | velocity")
+    <*> option auto (long "starts" <> value 20)
+    <*> option auto (long "seed" <> value 1)
+    <*> option auto (long "slack" <> value 0.005)
 
 bridgeDumpCmd :: Parser Cmd
 bridgeDumpCmd =
@@ -207,6 +287,24 @@ cmdP =
              (info evalCmd
                 (progDesc ("beat-level tempo r vs human performances, "
                              <> "whole corpus in one process")))
+        <> command "fit"
+             (info fitCmd
+                (progDesc ("per-piece hierarchical fits: tempo, "
+                             <> "timing and velocity, LOPO-guarded")))
+        <> command "bake-site"
+             (info bakeSiteCmd
+                (progDesc "bake the static patchboard into site/"))
+        <> command "maestro-fetch"
+             (info maestroFetchCmd
+                (progDesc "fetch the MAESTRO v3 archive + WTC catalog"))
+        <> command "maestro-align"
+             (info maestroAlignCmd
+                (progDesc ("align MAESTRO WTC performances to otb "
+                             <> "scores -> corpus/maestro-wtc")))
+        <> command "landscape"
+             (info landscapeCmd
+                (progDesc ("multi-start knob-landscape search: are "
+                             <> "the zeros real?")))
         <> command "bridge-dump"
              (info bridgeDumpCmd
                 (progDesc ("canonical TSV of the note bridge's rows — "
@@ -234,6 +332,23 @@ main = do
     Eval corpus cfgPath tempo temp eds roots ps vel ->
       runEval corpus cfgPath tempo temp eds roots ps vel
     BridgeDump krn match cfgPath -> runBridgeDump krn match cfgPath
+    Landscape corpus cfgPath fam st sd sl ->
+      runLandscape corpus cfgPath fam st sd sl
+    Fit corpus cfgPath sk ps ap dr -> runFit corpus cfgPath sk ps ap dr
+    MaestroFetch catOnly -> M.runMaestroFetch catOnly
+    BakeSite opts0 -> do
+      opts <- if null (BS.boSurgeDir opts0)
+        then do
+          menv <- lookupEnv "SURGE_DIR"
+          home <- getHomeDirectory
+          pure opts0 {BS.boSurgeDir =
+            maybe (home </> "code" </> "surge") id menv}
+        else pure opts0
+      BS.runBakeSite
+        (\stage -> runAlbum ("corpus" </> "bach-wtc" </> "kern") stage
+           "config/default.toml" TempoDefault "werckmeister3" Nothing)
+        opts
+    MaestroAlign validate mp ml -> runMaestroAlign validate mp ml
     Stats corpus cfgPath tempo -> runStats corpus cfgPath tempo
     Ground bass nvar tempo temp out mscl mjson ->
       runGround bass nvar tempo temp out mscl mjson
@@ -565,6 +680,541 @@ runEval corpus cfgPath tempo temp meds roots0 wanted velocity = do
       putStrLn ("# grand mean r = "
                   <> show (sum allRs / fromIntegral (max 1 (length allRs)))
                   <> " over " <> show (length allRs) <> " performances")
+
+-- | The MAESTRO aligner's IO orchestration (@otb maestro-align@):
+-- catalog in, aligned mirror tree (or validation verdicts) out.
+runMaestroAlign :: Bool -> Maybe String -> Maybe Int -> IO ()
+runMaestroAlign validate mpiece mlimit = do
+  catalog0 <- M.readCatalog
+  let catalog1 = maybe catalog0
+        (\p -> filter ((p `elem`) . M.ceCandidates) catalog0) mpiece
+      catalog = maybe catalog1 (`take` catalog1) mlimit
+  perfMap <- if validate then asapPerfMap else pure Map.empty
+  cfg <- loadCfg cfgPath
+  table <- resolveTemperament "werckmeister3"
+  irCache <- newIORef
+    (Map.empty :: Map.Map String (Maybe [(Int, [(Int, Int)])]))
+  seqRef <- newIORef (Map.empty :: Map.Map String Int)
+  verdictsRef <- newIORef ([] :: [(String, String, MA.Verdict)])
+  forM_ catalog $ \entry -> do
+    let rel = T.unpack (M.ceMidi entry)
+    notes <- readSmf (M.maestroDir </> rel)
+    let notesV = BV.fromList notes
+    forM_ (M.ceCandidates entry) $ \piece -> do
+      let (kind, bwv) = bwvOf piece
+          folder = T.pack ("Bach/" <> kind <> "/" <> bwv)
+          skip
+            | maybe False (/= piece) mpiece = True
+            | validate = folder `notElem` M.ceAsapFolders entry
+            | otherwise = folder `elem` M.ceAsapFolders entry
+      unless skip $ do
+        msc <- cachedChords cfg table irCache piece
+        forM_ (maybe [] (maybe [] pure . flip MA.alignOne notesV) msc)
+          $ \res -> do
+          let tag = piece <> " <- " <> take 40 (takeFileName rel)
+          if MA.aoReject res
+            then putStrLn ("REJECT " <> tag <> " "
+                             <> statsLine (MA.aoStats res))
+            else if validate
+              then forM_ (Map.findWithDefault [] (M.ceMidi entry)
+                            perfMap) $ \(f_, perf) ->
+                when (f_ == folder) $ do
+                  mv <- validateIO res notesV folder perf
+                  forM_ mv $ \v -> do
+                    modifyIORef' verdictsRef ((piece, perf, v) :)
+                    putStrLn ("VALID  " <> tag <> " vs " <> perf
+                      <> ": agree "
+                      <> showFFloat (Just 3) (MA.vAgree v) ""
+                      <> " beat|D| "
+                      <> maybe "-" MA.pyRepr (MA.vBeatMs v)
+                      <> " ms (rate "
+                      <> MA.pyRepr (MA.stRate (MA.aoStats res))
+                      <> ")")
+              else do
+                let outdir = "corpus" </> "maestro-wtc" </> "Bach"
+                               </> kind </> bwv
+                createDirectoryIfMissing True outdir
+                n0 <- Map.findWithDefault 0 piece
+                        <$> readIORef seqRef
+                let n1 = n0 + 1
+                modifyIORef' seqRef (Map.insert piece n1)
+                let pid = "m" <> T.unpack (M.ceYear entry) <> "_"
+                            <> (if n1 < 10 then "0" else "") <> show n1
+                TIO.writeFile (outdir </> pid <> ".match")
+                  (MA.matchText piece (M.ceMidi entry) res notesV)
+                TIO.writeFile (outdir </> pid <> "_annotations.txt")
+                  (MA.annotationsText (MA.aoGrid res) (MA.aoTimes res))
+                TIO.writeFile (outdir </> pid <> ".json")
+                  (provFor piece entry res)
+                let sgrid = outdir </> "midi_score_annotations.txt"
+                haveGrid <- doesFileExist sgrid
+                unless haveGrid $ TIO.writeFile sgrid
+                  (MA.annotationsText (MA.aoGrid res)
+                     [ fromIntegral g / fromIntegral B.wnTicks
+                     | g <- MA.aoGrid res ])
+                putStrLn ("EMIT   " <> tag <> " -> " <> pid <> " "
+                            <> statsLine (MA.aoStats res))
+  when validate $ do
+    verdicts <- reverse <$> readIORef verdictsRef
+    unless (null verdicts) $ do
+      let agrees = [MA.vAgree v | (_, _, v) <- verdicts]
+          beats = [b | (_, _, v) <- verdicts
+                     , Just b <- [MA.vBeatMs v]]
+          -- the reference's falsy-or: a missing OR ZERO beat reads 999
+          bm v = case MA.vBeatMs v of
+            Just b | b /= 0 -> b
+            _ -> 999
+          passes v = (MA.vAgree v >= 0.95 && bm v <= 20)
+                       || (MA.vAgree v >= 0.97 && bm v <= 60)
+          good = length [() | (_, _, v) <- verdicts, passes v]
+      putStrLn ("\n" <> show (length verdicts)
+        <> " validated: agree median "
+        <> showFFloat (Just 3) (medianOf agrees) ""
+        <> ", beat|D| median "
+        <> showFFloat (Just 1) (medianOf beats) ""
+        <> " ms, " <> show good <> "/" <> show (length verdicts)
+        <> " pass the gate (agree>=.95 & beat<=20ms, "
+        <> "or agree>=.97 & beat<=60ms)")
+  where
+    cfgPath = "config" </> "default.toml"
+    kernDir = "corpus" </> "bach-wtc" </> "kern"
+    medianOf = F.medianD . sort
+
+    cachedChords cfg table irCache piece = do
+      cache <- readIORef irCache
+      case Map.lookup piece cache of
+        Just v -> pure v
+        Nothing -> do
+          have <- doesFileExist (kernDir </> piece <> ".krn")
+          v <- if not have then pure Nothing else do
+            src <- readKernSource (editionsFor cfgPath)
+                     (kernDir </> piece <> ".krn")
+            pure $ case parseKern (tempoFallback TempoDefault) src of
+              Left _ -> Nothing
+              Right s0 ->
+                let s1 = applyTempoOpt TempoDefault s0
+                    s = maybe s1 (\b -> s1 {scTempo = Bpm b})
+                          (pieceTempo cfg (T.pack piece))
+                 in either (const Nothing) (Just . MA.scoreChords)
+                      (perform (mkInterp cfg table False piece) s)
+          modifyIORef' irCache (Map.insert piece v)
+          pure v
+
+    bwvOf piece =
+      let book = read [piece !! 3] :: Int
+          kind = if piece !! 4 == 'p'
+                   then "Prelude" else "Fugue" :: String
+          num = read (take 2 (drop 5 piece)) :: Int
+       in ( kind
+          , "bwv_" <> show ((if book == 1 then 845 else 869) + num) )
+
+    statsLine st = "{score_notes " <> show (MA.stScoreNotes st)
+      <> ", matched " <> show (MA.stMatched st)
+      <> ", rate " <> MA.pyRepr (MA.stRate st)
+      <> ", deleted " <> show (MA.stDeleted st)
+      <> ", inserted " <> show (MA.stInserted st)
+      <> maybe "" ((", median_dev_ms " <>) . MA.pyRepr)
+           (MA.stMedianDevMs st)
+      <> "}"
+
+    provFor piece entry res =
+      let st = MA.aoStats res
+          q s = "\"" <> s <> "\""
+       in MA.provJson $
+            [ ("piece", q piece)
+            , ("maestro", q (T.unpack (M.ceMidi entry)))
+            , ("aligner", q "otb maestro-align 1.0")
+            , ("score_notes", show (MA.stScoreNotes st))
+            , ("matched", show (MA.stMatched st))
+            , ("rate", MA.pyRepr (MA.stRate st))
+            , ("deleted", show (MA.stDeleted st))
+            , ("inserted", show (MA.stInserted st)) ]
+            <> [ ( "span_s"
+                 , "[\n  " <> MA.pyRepr a <> ",\n  " <> MA.pyRepr b
+                     <> "\n ]" )
+               | Just (a, b) <- [MA.stSpan st] ]
+            <> [ ("median_dev_ms", MA.pyRepr d)
+               | Just d <- [MA.stMedianDevMs st] ]
+
+    validateIO res notesV folder perf = do
+      let adir = "corpus" </> "asap" </> T.unpack folder
+          mpath = adir </> perf <> ".match"
+          ann = adir </> perf <> "_annotations.txt"
+          sann = adir </> "midi_score_annotations.txt"
+      okM <- doesFileExist mpath
+      okA <- doesFileExist ann
+      if not (okM && okA) then pure Nothing else do
+        mp <- B.parseMatch <$> TIO.readFile mpath
+        scoreT <- TIO.readFile sann
+        annT <- TIO.readFile ann
+        pure (MA.validateOne res notesV mp scoreT annT)
+
+    asapPerfMap = do
+      ok <- doesFileExist M.asapMetaPath
+      if not ok then pure Map.empty else do
+        rows <- M.csvDicts <$> TIO.readFile M.asapMetaPath
+        pure $ foldl'
+          (\mm r ->
+             let mp = T.strip (fromMaybe ""
+                        (lookup "maestro_midi_performance" r))
+                 perf = takeBaseName (T.unpack
+                          (fromMaybe "" (lookup "midi_performance" r)))
+              in if T.null mp then mm
+                 else Map.insertWith (flip (<>))
+                        (T.replace "{maestro}/" "" mp)
+                        [(fromMaybe "" (lookup "folder" r), perf)] mm)
+          Map.empty rows
+
+-- | The per-piece hierarchical fit, in-process: tempo shrunk toward
+-- the authority, timing and velocity knob descents in the [piece.X]
+-- coordinate system, deployed-candidate scoring and LOPO acceptance.
+-- Everything scores against the PRE-FIT config.
+runFit :: FilePath -> FilePath -> Double -> [String] -> Bool -> Bool
+       -> IO ()
+runFit corpus cfgPath shrinkK wanted apply dryRun = do
+  cfgText <- TIO.readFile cfgPath
+  prefit <- either (die . ("config: " <>)) pure
+              (OTB.Config.loadConfig (F.prefitStrip cfgText))
+  table <- resolveTemperament "werckmeister3"
+  date <- takeWhile (/= '\n')
+            <$> readProcess "date" ["+%F"] ""
+  let roots = ["corpus" </> "asap", "corpus" </> "maestro-wtc"]
+      eds = editionsFor cfgPath
+  files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
+  let pieces0 = sort (map takeBaseName files)
+      pieces = if null wanted then pieces0
+               else filter (`elem` wanted) pieces0
+  pds0 <- forM pieces $ \piece -> do
+    src <- readKernSource eds (corpus </> piece <> ".krn")
+    F.loadPieceData roots piece src
+  let pds = [pd | Just pd <- pds0]
+  -- pieces are independent: fan the descents out across cores (the
+  -- Python reference ground through them one subprocess at a time)
+  caps <- getNumCapabilities
+  -- one global gate on candidate evaluations: descents, LOPO folds
+  -- and layers all fork freely, but at most `caps` compiles+bridges
+  -- run at once
+  sem <- newQSem (max 1 caps)
+  recs0 <- parallelForM (length pds) pds $ \pd -> do
+    mrec <- fitOnePiece sem prefit table shrinkK pd
+    forM_ mrec $ \rec ->
+      hPutStrLn stderr (PF.prPiece rec <> ": n=" <> show (PF.prN rec)
+                  <> maybe "" (\(_, _, f) -> " tempo " <> PF.fmtD 1 f)
+                       (PF.prTempo rec)
+                  <> " timing "
+                  <> show (maybe False PF.flKept (PF.prTiming rec))
+                  <> " vel "
+                  <> show (maybe False PF.flKept (PF.prVelocity rec)))
+    pure mrec
+  let recs = [rec | Just rec <- recs0]
+  let newText = PF.applyFits date recs cfgText
+  if dryRun
+    then TIO.putStr newText
+    else when apply $ do
+      TIO.writeFile cfgPath newText
+      putStrLn ("applied "
+                  <> show (sum (map (length . snd)
+                                 (PF.buildSections date recs)))
+                  <> " keys — validate with a compile")
+
+-- | A fixed-width worker pool: results keep input order, exceptions
+-- propagate.
+parallelForM :: forall a b. Int -> [a] -> (a -> IO b) -> IO [b]
+parallelForM cap xs f = do
+  slots <- mapM (const newEmptyMVar) xs
+  queue <- newMVar (zip xs slots)
+  let worker = do
+        next <- modifyMVar queue $ \q ->
+          pure (drop 1 q, take 1 q)
+        case next of
+          [] -> pure ()
+          ((x, slot) : _) -> do
+            r <- try (f x)
+            putMVar slot (r :: Either SomeException b)
+            worker
+  forM_ [1 .. cap] (const (forkIO worker))
+  mapM (either throwIO pure <=< takeMVar) slots
+
+-- | Fit one piece against its humans.
+fitOnePiece :: QSem -> OTB.Config.Config -> TuningTable -> Double
+            -> F.PieceData -> IO (Maybe PF.PieceRec)
+fitOnePiece sem prefit table shrinkK pd = do
+  let piece = F.pdPiece pd
+      perfNames = map fst (F.pdMatches pd)
+      n = length perfNames
+  if n == 0 then pure Nothing else do
+    let ms0 = parseKern (tempoFallback TempoDefault) (F.pdSource pd)
+        performWith knobs =
+          case ms0 of
+            Left _ -> Nothing
+            Right s0 ->
+              let cfg' = F.applyKnobs F.timingFamily
+                           (Just (T.pack piece)) knobs prefit
+                  s1 = applyTempoOpt TempoDefault s0
+                  s = maybe s1 (\b -> s1 {scTempo = Bpm b})
+                        (pieceTempo cfg' (T.pack piece))
+               in either (const Nothing) Just
+                    (perform (mkInterp cfg' table False piece) s)
+    -- authority + human body tempo
+    let mAuth = do
+          p <- performWith []
+          pure (F.medianD (sort [b | (_, Bpm b) <- perfTempoMap p]))
+        humanTempos =
+          [ t
+          | (scoreT, perfs) <- F.pdAnnotations pd
+          , (name, perfT) <- perfs
+          , name `elem` perfNames
+          , Just t <- [bodyTempo scoreT perfT] ]
+        mTempo = case (mAuth, humanTempos) of
+          (Just auth, ts@(_ : _)) ->
+            let human = F.medianD (sort ts)
+                fitted = auth + (human - auth) * fromIntegral n
+                           / (fromIntegral n + 1)
+             in Just ( roundTo1 human, roundTo1 auth, roundTo1 fitted )
+          _ -> Nothing
+        roundTo1 x = fromIntegral (round (x * 10) :: Integer) / 10
+    -- cached per-candidate performer scores
+    cacheRef <- newIORef (Map.empty
+      :: Map.Map (String, [(T.Text, Double)])
+           (MVar [(String, Double)]))
+    -- in-flight dedup: the first caller claims the key and computes
+    -- (gated by the global sem), racers block on the MVar instead of
+    -- recomputing
+    let scored fam rsFn knobs = do
+          let key = (F.kfName fam, sortOn fst knobs)
+          fresh <- newEmptyMVar
+          claim <- atomicModifyIORef' cacheRef $ \c ->
+            case Map.lookup key c of
+              Just mv -> (c, Left mv)
+              Nothing -> (Map.insert key fresh c, Right fresh)
+          case claim of
+            Left mv -> readMVar mv
+            Right mv -> do
+              v <- bracket_ (waitQSem sem) (signalQSem sem) $
+                evaluate (force
+                  (maybe [] (\p -> rsFn p pd) (performWith knobs)))
+              putMVar mv v
+              pure v
+        objective fam rsFn only knobs = do
+          rs <- scored fam rsFn knobs
+          let ok = [ r | (perf, r) <- rs, not (isNaN r)
+                   , maybe True (perf `elem`) only ]
+          pure $ if null ok then Nothing
+                 else Just (sum ok / fromIntegral (length ok))
+        -- fixed-order two-sweep descent (the reference's semantics)
+        descend2 obj grids only = do
+          mb <- obj only []
+          case mb of
+            Nothing -> pure Nothing
+            Just b0 -> do
+              (cur, best) <- foldM
+                (\acc _sweep -> foldM (stepK obj only) acc
+                                  (map fst grids))
+                ([], b0) [1 :: Int, 2]
+              pure (Just (cur, b0, best))
+          where
+            stepK obj' only' (cur, best) k = do
+              let grid = maybe [] id (lookup k grids)
+              -- warm the knob's whole grid concurrently: within one
+              -- knob every trial equals (insert k v cur) regardless
+              -- of the fold's improvements, so the sequential logic
+              -- below only ever reads warmed keys
+              forM_ grid $ \v -> forkIO . void . obj' only' $
+                Map.toList (Map.insert k v (Map.fromList cur))
+              foldM
+                (\(c, b) v ->
+                   if lookup k c == Just v then pure (c, b) else do
+                     r <- obj' only'
+                            (Map.toList (Map.insert k v
+                                           (Map.fromList c)))
+                     pure $ case r of
+                       Just x | x > b + 1e-4 ->
+                         (Map.toList (Map.insert k v (Map.fromList c))
+                         , x)
+                       _ -> (c, b))
+                (cur, best) grid
+        baseOf k = Map.findWithDefault 0 k
+          (Map.findWithDefault Map.empty
+             (Map.findWithDefault "agogics" k
+                (F.kfSections F.timingFamily
+                   <> F.kfSections F.velocityFamily)) prefit)
+        layer fam rsFn grids = do
+          let obj = objective fam rsFn
+          mres <- descend2 obj grids Nothing
+          case mres of
+            Nothing -> pure Nothing
+            Just (fitted, base, _rawBest) -> do
+              let shrunk = PF.shrinkKnobs fitted baseOf n shrinkK
+              mdep <- obj Nothing shrunk
+              case mdep of
+                Nothing -> pure Nothing
+                Just dep -> do
+                  let beats = dep >= base - 1e-4
+                  lopo <- if n >= 3 && not (null fitted)
+                    then do
+                      ds <- parallelForM n perfNames $ \hold -> do
+                        let keep = filter (/= hold) perfNames
+                        mf <- descend2 obj grids (Just keep)
+                        case mf of
+                          Nothing -> pure Nothing
+                          Just (f2, _, _) -> do
+                            let s2 = PF.shrinkKnobs f2 baseOf
+                                       (n - 1) shrinkK
+                            rf <- obj (Just [hold]) s2
+                            rb <- obj (Just [hold]) []
+                            pure ((-) <$> rf <*> rb)
+                      let good = [d | Just d <- ds]
+                      pure $ if null good then Nothing
+                        else Just (sum good
+                                     / fromIntegral (length good))
+                    else pure Nothing
+                  let kept = case lopo of
+                        Just d -> beats && d >= -1e-3
+                        Nothing -> not (null fitted) && beats
+                  pure (Just (PF.FitLayer shrunk base dep lopo kept))
+    layers <- parallelForM 2
+      [ layer F.timingFamily F.timingRs PF.timingKnobs
+      , layer F.velocityFamily F.velocityRsNoOrn PF.velocityKnobs ]
+      id
+    case layers of
+      [timing, vel] ->
+        pure (Just (PF.PieceRec piece n mTempo timing vel))
+      _ -> pure Nothing
+
+-- | Quarter-note bpm over the middle 80% of a performance's beats.
+bodyTempo :: T.Text -> T.Text -> Maybe Double
+bodyTempo scoreT perfT =
+  let sw = [fromRational w :: Double
+           | WholeNotes w <- scoreBeatPositions scoreT]
+      ts = perfBeatTimes perfT
+      nn = min (length sw) (length ts)
+   in if nn < 5 then Nothing else
+        let lo = (nn * 10) `div` 100
+            hi = (nn * 90) `div` 100
+            dw = sw !! hi - sw !! lo
+            dt = ts !! hi - ts !! lo
+         in if dt <= 0 || dw <= 0 then Nothing
+            else Just (dw / dt * 240)
+
+-- | Multi-start fixpoint search over a global knob family, evaluated
+-- against the PRE-FIT config on Book I with Book II held out. The
+-- whole run is in-process: a candidate evaluation is a parMap over
+-- the train pieces, cached by knob tuple.
+runLandscape :: FilePath -> FilePath -> String -> Int -> Int -> Double
+             -> IO ()
+runLandscape corpus cfgPath famName starts seed slack = do
+  cfgText <- TIO.readFile cfgPath
+  prefit <- either (die . ("config: " <>)) pure
+              (OTB.Config.loadConfig (F.prefitStrip cfgText))
+  table <- resolveTemperament "werckmeister3"
+  let fam = if famName == "velocity"
+              then F.velocityFamily else F.timingFamily
+      roots = ["corpus" </> "asap", "corpus" </> "maestro-wtc"]
+      eds = editionsFor cfgPath
+  files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
+  pds0 <- forM (sort (map takeBaseName files)) $ \piece -> do
+    src <- readKernSource eds (corpus </> piece <> ".krn")
+    F.loadPieceData roots piece src
+  let pds = [pd | Just pd <- pds0]
+      train = [pd | pd <- pds, "wtc1" `isPrefixOf'` F.pdPiece pd]
+      test = [pd | pd <- pds, "wtc2" `isPrefixOf'` F.pdPiece pd]
+      isPrefixOf' a b = take (length a) b == a
+      rsFn = if famName == "velocity" then F.velocityRs else F.timingRs
+      agg = if famName == "velocity"
+              then F.meanOfPieceMedians else F.meanFlat
+      -- parse once per piece; candidates only re-perform
+      parsed = Map.fromList
+        [ (F.pdPiece pd, s0)
+        | pd <- pds
+        , Right s0 <- [parseKern (tempoFallback TempoDefault)
+                         (F.pdSource pd)] ]
+      score cfg' pd = case Map.lookup (F.pdPiece pd) parsed of
+        Nothing -> []
+        Just s0 ->
+          let s1 = applyTempoOpt TempoDefault s0
+              s = maybe s1 (\b -> s1 {scTempo = Bpm b})
+                    (pieceTempo cfg' (T.pack (F.pdPiece pd)))
+           in either (const []) (\p -> map snd (rsFn p pd))
+                (perform (mkInterp cfg' table False (F.pdPiece pd)) s)
+      evalSet set knobs =
+        let cfg' = F.applyKnobs fam Nothing knobs prefit
+         in agg (parMap rdeepseq (score cfg') set)
+  cache <- newIORef (Map.empty :: Map.Map [(T.Text, Double)]
+                                   (Maybe Double))
+  let objective knobs = do
+        let key = sortOn fst knobs
+        c <- readIORef cache
+        case Map.lookup key c of
+          Just v -> pure v
+          Nothing -> do
+            let v = evalSet train knobs
+            v `seq` modifyIORef' cache (Map.insert key v)
+            pure v
+      grids = F.kfGrids fam
+      baseKnobs =
+        [ (k, Map.findWithDefault 0
+                k (Map.findWithDefault Map.empty
+                     (Map.findWithDefault "agogics" k
+                        (F.kfSections fam)) prefit))
+        | (k, _) <- grids ]
+      descendIO rng0 init0 = do
+        r0 <- objective init0
+        case r0 of
+          Nothing -> pure (Nothing, rng0)
+          Just b0 -> loop rng0 (Map.fromList init0) b0 1
+        where
+          loop rng cur best sweep
+            | sweep > 8 = pure (Just (cur, best, sweep - 1), rng)
+            | otherwise = do
+                let (order, rng') = F.shuffle rng (map fst grids)
+                (cur', best', imp) <- foldM stepK (cur, best, False) order
+                if imp then loop rng' cur' best' (sweep + 1)
+                       else pure (Just (cur', best', sweep), rng')
+          stepK (cur, best, imp) k = do
+            let grid = maybe [] id (lookup k grids)
+                tryV (c, b, i) v
+                  | Just v == Map.lookup k c = pure (c, b, i)
+                  | otherwise = do
+                      r <- objective (Map.toList (Map.insert k v c))
+                      pure $ case r of
+                        Just x | x > b + 1e-4 ->
+                          (Map.insert k v c, x, True)
+                        _ -> (c, b, i)
+            foldM tryV (cur, best, imp) grid
+  finalsRef <- newIORef []
+  let runStart i rng = do
+        let (initK, rng') =
+              if i == 0 then (baseKnobs, rng)
+              else foldl'
+                (\(acc, r) (k, g) ->
+                   let (v, r') = F.choice r g in (acc <> [(k, v)], r'))
+                ([], rng) grids
+        (res, rng'') <- descendIO rng' initK
+        case res of
+          Nothing -> pure rng''
+          Just (cur, best, sweeps) -> do
+            testR <- pure (evalSet test (Map.toList cur))
+            putStrLn ("start " <> show i <> ": train "
+                        <> show best <> " test " <> show testR
+                        <> " sweeps " <> show sweeps)
+            modifyIORef' finalsRef ((Map.toList cur, best, testR) :)
+            pure rng''
+  _ <- foldM (\rng i -> runStart i rng) (F.mkRng seed) [0 .. starts - 1]
+  finals <- reverse <$> readIORef finalsRef
+  let bestTrain = maximum [b | (_, b, _) <- finals]
+      elite = [f | f@(_, b, _) <- finals, b >= bestTrain - slack]
+  putStrLn ("\n" <> show (length finals) <> " starts; best train "
+              <> show bestTrain <> "; " <> show (length elite)
+              <> " within slack " <> show slack)
+  forM_ (map fst grids) $ \k -> do
+    let vals fs = [maybe 0 id (lookup k f) | (f, _, _) <- fs]
+        za = length [() | v <- vals finals, v == 0]
+        ze = length [() | v <- vals elite, v == 0]
+        uniqSorted = Map.keys . Map.fromList . map (, ())
+    putStrLn (T.unpack k <> "  zero " <> show za <> "/"
+                <> show (length finals) <> " elite-zero " <> show ze
+                <> "/" <> show (length elite) <> "  elite values "
+                <> show (uniqSorted (vals elite)))
 
 -- | The parity gate for the bridge port: identical invocation of the
 -- Python reference and this dump must produce byte-identical TSV.

@@ -186,6 +186,9 @@ overhold = 0.5       # finger-pedal legato in the chordal texture
 repeated = 0.7       # the corpus median 0.45 gate reads clipped at this
                      # tempo; a lament rearticulates, it does not detach
 trill_rate = 10      # 12/s is keyboard-brilliant; grave asks for fewer
+
+
+# ---- fitted per piece (piece_fit.py, 2026-09-01) ----
 tempo = 72.3 # PIECE-FIT 2026-09-01 n=5 human 66.5 vs authority 101.6
 arch_piece = 0.0069 # PIECE-FIT 2026-09-01 n=5 r 0.0895->0.2505 LOPO +0.099
 cadence_depth = 0.0214 # PIECE-FIT 2026-09-01 n=5 r 0.0895->0.2505 LOPO +0.099
@@ -193,9 +196,6 @@ open_push = 0.1029 # PIECE-FIT 2026-09-01 n=5 r 0.0895->0.2505 LOPO +0.099
 rit_floor = 0.5143 # PIECE-FIT 2026-09-01 n=5 r 0.0895->0.2505 LOPO +0.099
 rit_span = 3.4286 # PIECE-FIT 2026-09-01 n=5 r 0.0895->0.2505 LOPO +0.099
 vel_highloud = 1.0857 # PIECE-FIT 2026-09-01 n=5 r 0.3133->0.3156 LOPO +0.0061
-
-
-# ---- fitted per piece (piece_fit.py, 2026-09-01) ----
 
 [piece.wtc1f01]
 tempo = 54.7 # PIECE-FIT 2026-09-01 n=1 human 46.3 vs authority 63.2
@@ -785,3 +785,4 @@ arch_piece = 0.0168 # PIECE-FIT 2026-09-01 n=3 r 0.5882->0.6853 LOPO +0.0823
 boundary_ease = 0.012 # PIECE-FIT 2026-09-01 n=3 r 0.5882->0.6853 LOPO +0.0823
 rit_floor = 0.48 # PIECE-FIT 2026-09-01 n=3 r 0.5882->0.6853 LOPO +0.0823
 rit_span = 3.2 # PIECE-FIT 2026-09-01 n=3 r 0.5882->0.6853 LOPO +0.0823
+

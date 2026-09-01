@@ -53,8 +53,8 @@ What the bake produces (gitignored — regenerate, don't commit):
 Bake and serve:
 
 ```
-python3 tools/bake_site.py                # builds wasm + regenerates IRs
-python3 tools/bake_site.py --skip-wasm --perf-dir ~/.local/share/otb/perf
+stack exec otb -- bake-site               # builds wasm + regenerates IRs
+stack exec otb -- bake-site --skip-wasm --perf-dir ~/.local/share/otb/perf
 python3 -m http.server -d site 8877      # or any static host
 ```
 
