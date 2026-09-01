@@ -1229,6 +1229,21 @@ review = testGroup "review regressions"
         ("resolution" `notElem` rulesOf reattack)
       assertBool "still dissonant: no resolution label"
         ("resolution" `notElem` rulesOf stillDiss)
+  , testCase "metrical residuals reproduce the historical accents" $ do
+      -- the 2026-09-01 migration: absolute 12/6/3 under select-one
+      -- semantics == residuals 6/3/3 under additive semantics, in BOTH
+      -- meter parities (downbeats belong to the half-bar level in every
+      -- meter, which is what makes the odd-meter case exact)
+      let dp = defaultDynParams {dyArch = 0, dyHighLoud = 0}
+          note t = scoreNote t (1 / 16) 66 []
+          velsIn meter ts =
+            [ v - round (dyBase dp)
+            | (v, _) <- dynamicsLane' dp [(0, meter)]
+                          (replicate (length ts) False) (map note ts) ]
+      -- 4/4: downbeat, mid-bar, beat, subdivision
+      velsIn (4, 4) [0, 1 / 2, 1 / 4, 1 / 8] @?= [12, 6, 3, 0]
+      -- 3/4: downbeat still 12; no mid-bar; beats 3
+      velsIn (3, 4) [0, 1 / 4, 1 / 8] @?= [12, 3, 0]
   , testCase "easing shape: kinematic braking, not the vetoed line" $ do
       let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
           tm = tempoMap ag [] [(4, 0.3, 1)] [] [] [] (Bpm 100) 8

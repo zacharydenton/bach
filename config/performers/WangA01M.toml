@@ -39,9 +39,9 @@ w_leap = 0.5        # leap away from the note
 
 [dynamics]
 vel_base = 84       # centre velocity
-vel_bar = 12        # Sloboda: the barline is marked loudest...
-vel_halfbar = 6     # ...mid-bar next (even meters)...
-vel_beat = 3        # ...beats next; subdivisions get nothing
+vel_bar = 6         # Sloboda's hierarchy as ADDITIVE residuals (the
+vel_halfbar = 3     # 2026-09-01 migration): downbeat 6+3+3 = 12,
+vel_beat = 3        # half-bar 3+3 = 6, beat 3 — the fitted sound intact
 vel_arch = 8        # Todd: loudness arches to the phrase middle
 vel_highloud = 0.25 # KTH: per semitone — melodic peaks carry
 vel_accent = 14     # kern ^ marks: the score's own emphasis

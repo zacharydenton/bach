@@ -47,8 +47,11 @@ data DynParams = DynParams
 defaultDynParams :: DynParams
 defaultDynParams = DynParams
   { dyBase = 84
-  , dyBar = 12
-  , dyHalfBar = 6
+  -- MIGRATED to additive residuals (2026-09-01): the historical hand
+  -- model's absolute accents were 12/6/3; as residuals that is 6/3/3
+  -- (downbeat 6+3+3 = 12, half-bar 3+3 = 6, beat 3 — identical sound)
+  , dyBar = 6
+  , dyHalfBar = 3
   , dyBeat = 3
   , dyArch = 8
   , dyHighLoud = 0.25
@@ -93,11 +96,15 @@ dynamicsLane' dp meters bounds ns =
     -- the meter in force at the note: last change at or before its onset,
     -- with bar positions counted from that change
     -- ADDITIVE residuals, not an exclusive pick: a downbeat is also a
-    -- half-bar point and a beat, so it accrues every level it sits on.
-    -- With the old select-one semantics, fitting vel_bar to 0 while
-    -- vel_beat stayed positive INVERTED the hierarchy (ordinary beats
-    -- louder than downbeats) — "no extra bar accent" and "no bar
-    -- accent at all" must be different configurations.
+    -- half-bar point (trivially, in every meter) and a beat, so it
+    -- accrues every level it sits on. With the old select-one
+    -- semantics, fitting vel_bar to 0 while vel_beat stayed positive
+    -- INVERTED the hierarchy — "no extra bar accent" and "no bar
+    -- accent at all" must be different configurations. Downbeats
+    -- belonging to the half-bar level in ALL meters (not only even
+    -- ones) is what makes the migration from the old absolute values
+    -- exact: residuals (bar-half, half-beat, beat) reproduce the old
+    -- accents in odd meters too.
     metrical n = case takeWhile ((<= snOnset n) . fst) meters of
       [] -> 0
       ms ->
@@ -106,7 +113,7 @@ dynamicsLane' dp meters bounds ns =
             beat = WholeNotes (1 / fromIntegral den)
             pos = wmod (snOnset n - start) bar
             onBar = pos == 0
-            onHalf = even num && (onBar || pos == bar / 2)
+            onHalf = onBar || (even num && pos == bar / 2)
             onBeat = wmod pos beat == 0
          in sum [ dyBar dp | onBar ]
               + sum [ dyHalfBar dp | onHalf ]

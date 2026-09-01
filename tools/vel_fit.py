@@ -32,8 +32,11 @@ veto is recorded. Regeneration: run the commands above from the repo
 root with corpus/asap and corpus/bach-wtc present and otb built.
 
 Committed run (2026-09-01, 58-piece overlap, --from-prefit, ADDITIVE
-metrical semantics): baseline train r = 0.119, test 0.132; fitted train
-0.401, TEST 0.423. Winners: vel_highloud 0.8 (the dominant driver),
+metrical semantics with the PREFIT values MIGRATED to residuals — the
+historical 12/6/3 absolute accents are 6/3/3 as residuals, identical
+sound; the baseline reproduces the original hand model's numbers
+exactly): baseline train r = 0.164, test 0.161; fitted train 0.401,
+TEST 0.423. Winners: vel_highloud 0.8 (the dominant driver),
 subject_vel 5 (at its hand value), dialogue_vel 2. Vetoed beside
 register: the whole metrical hierarchy (vel_bar/halfbar/beat — an
 earlier select-one-semantics run appeared to keep vel_beat; that was an
@@ -73,7 +76,9 @@ VEL_KNOB_SECTIONS = {
 # committed fit numbers are regenerated from THIS baseline, not from
 # the already-fitted default.toml — vel_fit --fit-defaults --from-prefit
 PREFIT = {
-    "vel_bar": 12, "vel_halfbar": 6, "vel_beat": 3, "vel_arch": 8,
+    # vel_bar/halfbar migrated to additive residuals: the historical
+    # 12/6/3 ABSOLUTE accents are 6/3/3 as residuals (identical sound)
+    "vel_bar": 6, "vel_halfbar": 3, "vel_beat": 3, "vel_arch": 8,
     "vel_highloud": 0.25, "dis_vel": 10, "sus_soft": 4,
     "mel_charge": 0.4, "harm_charge": 0.3, "subject_vel": 5,
     "dialogue_vel": 4, "dialogue_yield": 2, "seq_echo": 2,
