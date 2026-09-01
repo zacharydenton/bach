@@ -28,16 +28,22 @@ Eligibility everywhere: exact-pass bridge rows only (seg/fuzzy/orn are
 re-anchored), non-ornament representatives, performances passing the
 |median deviation| < 30 ms calibration gate (dropped ones counted).
 
-Committed run (2026-09-01, 58-piece overlap, 166 performances):
-CONTRASTS (primary): uphill +0.2 ms t=0.5 (null -> vetoed);
-double-dur short half +2.6 ms LATE t=6.6 with direct 2:1 IOI ratio
-2.041 vs notated 2.0 vs otb's softened 1.75 — the KTH softening is
-opposite-signed, humans slightly overdot (-> vetoed, overdot shape
-recorded); post-leap arrival +1.1 ms t=4.8 (unmodelled discovery);
-final-chord spread -2.1 ms/rank (roll_ms -> 0, harpsichord idiom kept
-per-piece); inegales 0.931 over 57 pieces (no swing; inegal = 0
-confirmed); grace instances too few to measure (grace_ms stays at the
-literature 70); noise floor IQR 15.2 ms (jitter_ms = 3 conservative).
+Committed run (2026-09-01, 58-piece overlap, 166 performances;
+--measure compiles against PREFIT so the contexts of vetoed rules
+still fire — the numbers regenerate from HEAD; t statistics are
+PIECE-clustered, since performances of one composition share notes
+and often pianists):
+CONTRASTS (primary): uphill -0.1 ms t=-0.2 over 56 pieces (null ->
+vetoed); double-dur short half +2.6 ms LATE t=3.6 over 55 pieces with
+direct 2:1 IOI ratio 2.041 vs notated 2.0 vs otb's softened 1.75 —
+the KTH softening is opposite-signed, humans slightly overdot
+(-> vetoed, overdot shape recorded); post-leap arrival +1.2 ms t=4.2
+(unmodelled discovery); final-chord contrast +5.4 ms t=1.0 (weak) and
+spread -2.1 ms/rank (roll_ms -> 0, harpsichord idiom kept per-piece);
+inegales 0.931 over 57 pieces (no swing; inegal = 0 confirmed); grace
+instances too few to measure (grace_ms stays at the literature 70);
+noise floor: signed deviation-minus-performance-median IQR 15.6 ms
+(jitter_ms = 3 conservative).
 DESCENT (secondary): baseline train r 0.001 / test -0.005, "fitted"
 0.021 / 0.003 — no held-out signal; unresolvable at this noise floor,
 verdicts carried by the contrasts per the decision rule above.
@@ -160,11 +166,15 @@ def dur_bucket(dur_wn):
     return 4
 
 
-def contrast(rows_by_perf, in_ctx):
-    """Per-performance median(in) - median(matched out); mean and
-    clustered t across performances (the residual_mine pattern)."""
-    effs, n_in = [], 0
-    for rows in rows_by_perf:
+def contrast(per_piece, in_ctx):
+    """Per-performance median(in) - median(matched out), aggregated to
+    PIECE means, then t across pieces: performances of one composition
+    share both the notes and often the pianist, so clustering at the
+    performance level overstates certainty (the double-duration t
+    dropped from 6.6 to ~3.6 under piece clustering)."""
+    by_piece = {}
+    n_in = n_perfs = 0
+    for piece, rows in per_piece:
         ins = [r for r in rows if in_ctx(r)]
         if len(ins) < 3:
             continue
@@ -175,17 +185,20 @@ def contrast(rows_by_perf, in_ctx):
                      phase_bucket(r["wn"])) in keys]
         if len(outs) < 3:
             continue
-        effs.append(statistics.median(r["human_dev"] for r in ins)
-                    - statistics.median(r["human_dev"] for r in outs))
+        eff = (statistics.median(r["human_dev"] for r in ins)
+               - statistics.median(r["human_dev"] for r in outs))
+        by_piece.setdefault(piece, []).append(eff)
         n_in += len(ins)
+        n_perfs += 1
+    effs = [sum(v) / len(v) for v in by_piece.values()]
     if len(effs) < 3:
         return None
     mean = sum(effs) / len(effs)
     sd = math.sqrt(sum((e - mean) ** 2 for e in effs)
                    / max(1, len(effs) - 1))
     t = mean / (sd / math.sqrt(len(effs))) if sd > 0 else float("inf")
-    return {"ms": 1000 * mean, "t": t, "n_perfs": len(effs),
-            "n_notes": n_in}
+    return {"ms": 1000 * mean, "t": t, "n_pieces": len(effs),
+            "n_perfs": n_perfs, "n_notes": n_in}
 
 
 CONTEXTS = [
@@ -207,13 +220,19 @@ CONTEXTS = [
 ]
 
 
-def measure(otb, pieces, tmp):
-    all_by_perf = []
+def measure(otb, args, pieces, tmp):
+    # measurement probes the PRE-FIT hand model: the verdicts switched
+    # uphill/double_dur off in the shipped config, which would erase the
+    # very contexts being measured — the committed contrasts regenerate
+    # from HEAD only against PREFIT
+    cfg = ae.with_knobs(args.config, PREFIT, tmp,
+                        sections=TIMING_KNOB_SECTIONS)
+    per_piece = []
     graces, dd_ratios, roll_incs = [], [], []
     inegal_by_piece = {}
     for piece in pieces:
-        for perf, rows in piece_perf_rows(otb, piece, tmp):
-            all_by_perf.append(rows)
+        for perf, rows in piece_perf_rows(otb, piece, tmp, cfg):
+            per_piece.append((piece, rows))
             by_ch = {}
             for r in sorted(rows, key=lambda r: r["wn"]):
                 by_ch.setdefault(r["ch"], []).append(r)
@@ -260,16 +279,17 @@ def measure(otb, pieces, tmp):
                 roll_incs.append(1000 * (b["human_on_s"] - a["human_on_s"]))
 
     print("== contrasts (human deviation in-context vs matched "
-          "baseline; clustered over performances) ==")
-    print(f"{'context':<32} {'effect ms':>10} {'t':>7} {'perfs':>6} "
-          f"{'notes':>7}")
+          "baseline; piece-clustered) ==")
+    print(f"{'context':<32} {'effect ms':>10} {'t':>7} {'pieces':>7} "
+          f"{'perfs':>6} {'notes':>7}")
     for name, ctx in CONTEXTS:
-        c = contrast(all_by_perf, ctx)
+        c = contrast(per_piece, ctx)
         if c is None:
             print(f"{name:<32} {'—':>10}   (too few instances)")
         else:
             print(f"{name:<32} {c['ms']:>+10.1f} {c['t']:>7.1f} "
-                  f"{c['n_perfs']:>6} {c['n_notes']:>7}")
+                  f"{c['n_pieces']:>7} {c['n_perfs']:>6} "
+                  f"{c['n_notes']:>7}")
 
     print("\n== direct readouts ==")
     if graces:
@@ -304,12 +324,14 @@ def measure(otb, pieces, tmp):
                       f"{vv[len(vv) // 2]:.3f} over {len(v)} pairs")
     # the empirical noise floor jitter_ms should be judged against
     resid = []
-    for rows in all_by_perf:
+    for _piece, rows in per_piece:
         med = statistics.median(r["human_dev"] for r in rows)
-        resid.extend(abs(r["human_dev"] - med) for r in rows)
+        resid.extend(r["human_dev"] - med for r in rows)
     resid.sort()
-    print(f"\nnoise floor: |human deviation - performance median| "
-          f"IQR width {1000 * resid[3 * len(resid) // 4]:.1f} ms "
+    q1 = resid[len(resid) // 4]
+    q3 = resid[3 * len(resid) // 4]
+    print(f"\nnoise floor: signed deviation-minus-performance-median "
+          f"IQR {1000 * (q3 - q1):.1f} ms "
           f"(jitter_ms = 3 is conservative)")
 
 
@@ -426,7 +448,7 @@ def main():
 
     with tempfile.TemporaryDirectory() as tmp:
         if args.measure:
-            measure(otb, pieces, tmp)
+            measure(otb, args, pieces, tmp)
         elif args.fit_defaults:
             fit_defaults(otb, args, pieces, tmp)
         elif args.dump_residuals:

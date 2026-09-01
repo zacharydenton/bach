@@ -821,6 +821,12 @@ let OPUS = null;
 // (gapless boundary): the ledger goes quiet rather than lying.
 function earPos(){
   if (!STATE) return 0;
+  // paused: freeze at the engine position — interpolating wall time
+  // would advance the rail and snap back at every poll. (A pause is
+  // not represented in the opus anchor's stream timeline either, so
+  // the frozen engine position is the honest display in both modes.)
+  if (!STATE.playing)
+    return Math.min(STATE.position, STATE.length||STATE.position);
   let at = STATE.position + (Date.now() - (STATE._t||Date.now()))/1000;
   if (OPUS && OPUS.anchor && !OPUS.el.paused && OPUS.el.currentTime > 0){
     const an = OPUS.anchor;

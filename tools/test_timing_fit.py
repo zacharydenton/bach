@@ -82,23 +82,28 @@ class RuleParsing(unittest.TestCase):
 
 
 class Contrast(unittest.TestCase):
-    def test_clustered_contrast(self):
-        # 4 performances; in-context notes uniformly 20 ms late
-        rows_by_perf = []
-        for _ in range(4):
-            rows = []
-            for i in range(12):
-                rows.append({"rules": {}, "human_dev": 0.0,
-                             "otb_dur_wn": 0.125, "wn": i * 0.25,
-                             "is_final": False})
-            for i in range(4):
-                rows.append({"rules": {"x": "onset"}, "human_dev": 0.02,
-                             "otb_dur_wn": 0.125, "wn": i * 0.25,
-                             "is_final": False})
-            rows_by_perf.append(rows)
-        c = tf.contrast(rows_by_perf, lambda r: "x" in r["rules"])
+    def test_piece_clustered_contrast(self):
+        # 4 pieces x 2 performances; in-context notes uniformly 20 ms
+        # late — clustering aggregates to PIECE means (performances of
+        # one composition are not independent)
+        per_piece = []
+        for p in range(4):
+            for _ in range(2):
+                rows = []
+                for i in range(12):
+                    rows.append({"rules": {}, "human_dev": 0.0,
+                                 "otb_dur_wn": 0.125, "wn": i * 0.25,
+                                 "is_final": False})
+                for i in range(4):
+                    rows.append({"rules": {"x": "onset"},
+                                 "human_dev": 0.02,
+                                 "otb_dur_wn": 0.125, "wn": i * 0.25,
+                                 "is_final": False})
+                per_piece.append((f"piece{p}", rows))
+        c = tf.contrast(per_piece, lambda r: "x" in r["rules"])
         self.assertAlmostEqual(c["ms"], 20.0)
-        self.assertEqual(c["n_perfs"], 4)
+        self.assertEqual(c["n_pieces"], 4)
+        self.assertEqual(c["n_perfs"], 8)
 
 
 def otb_binary():
