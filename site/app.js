@@ -179,24 +179,30 @@ async function loadPiece(idx) {
     shipInstance(inst, eff[slot])));
   if (gen !== pieceGen) return;
 
-  // this request won: commit the staged rig — except where the user
-  // retargeted a slot while we were loading; their choice stands, and
-  // its instances re-ship against THIS piece's placement (their edit
-  // may have shipped against the outgoing piece's instances)
-  castState.defaultDone = staged.defaultDone;
-  const reship = [];
+  // this request won: settle the FINAL rig — the staged casting, except
+  // where the user retargeted a slot while we were loading (their edit
+  // may have shipped against the outgoing piece's instances). Every
+  // instance is shipped its final patch and AWAITED before the score
+  // posts: playback must not begin on a patch whose replacement is
+  // still in flight, or the arriving load would cut sounding notes.
+  // (shipInstance dedups, so already-correct instances are no-ops.)
+  const finalEff = [];
   for (let s = 0; s < SLOTS.length; s++) {
-    if (slotPatch[s] === rigSnapshot[s]) slotPatch[s] = eff[s];
-    else reship.push(s);
+    finalEff[s] = slotPatch[s] === rigSnapshot[s] ? eff[s] : slotPatch[s];
   }
-  for (const s of reship) {
-    placement.instSlot.forEach((slot, inst) => {
-      if (slot === s) shipInstance(inst, slotPatch[s]);
-    });
+  await Promise.all(placement.instSlot.map((slot, inst) =>
+    shipInstance(inst, finalEff[slot])));
+  if (gen !== pieceGen) return;
+
+  // ...and only now commit, so a load that loses at either check has
+  // left the standing rig untouched
+  castState.defaultDone = staged.defaultDone;
+  for (let s = 0; s < SLOTS.length; s++) {
+    if (slotPatch[s] === rigSnapshot[s]) slotPatch[s] = finalEff[s];
   }
 
-  // calibration compensation sees the patches that will play
-  const score = buildEvents(perf, SR, chToSlot, chToLane, eff, CAL, true);
+  // calibration compensation sees the patches that will actually play
+  const score = buildEvents(perf, SR, chToSlot, chToLane, finalEff, CAL, true);
   PIECE = {
     idx, name: p.name, chToSlot, laneSlots, slotChannels,
     instSlot: placement.instSlot,
