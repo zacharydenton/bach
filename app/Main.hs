@@ -265,10 +265,18 @@ runExplain com mbar mnote = do
       notes = sortOn pnSrcOn (concat (perfTracks p))
       -- bar N's notated span, walked through the FULL meter map (meter
       -- changes shift every later barline); selection is by pnSrcOn —
-      -- melody lead and jitter move pnOnset across barlines
-      barSpan b = walk 1 0 (case scMeter score of
-                              [] -> [(0, (4, 4))]
-                              ms -> ms)
+      -- melody lead and jitter move pnOnset across barlines. The grid
+      -- anchors at the first meter entry's onset (the parser moves it
+      -- to the pickup's end when the piece opens with an anacrusis);
+      -- bar 0 names the pickup itself.
+      gridStart = case scMeter score of
+        ((o, _) : _) -> o
+        [] -> 0
+      barSpan b
+        | b < 1 = (0, gridStart)
+        | otherwise = walk 1 gridStart (case scMeter score of
+                                          [] -> [(0, (4, 4))]
+                                          ms -> ms)
         where
           walk k t ((_, (n, d)) : more@((next, _) : _)) =
             let bl = WholeNotes (fromIntegral n / fromIntegral d)

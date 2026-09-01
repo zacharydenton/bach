@@ -1018,6 +1018,40 @@ review = testGroup "review regressions"
                      , pnSrcOn n == o, abs (pnPitch n - tp) <= 2 ]
           assertBool ("lower aux is the letter below: " <> show subs)
             ((tp - 2) `elem` subs && (tp - 1) `notElem` subs)
+  , testCase "anacrusis: the bar grid anchors at the first full bar" $ do
+      -- an eighth-note pickup: the first meter entry moves to the
+      -- pickup's end so every metrical consumer (Sloboda accents, bar
+      -- arches, explain --bar) starts bar 1 where the edition prints it
+      let pickup = T.unlines
+            ["**kern", "*M4/4", "8c", "=1", "2d", "2e", "=2", "4f", "*-"]
+          leadingBar = T.unlines ["**kern", "*M4/4", "=1-", "4c", "*-"]
+      case parseKern (Bpm 72) pickup of
+        Left e -> assertFailure e
+        Right s -> map fst (scMeter s) @?= [1 / 8]
+      case parseKern (Bpm 72) leadingBar of
+        Left e -> assertFailure e
+        Right s -> map fst (scMeter s) @?= [0]
+  , testCase "parser: mid-piece *MM is a loud error, not a silent latch" $ do
+      let src = T.unlines ["**kern", "*MM96", "4c", "*MM120", "4d", "*-"]
+      case parseKern (Bpm 72) src of
+        Left e -> assertBool e ("*MM" `isInfixOf` e)
+        Right _ -> assertFailure "mid-piece tempo change absorbed silently"
+      -- restating the SAME tempo is harmless
+      let same = T.unlines ["**kern", "*MM96", "4c", "*MM96", "4d", "*-"]
+      case parseKern (Bpm 72) same of
+        Left e -> assertFailure e
+        Right s -> scTempo s @?= Bpm 96
+  , testCase "parser: additive meters are not quietly truncated" $ do
+      -- *M3+2/8 must not read as 3/8; with no valid meter record the
+      -- map stays empty (metrical dynamics degrade gracefully)
+      let src = T.unlines ["**kern", "*M3+2/8", "4c", "*-"]
+      case parseKern (Bpm 72) src of
+        Left e -> assertFailure e
+        Right s -> scMeter s @?= []
+  , testCase "parser: CRLF input parses identically to LF" $ do
+      let lf = T.unlines ["**kern", "*M4/4", "4c", ".", "4d", "*-"]
+          crlf = T.replace "\n" "\r\n" lf
+      show (parseKern (Bpm 72) crlf) @?= show (parseKern (Bpm 72) lf)
   , testCase "scl: a bare integer is a ratio (2 = the octave)" $ do
       let scl = T.unlines $
             ["! t", "t", "12", "!"]

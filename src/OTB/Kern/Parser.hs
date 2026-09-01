@@ -23,7 +23,7 @@ import OTB.Kern.Spine
 import OTB.Kern.Token
 import OTB.Pitch (spDegree)
 import OTB.Score
-import OTB.Units (Bpm (..), WholeNotes)
+import OTB.Units (Bpm (..), WholeNotes (..))
 
 type ParseError = String
 
@@ -36,6 +36,10 @@ data PSt = PSt
   , psRestHolds :: [(WholeNotes, WholeNotes)]
     -- ^ fermatas on rests, (onset, dur), reverse order — realised by the
     -- Player as tempo-map holds
+  , psFirstBar :: Maybe WholeNotes
+    -- ^ clock at the first barline record: data before it is an
+    -- anacrusis (six WTC pieces open with one), and the bar grid must
+    -- anchor at the first FULL bar
   , psDone :: Map Int [ScoreNote] -- ^ per voice, reverse order
   , psTies :: Map (Int, Int) [ScoreNote]
     -- ^ open ties by (voice, staff position) — spelled degree, so a
@@ -49,7 +53,10 @@ parseKern :: Bpm -> Text -> Either ParseError Score
 parseKern defaultTempo src = do
   let records =
         [ r
-        | (n, line) <- zip [1 ..] (T.lines src)
+        | (n, line0) <- zip [1 ..] (T.lines src)
+        -- CRLF input: T.lines keeps the \r, which would corrupt the
+        -- last field of every record (".\r" is not a null token)
+        , let line = T.dropWhileEnd (== '\r') line0
         , not (T.null (T.strip line))
         , let r = lexRecord n line
         , not (isCommentRecord r)
@@ -59,7 +66,8 @@ parseKern defaultTempo src = do
       | any isExclusive fs -> Right (h, rest)
     _ -> Left "no **kern exclusive interpretation record found"
   st0 <- initFromHeader header
-  final <- foldM step (PSt st0 Nothing [] 0 0 [] Map.empty Map.empty) body
+  final <-
+    foldM step (PSt st0 Nothing [] 0 0 [] Nothing Map.empty Map.empty) body
   -- flush unclosed ties as sounding notes: they *were* heard for their
   -- accumulated duration (usually an enharmonic respelling at the close, or
   -- an editorial quirk); the count is surfaced, not fatal
@@ -75,9 +83,24 @@ parseKern defaultTempo src = do
         | (i, ns) <- Map.toAscList flushed
         , not (null ns)
         ]
+      -- anchor the bar grid at the first FULL bar: data before the
+      -- first barline record is an anacrusis, so the first meter
+      -- entry's onset moves to the pickup's end — every metrical
+      -- consumer (Sloboda accents, bar arches, otb explain --bar)
+      -- aligns at once, and anacrusis notes fall before the grid,
+      -- which reads as "no downbeat accent" (an upbeat, correctly)
+      meter0 = reverse (psMeter final)
+      pickup = case (psFirstBar final, meter0) of
+        (Just (WholeNotes fb), (_, (n, d)) : _) | n > 0, d > 0 ->
+          let bl = fromIntegral n / fromIntegral d
+           in WholeNotes (fb - bl * fromIntegral (floor (fb / bl) :: Integer))
+        _ -> 0
+      meter' = case meter0 of
+        ((0, m) : more) | pickup > 0 -> (pickup, m) : more
+        _ -> meter0
   Right
     (Score (fromMaybe defaultTempo (psTempo final)) voices
-       (length leftovers) (psDrifts final) (reverse (psMeter final))
+       (length leftovers) (psDrifts final) meter'
        (psGrace final) (reverse (psRestHolds final)))
   where
     foldM f z = foldl (\acc x -> acc >>= \s -> f s x) (Right z)
@@ -100,10 +123,23 @@ initFromHeader (Record n fs) = do
 
 step :: PSt -> Record -> Either ParseError PSt
 step st (Record n fs)
-  | all isBarOrNull fs = Right st -- barline record: no time semantics here
+  -- barline record: no time semantics, but the FIRST one's clock marks
+  -- where the bar grid begins (see the anacrusis note in parseKern)
+  | all isBarOrNull fs =
+      Right st {psFirstBar = case psFirstBar st of
+                  Nothing | any isBar fs -> Just now
+                  fb -> fb}
   | any isInterp fs = do
       is <- traverse asInterp fs
       let tempo' = firstTempo is
+      -- the Score holds ONE tempo; a differing mid-piece *MM cannot be
+      -- represented and must not be silently ignored (none in the
+      -- corpus — this is the loud guard for other kern input)
+      case (psTempo st, tempo') of
+        (Just t, Just t') | t /= t' ->
+          Left ("line " <> show n
+                  <> ": mid-piece *MM tempo change is not supported")
+        _ -> Right ()
       changed <-
         mapLeft (("line " <> show n <> ": ") <>) (applyInterps is (psSpines st))
       Right st
@@ -122,6 +158,7 @@ step st (Record n fs)
     isInterp (FInterp _) = True
     isInterp _ = False
     isBarOrNull f = case f of FBar _ -> True; FNull -> True; FComment -> True; _ -> False
+    isBar f = case f of FBar _ -> True; _ -> False
     asInterp (FInterp i) = Right i
     asInterp f = Left ("line " <> show n <> ": mixed interpretation record: " <> show f)
     -- an interpretation record sits at one instant; all live kern paths
@@ -132,11 +169,13 @@ step st (Record n fs)
     firstTempo is = case [b | ITempo b <- is] of (b : _) -> Just b; [] -> Nothing
     firstMeter is = case [m | IMeter txt <- is, Just m <- [readMeter txt]] of
       (m : _) -> Just m; [] -> Nothing
+    -- full consumption required: *M3+2/8 (an additive meter) must not
+    -- quietly read as 3/8
     readMeter txt = case T.splitOn "/" txt of
       [a, b]
-        | Right (n, _) <- decimalT a
-        , Right (d, _) <- decimalT b
-        , n > 0, d > 0 -> Just (n, d)
+        | Right (nu, ra) <- decimalT a, T.null ra
+        , Right (d, rb) <- decimalT b, T.null rb
+        , nu > 0, d > 0 -> Just (nu, d)
       _ -> Nothing
     decimalT = TR.decimal
     -- advance each path's clock by its field's (first) note duration
