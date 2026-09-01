@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Bake the static patchboard: site/ becomes a self-contained board.
 
-The live patchboard (tools/patchboard.py) renders on the server; the
-static board renders in the listener's browser via the surge fork's
+The board renders in the listener's browser via the surge fork's
 WebAssembly build (~/code/surge, branch wasm-headless-audioworklet).
-Everything the server used to know is baked into site/data/:
+Everything it needs to know is baked into site/data/:
 
   data/perf/<piece>.json   the PerformanceIRs, regenerated from HEAD
                            (otb album) unless --perf-dir copies a render
@@ -34,8 +33,40 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-sys.path.insert(0, HERE)
-from patchboard import patch_dirs, scan_patches  # noqa: E402
+
+
+def patch_dirs():
+    """Surge patch library roots, in precedence order (inherited from
+    the retired live patchboard)."""
+    cands = [
+        os.environ.get("SURGE_PATCHES", ""),  # explicit override wins
+        "/usr/share/surge-xt/patches_factory",
+        "/usr/share/surge-xt/patches_3rdparty",
+        os.path.expanduser(
+            "~/Library/Application Support/Surge XT/patches_factory"),
+        "/Library/Application Support/Surge XT/patches_factory",
+        # a surge checkout works without installing Surge at all
+        os.path.expanduser("~/code/surge/resources/data/patches_factory"),
+    ]
+    return [d for d in cands if d and os.path.isdir(d)]
+
+
+def scan_patches():
+    # a system install and a surge checkout carry the same factory
+    # bank; first tree wins per (category, name) so nothing lists twice
+    cats = {}
+    seen = set()
+    for root in patch_dirs():
+        for cat in sorted(os.listdir(root)):
+            catdir = os.path.join(root, cat)
+            if not os.path.isdir(catdir) or cat in ("Tutorials", "Templates"):
+                continue
+            for f in sorted(os.listdir(catdir)):
+                if f.endswith(".fxp") and (cat, f) not in seen:
+                    seen.add((cat, f))
+                    cats.setdefault(cat, []).append(
+                        (f[:-4], os.path.join(catdir, f)))
+    return cats
 
 WASM_FILES = ["surge-worklet.js", "surge-worklet.wasm", "worklet-shim.js"]
 
@@ -56,8 +87,8 @@ WASM_CMAKE_FLAGS = [
 
 
 def album_key(path):
-    # mirrors patchboard.py main(): prelude before fugue per key number,
-    # non-WTC extras alphabetically at the end
+    # album order: prelude before fugue per key number, non-WTC extras
+    # alphabetically at the end
     b = os.path.splitext(os.path.basename(path))[0]
     if len(b) == 7 and b.startswith("wtc") and b[4] in "pf":
         return (0, int(b[3]), int(b[5:7]), 0 if b[4] == "p" else 1, "")

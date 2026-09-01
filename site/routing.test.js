@@ -4,8 +4,8 @@
  * The static board's logic: register-ranked distribution of a piece's
  * channels over the fixed four-voice rig, casting resolution onto slots,
  * calibration compensation, event building, the why index, and title
- * engraving. Where behavior is shared with the live board
- * (tools/test_patchboard.py), the cases mirror it.
+ * engraving. Where behavior was inherited from the retired live
+ * board, the cases mirror its suite (test_patchboard.py, git history).
  */
 import test from "node:test";
 import assert from "node:assert/strict";

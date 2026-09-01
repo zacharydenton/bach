@@ -55,19 +55,29 @@ programmed into an emulated BCR2000 by OSC gestures and sequenced by real
 firmware. The compiler exists to replace that 107-second gesture session with
 a build step.
 
-## macOS (the patchboard / audition side)
+## The patchboard (a static site)
 
-The tools have no platform branches — PortAudio is CoreAudio on macOS and
-the patchboard outputs to the browser anyway. What the Mac needs is a
-surgepy build:
+The board lives in `site/` and renders the whole album with the Surge
+engine compiled to WebAssembly — all audio synthesized client-side, any
+dumb static host is the whole deployment. `python3 tools/bake_site.py`
+fills it; `site/README.md` has the details. (An earlier server-rendered
+patchboard streamed Opus from surgepy; it was retired 2026-09-01 once
+the static board reached parity and beyond — seeking, per-lane
+polyphony, the full native FX path.)
+
+## Offline rendering (audition.py)
+
+`tools/audition.py` renders a PerformanceIR to WAV through surgepy, and
+`tools/render_showcase.sh` / `tools/calibrate_patch.py` build on it. They
+need a surgepy build (no platform branches — works on macOS too):
 
 ```sh
-# once: xcode-select --install ; brew install cmake ninja ffmpeg ; uv python install 3.11
+# once: xcode-select --install ; brew install cmake ninja ; uv python install 3.11
 git clone https://github.com/surge-synthesizer/surge && cd surge
 git submodule update --init --recursive
 # REQUIRED: stock surgepy has no setTempo — without this patch every
-# tempo-synced LFO and delay drifts against the piece (the patchboard
-# warns, but warns is all it can do)
+# tempo-synced LFO and delay drifts against the piece (audition warns,
+# but warns is all it can do)
 git apply /path/to/otb/tools/surgepy-patches/0001-expose-tempo.patch
 uv venv --python 3.11 ~/.venv-audition && uv pip install --python ~/.venv-audition/bin/python numpy
 cmake -S . -B build -DSURGE_BUILD_PYTHON_BINDINGS=ON -DCMAKE_BUILD_TYPE=Release \
@@ -76,23 +86,10 @@ cmake -S . -B build -DSURGE_BUILD_PYTHON_BINDINGS=ON -DCMAKE_BUILD_TYPE=Release 
 cmake --build build --target surgepy -j
 ```
 
-Then, with `examples/` shipped in this repo (no Haskell toolchain needed):
-
-```sh
-PYTHONPATH=<dir with surgepy*.so> ~/.venv-audition/bin/python \
-  tools/patchboard.py examples/bwv846f.json --scl examples/w3.scl
-```
-
-The page binds to loopback (`http://127.0.0.1:8766/`). It has no login, so
-only pass `--host 0.0.0.0` on a network you trust; cross-site POSTs are
-refused by an Origin check either way.
-
 Patch library discovery: installed Surge XT locations are searched
-automatically; a bare checkout works too, or set `SURGE_PATCHES=/path/to/patches_factory`.
-Vendored pybind11 caps the venv at Python 3.11. AudioWorklet needs a
-secure context: open via localhost, or put tailscale serve in front as
-on Linux. Remote Opus listening uses ffmpeg and is capped at four concurrent
-listeners; the LAN button keeps using the uncompressed browser path.
+automatically; a bare checkout works too, or set
+`SURGE_PATCHES=/path/to/patches_factory`. Vendored pybind11 caps the
+venv at Python 3.11.
 
 ## Status
 

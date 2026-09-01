@@ -2,13 +2,13 @@
 
 A self-contained static build of the patchboard: the Surge XT engine
 compiled to WebAssembly renders the album **in the listener's browser**,
-from the same PerformanceIR JSON the live board plays. No stream, no
+from the same PerformanceIR JSON the interpreter emits. No stream, no
 ffmpeg, no surgepy — a dumb file host is the whole deployment.
 
 What ships here (committed):
 
 - `index.html`, `app.css`, `app.js` — the board UI, ported from
-  `tools/patchboard.py`'s PAGE and recast as a **fixed four-voice
+  the retired live patchboard's PAGE and recast as a **fixed four-voice
   rig**: bass, tenor, alto, soprano, shown at all times, each with its
   own preset, mute and gain. Every piece's channels are distributed
   among the four by register rank (a slot with nothing to play reads
@@ -60,7 +60,7 @@ python3 -m http.server -d site 8877      # or any static host
 
 All URLs are relative, so the site works from a subdirectory, GitHub
 Pages, or `tailscale serve` alike. Deployed on the tailnet since
-2026-09-01, replacing the live board's proxy:
+2026-09-01, replacing the (since retired) live board's proxy:
 
 ```
 sudo tailscale serve --bg --set-path /bach /home/zach/code/otb/site

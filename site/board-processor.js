@@ -11,7 +11,8 @@
  * apply per instance at the mix. Lane -> (instance, scene) comes with
  * the score (routing.js lanePlacement).
  *
- * Scheduling matches tools/patchboard.py render(): the walk is in 32-frame
+ * Scheduling matches the retired live board's render loop
+ * (tools/patchboard.py, in git history): the walk is in 32-frame
  * engine blocks and every event lands at the boundary of the block that
  * contains it (≤1 ms quantization). Pause simply stops walking — synth
  * state freezes and resume continues mid-note, like the live engine.

@@ -15,7 +15,7 @@ and record how much sounding time the patch itself adds.
 Consumers subtract (a clamped fraction of) releaseS from note ends on
 that channel, so the *perceived* articulation matches the intended
 one. One calibration file, two consumers (audition.py --calibrate,
-patchboard --calibration).
+the baked board's data/calibration.json via tools/bake_site.py).
 
   PYTHONPATH=$SURGEPY_DIR python tools/calibrate_patch.py \
       config/casting/default.json -o config/calibration.json
