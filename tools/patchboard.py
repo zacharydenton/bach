@@ -736,7 +736,7 @@ function listenRemote(){
   // the server records an exact anchor (engine position + true banked
   // history) when it assembles this listener's burst; fetch it so the
   // why-subtitles track OUR ears, not the engine's now
-  OPUS = { el: a, anchor: null };
+  OPUS = { el: a, anchor: null, pausedAccum: 0, lastCt: null };
   // the server mints the anchor when /opus reaches subscription setup,
   // which can lag media startup: poll by token, bounded, until it lands
   let anchorTries = 0;
@@ -819,18 +819,20 @@ let OPUS = null;
 // timeline when streaming, the interpolated engine position otherwise.
 // Returns null when the ears are in a DIFFERENT piece than the engine
 // (gapless boundary): the ledger goes quiet rather than lying.
+let lastEar = 0;
 function earPos(){
   if (!STATE) return 0;
-  // paused: freeze at the engine position — interpolating wall time
-  // would advance the rail and snap back at every poll. (A pause is
-  // not represented in the opus anchor's stream timeline either, so
-  // the frozen engine position is the honest display in both modes.)
+  // paused: freeze. An opus listener freezes at their own EARS' last
+  // position (the engine runs ~buffer-latency ahead of them); a local
+  // listener at the engine position. Interpolating wall time would
+  // advance the rail and snap back at every poll.
   if (!STATE.playing)
-    return Math.min(STATE.position, STATE.length||STATE.position);
+    return (OPUS && OPUS.anchor) ? lastEar
+         : Math.min(STATE.position, STATE.length||STATE.position);
   let at = STATE.position + (Date.now() - (STATE._t||Date.now()))/1000;
   if (OPUS && OPUS.anchor && !OPUS.el.paused && OPUS.el.currentTime > 0){
     const an = OPUS.anchor;
-    const ct = OPUS.el.currentTime;
+    const ct = OPUS.el.currentTime - OPUS.pausedAccum;
     let seg = an.segments[0];
     for (const s of an.segments) if (s.streamS <= ct) seg = s;
     let piece = seg.piece;
@@ -841,7 +843,9 @@ function earPos(){
     }
     if (piece !== (STATE.pieceIndex|0)) return null;
   }
-  return Math.min(at, STATE.length||at);
+  at = Math.min(at, STATE.length||at);
+  lastEar = at;
+  return at;
 }
 
 function esc(s){ return String(s).replace(/[&<>"]/g,
@@ -872,6 +876,15 @@ function fmt(s){ s=Math.max(0,s|0); return (s/60|0)+':'+String(s%60).padStart(2,
 // smooth progress: rAF between 1 Hz polls, tabular time labels
 function tick(){
   if (STATE){
+    // the opus element keeps playing streamed SILENCE through an
+    // engine pause, so its currentTime runs ahead of the anchor's
+    // musical timeline — bank that paused stream time and subtract it
+    if (OPUS && OPUS.el){
+      const ct = OPUS.el.currentTime;
+      if (OPUS.lastCt != null && !STATE.playing && ct > OPUS.lastCt)
+        OPUS.pausedAccum += ct - OPUS.lastCt;
+      OPUS.lastCt = ct;
+    }
     const at = earPos();
     const p = at==null?0:Math.min(1, at/(STATE.length||1));
     document.getElementById('fill').style.width = (p*100).toFixed(2)+'%';

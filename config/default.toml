@@ -133,7 +133,8 @@ uphill = 0.0       # MEASURED to null (timing_fit 2026-09-01: -0.1 ms,
                    # run-rushing in the human onsets; KTH faster-uphill
                    # switched off
 double_dur = 0.0   # DIRECTION DISPROVEN (timing_fit 2026-09-01): the
-                   # KTH rule SOFTENS 2:1 toward 1.75, but humans play
+                   # KTH rule SOFTENS 2:1 to a measured 1.807 (analytic
+                   # (2-k)/(1+k) = 1.804), but humans play
                    # 2.041 — they slightly OVERDOT (short half +2.6 ms
                    # late, t=3.6 piece-clustered, n=7862). Softening
                    # off; a future overdot rule is the discovered

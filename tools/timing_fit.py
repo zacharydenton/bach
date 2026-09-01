@@ -35,8 +35,10 @@ PIECE-clustered, since performances of one composition share notes
 and often pianists):
 CONTRASTS (primary): uphill -0.1 ms t=-0.2 over 56 pieces (null ->
 vetoed); double-dur short half +2.6 ms LATE t=3.6 over 55 pieces with
-direct 2:1 IOI ratio 2.041 vs notated 2.0 vs otb's softened 1.75 —
-the KTH softening is opposite-signed, humans slightly overdot
+direct 2:1 IOI ratio 2.041 vs notated 2.0 vs otb's prefit 1.807
+(measured from the same triples; the rule alone gives (2-k)/(1+k) =
+1.804 at k = 0.07) — the KTH softening is opposite-signed, humans
+slightly overdot
 (-> vetoed, overdot shape recorded); post-leap arrival +1.2 ms t=4.2
 (unmodelled discovery); final-chord contrast +5.4 ms t=1.0 (weak) and
 spread -2.1 ms/rank (roll_ms -> 0, harpsichord idiom kept per-piece);
@@ -228,7 +230,7 @@ def measure(otb, args, pieces, tmp):
     cfg = ae.with_knobs(args.config, PREFIT, tmp,
                         sections=TIMING_KNOB_SECTIONS)
     per_piece = []
-    graces, dd_ratios, roll_incs = [], [], []
+    graces, dd_ratios, dd_otb, roll_incs = [], [], [], []
     inegal_by_piece = {}
     for piece in pieces:
         for perf, rows in piece_perf_rows(otb, piece, tmp, cfg):
@@ -252,8 +254,12 @@ def measure(otb, args, pieces, tmp):
                             and lb <= 1 / 4:
                         ha = b["human_on_s"] - a["human_on_s"]
                         hb = c2["human_on_s"] - b["human_on_s"]
+                        oa = b["otb_on_s"] - a["otb_on_s"]
+                        ob = c2["otb_on_s"] - b["otb_on_s"]
                         if hb > 0.01 and ha > 0.01:
                             dd_ratios.append(ha / hb)
+                        if ob > 0.01 and oa > 0.01:
+                            dd_otb.append(oa / ob)
                 # inegales candidates: conjunct equal pairs <= eighth,
                 # contiguous, long half on the even multiple
                 # (inegalLane's own preconditions, in python)
@@ -302,9 +308,14 @@ def measure(otb, args, pieces, tmp):
               f"(grace_ms = 70)")
     if dd_ratios:
         ds = sorted(dd_ratios)
+        os2 = sorted(dd_otb)
+        otb_med = os2[len(os2) // 2] if os2 else float("nan")
+        # otb's comparator is MEASURED from the same triples in the
+        # PREFIT render, not embedded (the rule alone gives
+        # (2-k)/(1+k) = 1.804 at k = 0.07; interactions move it)
         print(f"2:1 pair IOI ratio: human median "
               f"{ds[len(ds) // 2]:.3f} (n={len(ds)}) — notated 2.0, "
-              f"otb ~1.75 at double_dur 0.07")
+              f"otb prefit {otb_med:.3f}")
     if roll_incs:
         rs = sorted(roll_incs)
         print(f"final-chord spread: human median "
