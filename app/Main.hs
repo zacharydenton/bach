@@ -76,8 +76,8 @@ import OTB.Units (Bpm (..), WholeNotes (..))
 import Options.Applicative
 import System.Directory
   ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist
-  , getHomeDirectory, listDirectory )
-import System.Environment (lookupEnv)
+  , getHomeDirectory, listDirectory, renameFile )
+import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (die)
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcess, readProcessWithExitCode)
@@ -1198,12 +1198,29 @@ runLandscape corpus cfgPath famName starts seed slack = do
                         _ -> (c, b, i)
             foldM tryV (cur, best, imp) grid
 
-  -- checkpoint state, the reference's scheme: resumable by count,
-  -- guarded by a fingerprint over grids + baseline + family + seed
+  -- checkpoint state, resumable by count. The fingerprint must
+  -- identify the EXPERIMENT, not just its knobs: it digests the grids
+  -- and baseline, the effective (prefit) config the objective scores
+  -- against, every corpus input it reads (kern sources, annotations,
+  -- matches), and the binary itself — resuming across any of those
+  -- changing would silently mix incomparable scores
   let statePath = "corpus" </> ("knob-landscape-" <> famName <> ".json")
-      fpInput = show grids <> show (sortOn fst baseKnobs)
-                  <> famName <> show seed
-  fp <- takeWhile (/= ' ') <$> readProcess "sha256sum" [] fpInput
+      pieceBlob pd = T.concat
+        ( [T.pack (F.pdPiece pd), F.pdSource pd]
+            <> concat [ scoreT : concat [[T.pack nm, t]
+                                        | (nm, t) <- perfs]
+                      | (scoreT, perfs) <- F.pdAnnotations pd ]
+            <> concat [[T.pack nm, mt] | (nm, mt) <- F.pdMatches pd] )
+      sha t = takeWhile (/= ' ') <$> readProcess "sha256sum" [] t
+  corpusDigests <- forM pds (sha . T.unpack . pieceBlob)
+  prefitDigest <- sha (T.unpack (F.prefitStrip cfgText))
+  binDigest <- do
+    exe <- getExecutablePath
+    takeWhile (/= ' ') <$> readProcess "sha256sum" [exe] ""
+  let fpInput = show grids <> show (sortOn fst baseKnobs)
+                  <> famName <> show seed <> prefitDigest
+                  <> concat corpusDigests <> binDigest
+  fp <- sha fpInput
   haveState <- doesFileExist statePath
   stored0 <- if not haveState then pure [] else do
     raw <- TIO.readFile statePath
@@ -1224,9 +1241,14 @@ runLandscape corpus cfgPath famName starts seed slack = do
         [ (k, J.JNum (T.pack (MA.pyRepr v))) | (k, v) <- ks ]
       saveState = do
         entries <- readIORef finalsRef
-        TIO.writeFile statePath $ J.dumpJson (Just 1) (J.JObj
+        -- atomic: a kill mid-write must not truncate the state (a
+        -- parse failure would read as changed inputs and discard
+        -- every completed start)
+        let tmpPath = statePath <> ".tmp"
+        TIO.writeFile tmpPath $ J.dumpJson (Just 1) (J.JObj
           [ ("_meta", J.JObj [("fingerprint", J.JStr (T.pack fp))])
           , ("finals", J.JArr entries) ])
+        renameFile tmpPath statePath
       runStart i = do
         let rng = F.mkRng (seed * 1000 + i)
             (initK, rngAfter) =
