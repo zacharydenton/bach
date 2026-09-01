@@ -152,20 +152,641 @@ harm_charge = 0   # FITTED (was 0.3): ...and harmonic charge — neither
 [piece.wtc1p01]
 base = 0.85       # pure arpeggiated figuration: let it ring toward pedal
 overhold = 0.9    # finger pedal a la Czerny: the arpeggios bloom to the bar
+tempo = 88.4 # FITTED 2026-09-01 n=1 human 62.5 vs authority 114.2
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.703->0.8178 unvalidated(n<3)
+cadence_depth = 0.02 # FITTED 2026-09-01 n=1 r 0.703->0.8178 unvalidated(n<3)
+open_push = 0.08 # FITTED 2026-09-01 n=1 r 0.703->0.8178 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.703->0.8178 unvalidated(n<3)
+rit_span = 2.6667 # FITTED 2026-09-01 n=1 r 0.703->0.8178 unvalidated(n<3)
+vel_beat = 2.0 # FITTED 2026-09-01 n=1 r -0.2531->0.0748 unvalidated(n<3)
+vel_highloud = 0.5333 # FITTED 2026-09-01 n=1 r -0.2531->0.0748 unvalidated(n<3)
 
 [piece.wtc1p05]
 inegal = 0.18     # audition: French-style D major sixteenths, gently swung
                   # (Quantz XI says yes, Neumann says not for Bach — ears decide)
+tempo = 137.6 # FITTED 2026-09-01 n=2 human 139.2 vs authority 134.4
+arch_piece = 0.018 # FITTED 2026-09-01 n=2 r 0.7126->0.9391 unvalidated(n<3)
+boundary_ease = 0.02 # FITTED 2026-09-01 n=2 r 0.7126->0.9391 unvalidated(n<3)
+cadence_depth = 0.0 # FITTED 2026-09-01 n=2 r 0.7126->0.9391 unvalidated(n<3)
+rit_floor = 0.25 # FITTED 2026-09-01 n=2 r 0.7126->0.9391 unvalidated(n<3)
+rit_span = 3.0 # FITTED 2026-09-01 n=2 r 0.7126->0.9391 unvalidated(n<3)
+vel_bar = 2.0 # FITTED 2026-09-01 n=2 r 0.3726->0.3834 unvalidated(n<3)
+vel_beat = 1.5 # FITTED 2026-09-01 n=2 r 0.3726->0.3834 unvalidated(n<3)
+vel_highloud = 1.0 # FITTED 2026-09-01 n=2 r 0.3726->0.3834 unvalidated(n<3)
 
 [piece.wtc1p08]
-# The E-flat minor lament (BWV 853). No BWV 853 performance in the local
-# ASAP subset, so the globally fitted defaults are unvalidated here — and
-# this is exactly the piece where their honest vetoes (boundary_ease,
-# cadence_depth: real in the residuals, shape unfound) cost the most.
-# Per-piece entries by audition, 2026-09-01:
-cadence_depth = 0.06 # phrase-scale breathing at the detected cadences
-boundary_ease = 0.04 # ...and easing into group boundaries
+# The E-flat minor lament (BWV 853). The 2026-09-01 audition entries
+# (cadence_depth 0.06, boundary_ease 0.04) were flagged unvalidated;
+# five MAESTRO humans arrived the same day and the piece_fit LOPO run
+# (held-out +0.25 r) now carries the tempo contour — the audition's
+# cadence_depth 0.06 was independently CONFIRMED by the fit's raw
+# optimum, boundary_ease was not chosen, and both defer to the FITTED
+# lines below. What stays by ear is what the fit cannot see:
 overhold = 0.5       # finger-pedal legato in the chordal texture
 repeated = 0.7       # the corpus median 0.45 gate reads clipped at this
                      # tempo; a lament rearticulates, it does not detach
 trill_rate = 10      # 12/s is keyboard-brilliant; grave asks for fewer
+tempo = 71.8 # FITTED 2026-09-01 n=5 human 66.5 vs authority 98.6
+arch_piece = 0.0069 # FITTED 2026-09-01 n=5 r -0.0555->0.2624 LOPO +0.2514
+boundary_ease = 0.0 # FITTED 2026-09-01 n=5 r -0.0555->0.2624 LOPO +0.2514
+cadence_depth = 0.0429 # FITTED 2026-09-01 n=5 r -0.0555->0.2624 LOPO +0.2514
+open_push = 0.1029 # FITTED 2026-09-01 n=5 r -0.0555->0.2624 LOPO +0.2514
+rit_floor = 0.5143 # FITTED 2026-09-01 n=5 r -0.0555->0.2624 LOPO +0.2514
+rit_span = 3.4286 # FITTED 2026-09-01 n=5 r -0.0555->0.2624 LOPO +0.2514
+vel_highloud = 1.0857 # FITTED 2026-09-01 n=5 r 0.3133->0.3193 LOPO +0.0061
+
+
+# ---- fitted per piece (piece_fit.py, 2026-09-01) ----
+
+[piece.wtc1f01]
+tempo = 54.7 # FITTED 2026-09-01 n=1 human 46.3 vs authority 63.2
+arch_piece = 0.02 # FITTED 2026-09-01 n=1 r 0.6837->0.73 unvalidated(n<3)
+cadence_depth = 0.0333 # FITTED 2026-09-01 n=1 r 0.6837->0.73 unvalidated(n<3)
+rit_floor = 0.4 # FITTED 2026-09-01 n=1 r 0.6837->0.73 unvalidated(n<3)
+dialogue_vel = 3.0 # FITTED 2026-09-01 n=1 r 0.2222->0.2534 unvalidated(n<3)
+subject_vel = 3.3333 # FITTED 2026-09-01 n=1 r 0.2222->0.2534 unvalidated(n<3)
+vel_beat = 1.0 # FITTED 2026-09-01 n=1 r 0.2222->0.2534 unvalidated(n<3)
+vel_highloud = 0.6667 # FITTED 2026-09-01 n=1 r 0.2222->0.2534 unvalidated(n<3)
+
+[piece.wtc1f03]
+tempo = 105.2 # FITTED 2026-09-01 n=11 human 104.9 vs authority 107.9
+arch_piece = 0.0138 # FITTED 2026-09-01 n=11 r 0.6171->0.6433 LOPO +0.0162
+open_push = 0.0092 # FITTED 2026-09-01 n=11 r 0.6171->0.6433 LOPO +0.0162
+rit_floor = 0.2154 # FITTED 2026-09-01 n=11 r 0.6171->0.6433 LOPO +0.0162
+dialogue_vel = 0.3077 # FITTED 2026-09-01 n=11 r 0.4437->0.4622 LOPO +0.0175
+subject_vel = 9.2308 # FITTED 2026-09-01 n=11 r 0.4437->0.4622 LOPO +0.0175
+vel_beat = 2.5385 # FITTED 2026-09-01 n=11 r 0.4437->0.4622 LOPO +0.0175
+
+[piece.wtc1f04]
+tempo = 103.6 # FITTED 2026-09-01 n=3 human 101.9 vs authority 108.6
+arch_piece = 0.0396 # FITTED 2026-09-01 n=3 r 0.7034->0.7812 LOPO +0.0669
+cadence_depth = 0.036 # FITTED 2026-09-01 n=3 r 0.7034->0.7812 LOPO +0.0669
+open_push = 0.024 # FITTED 2026-09-01 n=3 r 0.7034->0.7812 LOPO +0.0669
+rit_floor = 0.39 # FITTED 2026-09-01 n=3 r 0.7034->0.7812 LOPO +0.0669
+rit_span = 3.2 # FITTED 2026-09-01 n=3 r 0.7034->0.7812 LOPO +0.0669
+dialogue_vel = 3.8 # FITTED 2026-09-01 n=3 r 0.2609->0.2894 LOPO +0.013
+subject_vel = 2.0 # FITTED 2026-09-01 n=3 r 0.2609->0.2894 LOPO +0.013
+vel_highloud = 0.56 # FITTED 2026-09-01 n=3 r 0.2609->0.2894 LOPO +0.013
+
+[piece.wtc1f05]
+tempo = 57.7 # FITTED 2026-09-01 n=2 human 55.9 vs authority 61.1
+arch_piece = 0.012 # FITTED 2026-09-01 n=2 r 0.6547->0.7574 unvalidated(n<3)
+cadence_depth = 0.015 # FITTED 2026-09-01 n=2 r 0.6547->0.7574 unvalidated(n<3)
+rit_floor = 0.25 # FITTED 2026-09-01 n=2 r 0.6547->0.7574 unvalidated(n<3)
+rit_span = 3.0 # FITTED 2026-09-01 n=2 r 0.6547->0.7574 unvalidated(n<3)
+subject_vel = 7.5 # FITTED 2026-09-01 n=2 r 0.3769->0.3861 unvalidated(n<3)
+vel_highloud = 0.8 # FITTED 2026-09-01 n=2 r 0.3769->0.3861 unvalidated(n<3)
+
+[piece.wtc1f06]
+tempo = 71.4 # FITTED 2026-09-01 n=1 human 63.1 vs authority 79.7
+cadence_depth = 0.02 # FITTED 2026-09-01 n=1 r 0.7914->0.8037 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.7914->0.8037 unvalidated(n<3)
+dialogue_vel = 3.0 # FITTED 2026-09-01 n=1 r 0.5461->0.5504 unvalidated(n<3)
+vel_highloud = 0.9333 # FITTED 2026-09-01 n=1 r 0.5461->0.5504 unvalidated(n<3)
+
+[piece.wtc1f08]
+tempo = 72.4 # FITTED 2026-09-01 n=5 human 71.8 vs authority 75.4
+arch_piece = 0.0069 # FITTED 2026-09-01 n=5 r 0.6254->0.697 LOPO +0.0479
+cadence_depth = 0.0714 # FITTED 2026-09-01 n=5 r 0.6254->0.697 LOPO +0.0479
+open_push = 0.0171 # FITTED 2026-09-01 n=5 r 0.6254->0.697 LOPO +0.0479
+rit_floor = 0.2286 # FITTED 2026-09-01 n=5 r 0.6254->0.697 LOPO +0.0479
+dialogue_vel = 4.1429 # FITTED 2026-09-01 n=5 r 0.401->0.4126 LOPO +0.0084
+subject_vel = 1.4286 # FITTED 2026-09-01 n=5 r 0.401->0.4126 LOPO +0.0084
+vel_highloud = 0.8 # FITTED 2026-09-01 n=5 r 0.401->0.4126 LOPO +0.0084
+
+[piece.wtc1f09]
+tempo = 111.3 # FITTED 2026-09-01 n=6 human 112.2 vs authority 105.9
+dialogue_vel = 0.5 # FITTED 2026-09-01 n=6 r 0.4225->0.4415 LOPO +0.0136
+subject_vel = 8.75 # FITTED 2026-09-01 n=6 r 0.4225->0.4415 LOPO +0.0136
+vel_bar = 3.0 # FITTED 2026-09-01 n=6 r 0.4225->0.4415 LOPO +0.0136
+vel_beat = 2.25 # FITTED 2026-09-01 n=6 r 0.4225->0.4415 LOPO +0.0136
+vel_highloud = 1.1 # FITTED 2026-09-01 n=6 r 0.4225->0.4415 LOPO +0.0136
+
+[piece.wtc1f10]
+tempo = 116.0 # FITTED 2026-09-01 n=1 human 127.8 vs authority 104.1
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.9238->0.9724 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.9238->0.9724 unvalidated(n<3)
+rit_floor = 0.35 # FITTED 2026-09-01 n=1 r 0.9238->0.9724 unvalidated(n<3)
+rit_span = 1.6667 # FITTED 2026-09-01 n=1 r 0.9238->0.9724 unvalidated(n<3)
+dialogue_vel = 1.3333 # FITTED 2026-09-01 n=1 r 0.5779->0.6122 unvalidated(n<3)
+subject_vel = 6.6667 # FITTED 2026-09-01 n=1 r 0.5779->0.6122 unvalidated(n<3)
+vel_bar = 1.3333 # FITTED 2026-09-01 n=1 r 0.5779->0.6122 unvalidated(n<3)
+vel_beat = 1.0 # FITTED 2026-09-01 n=1 r 0.5779->0.6122 unvalidated(n<3)
+
+[piece.wtc1f11]
+tempo = 95.2 # FITTED 2026-09-01 n=1 human 101.5 vs authority 88.9
+arch_piece = 0.02 # FITTED 2026-09-01 n=1 r 0.6118->0.7534 unvalidated(n<3)
+cadence_depth = 0.0 # FITTED 2026-09-01 n=1 r 0.6118->0.7534 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.6118->0.7534 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.6118->0.7534 unvalidated(n<3)
+rit_span = 1.6667 # FITTED 2026-09-01 n=1 r 0.6118->0.7534 unvalidated(n<3)
+dialogue_vel = 1.3333 # FITTED 2026-09-01 n=1 r 0.48->0.5014 unvalidated(n<3)
+subject_vel = 3.3333 # FITTED 2026-09-01 n=1 r 0.48->0.5014 unvalidated(n<3)
+vel_beat = 1.0 # FITTED 2026-09-01 n=1 r 0.48->0.5014 unvalidated(n<3)
+vel_highloud = 0.8 # FITTED 2026-09-01 n=1 r 0.48->0.5014 unvalidated(n<3)
+
+[piece.wtc1f12]
+tempo = 65.0 # FITTED 2026-09-01 n=7 human 66.5 vs authority 54.9
+arch_piece = 0.0147 # FITTED 2026-09-01 n=7 r 0.5706->0.6546 LOPO +0.0614
+open_push = 0.0133 # FITTED 2026-09-01 n=7 r 0.5706->0.6546 LOPO +0.0614
+rit_floor = 0.2222 # FITTED 2026-09-01 n=7 r 0.5706->0.6546 LOPO +0.0614
+dialogue_vel = 0.4444 # FITTED 2026-09-01 n=7 r 0.3035->0.3208 LOPO +0.0135
+subject_vel = 1.1111 # FITTED 2026-09-01 n=7 r 0.3035->0.3208 LOPO +0.0135
+vel_beat = 4.6667 # FITTED 2026-09-01 n=7 r 0.3035->0.3208 LOPO +0.0135
+vel_highloud = 1.1111 # FITTED 2026-09-01 n=7 r 0.3035->0.3208 LOPO +0.0135
+
+[piece.wtc1f13]
+tempo = 66.1 # FITTED 2026-09-01 n=2 human 62.4 vs authority 73.6
+arch_piece = 0.018 # FITTED 2026-09-01 n=2 r 0.5617->0.6518 unvalidated(n<3)
+cadence_depth = 0.0 # FITTED 2026-09-01 n=2 r 0.5617->0.6518 unvalidated(n<3)
+open_push = 0.03 # FITTED 2026-09-01 n=2 r 0.5617->0.6518 unvalidated(n<3)
+rit_floor = 0.25 # FITTED 2026-09-01 n=2 r 0.5617->0.6518 unvalidated(n<3)
+dialogue_vel = 1.0 # FITTED 2026-09-01 n=2 r 0.5402->0.5508 unvalidated(n<3)
+subject_vel = 2.5 # FITTED 2026-09-01 n=2 r 0.5402->0.5508 unvalidated(n<3)
+vel_highloud = 0.8 # FITTED 2026-09-01 n=2 r 0.5402->0.5508 unvalidated(n<3)
+
+[piece.wtc1f15]
+tempo = 97.1 # FITTED 2026-09-01 n=7 human 96.1 vs authority 104.0
+cadence_depth = 0.0467 # FITTED 2026-09-01 n=7 r 0.8285->0.8337 LOPO +0.0048
+open_push = 0.0367 # FITTED 2026-09-01 n=7 r 0.8285->0.8337 LOPO +0.0048
+rit_floor = 0.2222 # FITTED 2026-09-01 n=7 r 0.8285->0.8337 LOPO +0.0048
+dialogue_vel = 4.3333 # FITTED 2026-09-01 n=7 r 0.3292->0.3652 LOPO +0.0297
+vel_bar = 0.0 # FITTED 2026-09-01 n=7 r 0.3292->0.3652 LOPO +0.0297
+vel_beat = 4.6667 # FITTED 2026-09-01 n=7 r 0.3292->0.3652 LOPO +0.0297
+
+[piece.wtc1f17]
+tempo = 58.2 # FITTED 2026-09-01 n=2 human 59.8 vs authority 55.1
+arch_piece = 0.037 # FITTED 2026-09-01 n=2 r 0.7758->0.8507 unvalidated(n<3)
+cadence_depth = 0.015 # FITTED 2026-09-01 n=2 r 0.7758->0.8507 unvalidated(n<3)
+open_push = 0.03 # FITTED 2026-09-01 n=2 r 0.7758->0.8507 unvalidated(n<3)
+rit_floor = 0.25 # FITTED 2026-09-01 n=2 r 0.7758->0.8507 unvalidated(n<3)
+dialogue_vel = 1.0 # FITTED 2026-09-01 n=2 r 0.3461->0.3557 unvalidated(n<3)
+vel_highloud = 1.0 # FITTED 2026-09-01 n=2 r 0.3461->0.3557 unvalidated(n<3)
+
+[piece.wtc1f18]
+tempo = 60.3 # FITTED 2026-09-01 n=4 human 59.0 vs authority 65.2
+arch_piece = 0.016 # FITTED 2026-09-01 n=4 r 0.7699->0.8268 LOPO +0.0402
+cadence_depth = 0.0 # FITTED 2026-09-01 n=4 r 0.7699->0.8268 LOPO +0.0402
+open_push = 0.02 # FITTED 2026-09-01 n=4 r 0.7699->0.8268 LOPO +0.0402
+rit_floor = 0.3 # FITTED 2026-09-01 n=4 r 0.7699->0.8268 LOPO +0.0402
+subject_vel = 1.6667 # FITTED 2026-09-01 n=4 r 0.4563->0.4625 LOPO -0.0003
+vel_highloud = 1.0667 # FITTED 2026-09-01 n=4 r 0.4563->0.4625 LOPO -0.0003
+
+[piece.wtc1f19]
+tempo = 78.6 # FITTED 2026-09-01 n=1 human 102.2 vs authority 55.0
+cadence_depth = 0.01 # FITTED 2026-09-01 n=1 r 0.6829->0.6873 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.6829->0.6873 unvalidated(n<3)
+vel_highloud = 0.6667 # FITTED 2026-09-01 n=1 r 0.4073->0.4115 unvalidated(n<3)
+
+[piece.wtc1f20]
+tempo = 88.3 # FITTED 2026-09-01 n=4 human 89.0 vs authority 85.3
+vel_highloud = 0.5333 # FITTED 2026-09-01 n=4 r 0.3804->0.3888 LOPO +0.0028
+
+[piece.wtc1f21]
+tempo = 96.5 # FITTED 2026-09-01 n=1 human 91.3 vs authority 101.7
+arch_piece = 0.02 # FITTED 2026-09-01 n=1 r 0.6285->0.6561 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.6285->0.6561 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.6285->0.6561 unvalidated(n<3)
+dialogue_vel = 3.0 # FITTED 2026-09-01 n=1 r 0.304->0.3101 unvalidated(n<3)
+subject_vel = 6.6667 # FITTED 2026-09-01 n=1 r 0.304->0.3101 unvalidated(n<3)
+vel_beat = 1.0 # FITTED 2026-09-01 n=1 r 0.304->0.3101 unvalidated(n<3)
+
+[piece.wtc1f22]
+tempo = 118.7 # FITTED 2026-09-01 n=5 human 116.8 vs authority 128.1
+cadence_depth = 0.0214 # FITTED 2026-09-01 n=5 r 0.6991->0.792 LOPO +0.0767
+open_push = 0.0171 # FITTED 2026-09-01 n=5 r 0.6991->0.792 LOPO +0.0767
+rit_floor = 0.5143 # FITTED 2026-09-01 n=5 r 0.6991->0.792 LOPO +0.0767
+rit_span = 3.4286 # FITTED 2026-09-01 n=5 r 0.6991->0.792 LOPO +0.0767
+dialogue_vel = 0.5714 # FITTED 2026-09-01 n=5 r 0.4->0.4099 LOPO +0.0061
+subject_vel = 8.5714 # FITTED 2026-09-01 n=5 r 0.4->0.4099 LOPO +0.0061
+
+[piece.wtc1f23]
+tempo = 63.0 # FITTED 2026-09-01 n=1 human 66.9 vs authority 59.1
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.646->0.7442 unvalidated(n<3)
+cadence_depth = 0.0333 # FITTED 2026-09-01 n=1 r 0.646->0.7442 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.646->0.7442 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.646->0.7442 unvalidated(n<3)
+dialogue_vel = 1.3333 # FITTED 2026-09-01 n=1 r 0.3377->0.3418 unvalidated(n<3)
+subject_vel = 3.3333 # FITTED 2026-09-01 n=1 r 0.3377->0.3418 unvalidated(n<3)
+vel_highloud = 0.6667 # FITTED 2026-09-01 n=1 r 0.3377->0.3418 unvalidated(n<3)
+
+[piece.wtc1p03]
+tempo = 130.9 # FITTED 2026-09-01 n=11 human 135.1 vs authority 85.7
+arch_piece = 0.0037 # FITTED 2026-09-01 n=11 r 0.566->0.6602 LOPO +0.0964
+open_push = 0.0346 # FITTED 2026-09-01 n=11 r 0.566->0.6602 LOPO +0.0964
+rit_floor = 0.2154 # FITTED 2026-09-01 n=11 r 0.566->0.6602 LOPO +0.0964
+rit_span = 1.1538 # FITTED 2026-09-01 n=11 r 0.566->0.6602 LOPO +0.0964
+vel_bar = 0.0 # FITTED 2026-09-01 n=11 r 0.4083->0.4165 LOPO +0.0068
+vel_beat = 2.5385 # FITTED 2026-09-01 n=11 r 0.4083->0.4165 LOPO +0.0068
+vel_highloud = 1.1385 # FITTED 2026-09-01 n=11 r 0.4083->0.4165 LOPO +0.0068
+
+[piece.wtc1p04]
+tempo = 96.6 # FITTED 2026-09-01 n=3 human 97.6 vs authority 93.7
+arch_piece = 0.0396 # FITTED 2026-09-01 n=3 r 0.6537->0.659 LOPO -0.0007
+cadence_depth = 0.018 # FITTED 2026-09-01 n=3 r 0.6537->0.659 LOPO -0.0007
+rit_floor = 0.24 # FITTED 2026-09-01 n=3 r 0.6537->0.659 LOPO -0.0007
+dialogue_vel = 3.8 # FITTED 2026-09-01 n=3 r 0.5004->0.5053 LOPO +0.0036
+vel_highloud = 1.04 # FITTED 2026-09-01 n=3 r 0.5004->0.5053 LOPO +0.0036
+
+[piece.wtc1p06]
+tempo = 76.7 # FITTED 2026-09-01 n=1 human 75.7 vs authority 77.6
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.9183->0.9186 unvalidated(n<3)
+
+[piece.wtc1p09]
+tempo = 103.8 # FITTED 2026-09-01 n=6 human 105.5 vs authority 93.8
+arch_piece = 0.006 # FITTED 2026-09-01 n=6 r 0.6277->0.6953 LOPO +0.0609
+open_push = 0.0375 # FITTED 2026-09-01 n=6 r 0.6277->0.6953 LOPO +0.0609
+rit_floor = 0.225 # FITTED 2026-09-01 n=6 r 0.6277->0.6953 LOPO +0.0609
+rit_span = 3.5 # FITTED 2026-09-01 n=6 r 0.6277->0.6953 LOPO +0.0609
+vel_highloud = 1.1 # FITTED 2026-09-01 n=6 r 0.6496->0.65 LOPO -0.0006
+
+[piece.wtc1p10]
+tempo = 70.7 # FITTED 2026-09-01 n=1 human 70.9 vs authority 70.4
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.0085->0.7482 unvalidated(n<3)
+boundary_ease = 0.0267 # FITTED 2026-09-01 n=1 r 0.0085->0.7482 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.0085->0.7482 unvalidated(n<3)
+rit_floor = 0.4 # FITTED 2026-09-01 n=1 r 0.0085->0.7482 unvalidated(n<3)
+rit_span = 1.6667 # FITTED 2026-09-01 n=1 r 0.0085->0.7482 unvalidated(n<3)
+
+[piece.wtc1p11]
+tempo = 99.8 # FITTED 2026-09-01 n=1 human 118.1 vs authority 81.6
+arch_piece = 0.02 # FITTED 2026-09-01 n=1 r 0.8321->0.868 unvalidated(n<3)
+open_push = 0.08 # FITTED 2026-09-01 n=1 r 0.8321->0.868 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.8321->0.868 unvalidated(n<3)
+vel_beat = 1.0 # FITTED 2026-09-01 n=1 r 0.5709->0.581 unvalidated(n<3)
+
+[piece.wtc1p12]
+tempo = 49.6 # FITTED 2026-09-01 n=6 human 46.6 vs authority 67.3
+arch_piece = 0.006 # FITTED 2026-09-01 n=6 r 0.6635->0.6904 LOPO +0.0137
+cadence_depth = 0.0 # FITTED 2026-09-01 n=6 r 0.6635->0.6904 LOPO +0.0137
+open_push = 0.015 # FITTED 2026-09-01 n=6 r 0.6635->0.6904 LOPO +0.0137
+rit_floor = 0.225 # FITTED 2026-09-01 n=6 r 0.6635->0.6904 LOPO +0.0137
+
+[piece.wtc1p13]
+tempo = 78.2 # FITTED 2026-09-01 n=2 human 66.3 vs authority 102.1
+arch_piece = 0.024 # FITTED 2026-09-01 n=2 r 0.5821->0.719 unvalidated(n<3)
+cadence_depth = 0.05 # FITTED 2026-09-01 n=2 r 0.5821->0.719 unvalidated(n<3)
+open_push = 0.09 # FITTED 2026-09-01 n=2 r 0.5821->0.719 unvalidated(n<3)
+rit_floor = 0.25 # FITTED 2026-09-01 n=2 r 0.5821->0.719 unvalidated(n<3)
+rit_span = 1.5 # FITTED 2026-09-01 n=2 r 0.5821->0.719 unvalidated(n<3)
+vel_beat = 1.5 # FITTED 2026-09-01 n=2 r 0.5889->0.5896 unvalidated(n<3)
+
+[piece.wtc1p15]
+tempo = 138.1 # FITTED 2026-09-01 n=7 human 140.3 vs authority 122.6
+vel_beat = 4.6667 # FITTED 2026-09-01 n=7 r 0.4035->0.4287 LOPO +0.0234
+
+[piece.wtc1p17]
+tempo = 113.3 # FITTED 2026-09-01 n=2 human 114.8 vs authority 110.2
+cadence_depth = 0.03 # FITTED 2026-09-01 n=2 r 0.8145->0.8366 unvalidated(n<3)
+open_push = 0.045 # FITTED 2026-09-01 n=2 r 0.8145->0.8366 unvalidated(n<3)
+rit_floor = 0.25 # FITTED 2026-09-01 n=2 r 0.8145->0.8366 unvalidated(n<3)
+vel_bar = 2.0 # FITTED 2026-09-01 n=2 r 0.3258->0.3921 unvalidated(n<3)
+vel_beat = 3.0 # FITTED 2026-09-01 n=2 r 0.3258->0.3921 unvalidated(n<3)
+
+[piece.wtc1p18]
+tempo = 66.9 # FITTED 2026-09-01 n=4 human 54.1 vs authority 118.1
+arch_piece = 0.016 # FITTED 2026-09-01 n=4 r 0.8559->0.8667 LOPO +0.0019
+cadence_depth = 0.0667 # FITTED 2026-09-01 n=4 r 0.8559->0.8667 LOPO +0.0019
+open_push = 0.04 # FITTED 2026-09-01 n=4 r 0.8559->0.8667 LOPO +0.0019
+rit_floor = 0.2333 # FITTED 2026-09-01 n=4 r 0.8559->0.8667 LOPO +0.0019
+
+[piece.wtc1p19]
+tempo = 89.4 # FITTED 2026-09-01 n=1 human 92.9 vs authority 85.8
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.8419->0.8834 unvalidated(n<3)
+cadence_depth = 0.01 # FITTED 2026-09-01 n=1 r 0.8419->0.8834 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.8419->0.8834 unvalidated(n<3)
+
+[piece.wtc1p20]
+tempo = 123.0 # FITTED 2026-09-01 n=3 human 133.4 vs authority 91.6
+arch_piece = 0.0168 # FITTED 2026-09-01 n=3 r 0.6721->0.7504 LOPO +0.0416
+open_push = 0.042 # FITTED 2026-09-01 n=3 r 0.6721->0.7504 LOPO +0.0416
+rit_floor = 0.24 # FITTED 2026-09-01 n=3 r 0.6721->0.7504 LOPO +0.0416
+
+[piece.wtc1p21]
+tempo = 74.7 # FITTED 2026-09-01 n=1 human 71.7 vs authority 77.7
+arch_piece = 0.024 # FITTED 2026-09-01 n=1 r -0.015->0.6035 unvalidated(n<3)
+boundary_ease = 0.0267 # FITTED 2026-09-01 n=1 r -0.015->0.6035 unvalidated(n<3)
+cadence_depth = 0.0333 # FITTED 2026-09-01 n=1 r -0.015->0.6035 unvalidated(n<3)
+open_push = 0.08 # FITTED 2026-09-01 n=1 r -0.015->0.6035 unvalidated(n<3)
+rit_floor = 0.4 # FITTED 2026-09-01 n=1 r -0.015->0.6035 unvalidated(n<3)
+rit_span = 1.5 # FITTED 2026-09-01 n=1 r -0.015->0.6035 unvalidated(n<3)
+vel_beat = 2.0 # FITTED 2026-09-01 n=1 r 0.2497->0.2765 unvalidated(n<3)
+vel_highloud = 0.8 # FITTED 2026-09-01 n=1 r 0.2497->0.2765 unvalidated(n<3)
+
+[piece.wtc1p22]
+tempo = 49.7 # FITTED 2026-09-01 n=5 human 35.1 vs authority 122.7
+arch_piece = 0.0426 # FITTED 2026-09-01 n=5 r 0.4895->0.6644 LOPO +0.1381
+open_push = 0.1029 # FITTED 2026-09-01 n=5 r 0.4895->0.6644 LOPO +0.1381
+rit_floor = 0.5143 # FITTED 2026-09-01 n=5 r 0.4895->0.6644 LOPO +0.1381
+rit_span = 3.4286 # FITTED 2026-09-01 n=5 r 0.4895->0.6644 LOPO +0.1381
+vel_highloud = 1.0857 # FITTED 2026-09-01 n=5 r 0.4755->0.4765 LOPO -0.0004
+
+[piece.wtc1p23]
+tempo = 77.6 # FITTED 2026-09-01 n=1 human 73.3 vs authority 81.9
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.753->0.8947 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.753->0.8947 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.753->0.8947 unvalidated(n<3)
+rit_span = 1.6667 # FITTED 2026-09-01 n=1 r 0.753->0.8947 unvalidated(n<3)
+vel_highloud = 0.9333 # FITTED 2026-09-01 n=1 r 0.5555->0.5586 unvalidated(n<3)
+
+[piece.wtc2f01]
+tempo = 113.5 # FITTED 2026-09-01 n=3 human 116.8 vs authority 103.6
+arch_piece = 0.0096 # FITTED 2026-09-01 n=3 r 0.6694->0.7044 LOPO +0.0215
+open_push = 0.024 # FITTED 2026-09-01 n=3 r 0.6694->0.7044 LOPO +0.0215
+rit_floor = 0.24 # FITTED 2026-09-01 n=3 r 0.6694->0.7044 LOPO +0.0215
+dialogue_vel = 3.8 # FITTED 2026-09-01 n=3 r 0.2375->0.2888 LOPO +0.0273
+vel_bar = 2.4 # FITTED 2026-09-01 n=3 r 0.2375->0.2888 LOPO +0.0273
+vel_beat = 3.6 # FITTED 2026-09-01 n=3 r 0.2375->0.2888 LOPO +0.0273
+
+[piece.wtc2f02]
+tempo = 46.6 # FITTED 2026-09-01 n=1 human 42.2 vs authority 51.0
+arch_piece = 0.0427 # FITTED 2026-09-01 n=1 r 0.5888->0.6944 unvalidated(n<3)
+open_push = 0.05 # FITTED 2026-09-01 n=1 r 0.5888->0.6944 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.5888->0.6944 unvalidated(n<3)
+dialogue_vel = 1.3333 # FITTED 2026-09-01 n=1 r 0.1363->0.1515 unvalidated(n<3)
+subject_vel = 3.3333 # FITTED 2026-09-01 n=1 r 0.1363->0.1515 unvalidated(n<3)
+vel_beat = 1.0 # FITTED 2026-09-01 n=1 r 0.1363->0.1515 unvalidated(n<3)
+vel_highloud = 0.8 # FITTED 2026-09-01 n=1 r 0.1363->0.1515 unvalidated(n<3)
+
+[piece.wtc2f04]
+tempo = 101.7 # FITTED 2026-09-01 n=2 human 109.9 vs authority 85.3
+arch_piece = 0.012 # FITTED 2026-09-01 n=2 r 0.6456->0.7371 unvalidated(n<3)
+cadence_depth = 0.05 # FITTED 2026-09-01 n=2 r 0.6456->0.7371 unvalidated(n<3)
+open_push = 0.09 # FITTED 2026-09-01 n=2 r 0.6456->0.7371 unvalidated(n<3)
+rit_floor = 0.45 # FITTED 2026-09-01 n=2 r 0.6456->0.7371 unvalidated(n<3)
+subject_vel = 7.5 # FITTED 2026-09-01 n=2 r 0.3861->0.3868 unvalidated(n<3)
+vel_highloud = 1.0 # FITTED 2026-09-01 n=2 r 0.3861->0.3868 unvalidated(n<3)
+
+[piece.wtc2f05]
+tempo = 72.5 # FITTED 2026-09-01 n=4 human 67.3 vs authority 93.7
+arch_piece = 0.016 # FITTED 2026-09-01 n=4 r 0.661->0.7036 LOPO +0.0118
+cadence_depth = 0.02 # FITTED 2026-09-01 n=4 r 0.661->0.7036 LOPO +0.0118
+open_push = 0.02 # FITTED 2026-09-01 n=4 r 0.661->0.7036 LOPO +0.0118
+rit_floor = 0.2333 # FITTED 2026-09-01 n=4 r 0.661->0.7036 LOPO +0.0118
+subject_vel = 1.6667 # FITTED 2026-09-01 n=4 r 0.5727->0.5779 LOPO +0.0014
+vel_highloud = 1.0667 # FITTED 2026-09-01 n=4 r 0.5727->0.5779 LOPO +0.0014
+
+[piece.wtc2f06]
+tempo = 55.6 # FITTED 2026-09-01 n=3 human 53.7 vs authority 61.2
+arch_piece = 0.0168 # FITTED 2026-09-01 n=3 r 0.7528->0.7793 LOPO +0.0012
+open_push = 0.024 # FITTED 2026-09-01 n=3 r 0.7528->0.7793 LOPO +0.0012
+rit_floor = 0.24 # FITTED 2026-09-01 n=3 r 0.7528->0.7793 LOPO +0.0012
+rit_span = 1.4 # FITTED 2026-09-01 n=3 r 0.7528->0.7793 LOPO +0.0012
+dialogue_vel = 0.8 # FITTED 2026-09-01 n=3 r 0.4168->0.4345 LOPO +0.0113
+vel_highloud = 1.04 # FITTED 2026-09-01 n=3 r 0.4168->0.4345 LOPO +0.0113
+
+[piece.wtc2f07]
+tempo = 161.6 # FITTED 2026-09-01 n=2 human 176.3 vs authority 132.3
+arch_piece = 0.018 # FITTED 2026-09-01 n=2 r 0.7069->0.7632 unvalidated(n<3)
+cadence_depth = 0.015 # FITTED 2026-09-01 n=2 r 0.7069->0.7632 unvalidated(n<3)
+open_push = 0.03 # FITTED 2026-09-01 n=2 r 0.7069->0.7632 unvalidated(n<3)
+rit_floor = 0.25 # FITTED 2026-09-01 n=2 r 0.7069->0.7632 unvalidated(n<3)
+rit_span = 3.0 # FITTED 2026-09-01 n=2 r 0.7069->0.7632 unvalidated(n<3)
+dialogue_vel = 1.0 # FITTED 2026-09-01 n=2 r 0.5045->0.516 unvalidated(n<3)
+subject_vel = 7.5 # FITTED 2026-09-01 n=2 r 0.5045->0.516 unvalidated(n<3)
+vel_beat = 1.5 # FITTED 2026-09-01 n=2 r 0.5045->0.516 unvalidated(n<3)
+vel_highloud = 1.0 # FITTED 2026-09-01 n=2 r 0.5045->0.516 unvalidated(n<3)
+
+[piece.wtc2f08]
+tempo = 46.1 # FITTED 2026-09-01 n=1 human 43.6 vs authority 48.6
+arch_piece = 0.02 # FITTED 2026-09-01 n=1 r 0.6303->0.6587 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.6303->0.6587 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.6303->0.6587 unvalidated(n<3)
+dialogue_vel = 3.0 # FITTED 2026-09-01 n=1 r 0.3776->0.3897 unvalidated(n<3)
+vel_highloud = 0.9333 # FITTED 2026-09-01 n=1 r 0.3776->0.3897 unvalidated(n<3)
+
+[piece.wtc2f11]
+tempo = 88.5 # FITTED 2026-09-01 n=3 human 89.5 vs authority 85.6
+arch_piece = 0.0096 # FITTED 2026-09-01 n=3 r 0.51->0.5921 LOPO +0.0267
+open_push = 0.042 # FITTED 2026-09-01 n=3 r 0.51->0.5921 LOPO +0.0267
+rit_floor = 0.24 # FITTED 2026-09-01 n=3 r 0.51->0.5921 LOPO +0.0267
+rit_span = 1.4 # FITTED 2026-09-01 n=3 r 0.51->0.5921 LOPO +0.0267
+dialogue_vel = 0.8 # FITTED 2026-09-01 n=3 r 0.2473->0.267 LOPO +0.0022
+subject_vel = 8.0 # FITTED 2026-09-01 n=3 r 0.2473->0.267 LOPO +0.0022
+vel_bar = 4.8 # FITTED 2026-09-01 n=3 r 0.2473->0.267 LOPO +0.0022
+
+[piece.wtc2f14]
+tempo = 80.7 # FITTED 2026-09-01 n=6 human 82.6 vs authority 69.2
+arch_piece = 0.015 # FITTED 2026-09-01 n=6 r 0.5916->0.6376 LOPO +0.0593
+open_push = 0.015 # FITTED 2026-09-01 n=6 r 0.5916->0.6376 LOPO +0.0593
+rit_floor = 0.225 # FITTED 2026-09-01 n=6 r 0.5916->0.6376 LOPO +0.0593
+
+[piece.wtc2f15]
+tempo = 93.6 # FITTED 2026-09-01 n=1 human 105.5 vs authority 81.6
+arch_piece = 0.0327 # FITTED 2026-09-01 n=1 r 0.7069->0.7491 unvalidated(n<3)
+boundary_ease = 0.0067 # FITTED 2026-09-01 n=1 r 0.7069->0.7491 unvalidated(n<3)
+open_push = 0.05 # FITTED 2026-09-01 n=1 r 0.7069->0.7491 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.7069->0.7491 unvalidated(n<3)
+dialogue_vel = 1.3333 # FITTED 2026-09-01 n=1 r 0.4294->0.4467 unvalidated(n<3)
+subject_vel = 3.3333 # FITTED 2026-09-01 n=1 r 0.4294->0.4467 unvalidated(n<3)
+vel_highloud = 0.6667 # FITTED 2026-09-01 n=1 r 0.4294->0.4467 unvalidated(n<3)
+
+[piece.wtc2f16]
+tempo = 97.7 # FITTED 2026-09-01 n=6 human 99.7 vs authority 85.3
+dialogue_vel = 4.25 # FITTED 2026-09-01 n=6 r 0.3127->0.3478 LOPO +0.0301
+subject_vel = 8.75 # FITTED 2026-09-01 n=6 r 0.3127->0.3478 LOPO +0.0301
+vel_bar = 0.0 # FITTED 2026-09-01 n=6 r 0.3127->0.3478 LOPO +0.0301
+vel_beat = 4.5 # FITTED 2026-09-01 n=6 r 0.3127->0.3478 LOPO +0.0301
+
+[piece.wtc2f18]
+tempo = 87.1 # FITTED 2026-09-01 n=1 human 73.5 vs authority 100.7
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.7365->0.8458 unvalidated(n<3)
+cadence_depth = 0.01 # FITTED 2026-09-01 n=1 r 0.7365->0.8458 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.7365->0.8458 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.7365->0.8458 unvalidated(n<3)
+dialogue_vel = 3.0 # FITTED 2026-09-01 n=1 r 0.5705->0.5778 unvalidated(n<3)
+subject_vel = 6.6667 # FITTED 2026-09-01 n=1 r 0.5705->0.5778 unvalidated(n<3)
+
+[piece.wtc2f19]
+tempo = 97.6 # FITTED 2026-09-01 n=1 human 109.5 vs authority 85.7
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.9395->0.9601 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.9395->0.9601 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.9395->0.9601 unvalidated(n<3)
+dialogue_vel = 1.3333 # FITTED 2026-09-01 n=1 r 0.6208->0.6241 unvalidated(n<3)
+subject_vel = 6.6667 # FITTED 2026-09-01 n=1 r 0.6208->0.6241 unvalidated(n<3)
+
+[piece.wtc2f20]
+tempo = 74.8 # FITTED 2026-09-01 n=7 human 74.9 vs authority 73.5
+arch_piece = 0.0053 # FITTED 2026-09-01 n=7 r 0.6633->0.723 LOPO +0.0488
+open_push = 0.0133 # FITTED 2026-09-01 n=7 r 0.6633->0.723 LOPO +0.0488
+rit_floor = 0.2222 # FITTED 2026-09-01 n=7 r 0.6633->0.723 LOPO +0.0488
+rit_span = 1.2222 # FITTED 2026-09-01 n=7 r 0.6633->0.723 LOPO +0.0488
+dialogue_vel = 2.0 # FITTED 2026-09-01 n=7 r 0.2757->0.3596 LOPO +0.0688
+subject_vel = 8.8889 # FITTED 2026-09-01 n=7 r 0.2757->0.3596 LOPO +0.0688
+vel_bar = 0.0 # FITTED 2026-09-01 n=7 r 0.2757->0.3596 LOPO +0.0688
+vel_beat = 4.6667 # FITTED 2026-09-01 n=7 r 0.2757->0.3596 LOPO +0.0688
+vel_highloud = 0.4889 # FITTED 2026-09-01 n=7 r 0.2757->0.3596 LOPO +0.0688
+
+[piece.wtc2f22]
+tempo = 152.8 # FITTED 2026-09-01 n=1 human 173.6 vs authority 132.0
+arch_piece = 0.02 # FITTED 2026-09-01 n=1 r 0.4259->0.8653 unvalidated(n<3)
+cadence_depth = 0.02 # FITTED 2026-09-01 n=1 r 0.4259->0.8653 unvalidated(n<3)
+open_push = 0.04 # FITTED 2026-09-01 n=1 r 0.4259->0.8653 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.4259->0.8653 unvalidated(n<3)
+rit_span = 2.6667 # FITTED 2026-09-01 n=1 r 0.4259->0.8653 unvalidated(n<3)
+dialogue_vel = 1.3333 # FITTED 2026-09-01 n=1 r 0.3189->0.3597 unvalidated(n<3)
+subject_vel = 6.6667 # FITTED 2026-09-01 n=1 r 0.3189->0.3597 unvalidated(n<3)
+vel_beat = 1.0 # FITTED 2026-09-01 n=1 r 0.3189->0.3597 unvalidated(n<3)
+vel_highloud = 0.6667 # FITTED 2026-09-01 n=1 r 0.3189->0.3597 unvalidated(n<3)
+
+[piece.wtc2f23]
+tempo = 113.0 # FITTED 2026-09-01 n=2 human 106.5 vs authority 126.0
+arch_piece = 0.018 # FITTED 2026-09-01 n=2 r 0.4456->0.5754 unvalidated(n<3)
+cadence_depth = 0.05 # FITTED 2026-09-01 n=2 r 0.4456->0.5754 unvalidated(n<3)
+open_push = 0.03 # FITTED 2026-09-01 n=2 r 0.4456->0.5754 unvalidated(n<3)
+rit_floor = 0.3 # FITTED 2026-09-01 n=2 r 0.4456->0.5754 unvalidated(n<3)
+dialogue_vel = 1.0 # FITTED 2026-09-01 n=2 r 0.4223->0.4328 unvalidated(n<3)
+subject_vel = 7.5 # FITTED 2026-09-01 n=2 r 0.4223->0.4328 unvalidated(n<3)
+vel_bar = 0.0 # FITTED 2026-09-01 n=2 r 0.4223->0.4328 unvalidated(n<3)
+vel_beat = 1.5 # FITTED 2026-09-01 n=2 r 0.4223->0.4328 unvalidated(n<3)
+vel_highloud = 1.0 # FITTED 2026-09-01 n=2 r 0.4223->0.4328 unvalidated(n<3)
+
+[piece.wtc2f24]
+tempo = 96.4 # FITTED 2026-09-01 n=3 human 104.1 vs authority 73.3
+arch_piece = 0.0096 # FITTED 2026-09-01 n=3 r 0.5385->0.668 LOPO +0.0644
+cadence_depth = 0.018 # FITTED 2026-09-01 n=3 r 0.5385->0.668 LOPO +0.0644
+open_push = 0.042 # FITTED 2026-09-01 n=3 r 0.5385->0.668 LOPO +0.0644
+rit_floor = 0.24 # FITTED 2026-09-01 n=3 r 0.5385->0.668 LOPO +0.0644
+rit_span = 1.4 # FITTED 2026-09-01 n=3 r 0.5385->0.668 LOPO +0.0644
+dialogue_vel = 0.8 # FITTED 2026-09-01 n=3 r 0.2884->0.3466 LOPO +0.0189
+subject_vel = 8.0 # FITTED 2026-09-01 n=3 r 0.2884->0.3466 LOPO +0.0189
+vel_bar = 2.4 # FITTED 2026-09-01 n=3 r 0.2884->0.3466 LOPO +0.0189
+vel_beat = 1.8 # FITTED 2026-09-01 n=3 r 0.2884->0.3466 LOPO +0.0189
+vel_highloud = 0.56 # FITTED 2026-09-01 n=3 r 0.2884->0.3466 LOPO +0.0189
+
+[piece.wtc2p01]
+tempo = 59.2 # FITTED 2026-09-01 n=3 human 55.3 vs authority 70.8
+cadence_depth = 0.018 # FITTED 2026-09-01 n=3 r 0.7154->0.7252 LOPO +0.0057
+rit_floor = 0.24 # FITTED 2026-09-01 n=3 r 0.7154->0.7252 LOPO +0.0057
+
+[piece.wtc2p02]
+tempo = 85.5 # FITTED 2026-09-01 n=1 human 94.6 vs authority 76.5
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.8192->0.8911 unvalidated(n<3)
+boundary_ease = 0.0067 # FITTED 2026-09-01 n=1 r 0.8192->0.8911 unvalidated(n<3)
+open_push = 0.05 # FITTED 2026-09-01 n=1 r 0.8192->0.8911 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.8192->0.8911 unvalidated(n<3)
+vel_bar = 1.3333 # FITTED 2026-09-01 n=1 r 0.4178->0.4327 unvalidated(n<3)
+vel_beat = 1.0 # FITTED 2026-09-01 n=1 r 0.4178->0.4327 unvalidated(n<3)
+vel_highloud = 0.9333 # FITTED 2026-09-01 n=1 r 0.4178->0.4327 unvalidated(n<3)
+
+[piece.wtc2p04]
+tempo = 73.0 # FITTED 2026-09-01 n=2 human 68.5 vs authority 82.0
+arch_piece = 0.012 # FITTED 2026-09-01 n=2 r 0.6141->0.6518 unvalidated(n<3)
+vel_highloud = 1.0 # FITTED 2026-09-01 n=2 r 0.4892->0.4897 unvalidated(n<3)
+
+[piece.wtc2p05]
+tempo = 117.3 # FITTED 2026-09-01 n=3 human 121.1 vs authority 105.6
+dialogue_vel = 3.8 # FITTED 2026-09-01 n=3 r 0.4239->0.4276 LOPO +0.0018
+vel_bar = 2.4 # FITTED 2026-09-01 n=3 r 0.4239->0.4276 LOPO +0.0018
+
+[piece.wtc2p06]
+tempo = 117.5 # FITTED 2026-09-01 n=4 human 127.3 vs authority 78.0
+arch_piece = 0.008 # FITTED 2026-09-01 n=4 r 0.5632->0.6224 LOPO +0.0381
+cadence_depth = 0.0667 # FITTED 2026-09-01 n=4 r 0.5632->0.6224 LOPO +0.0381
+open_push = 0.04 # FITTED 2026-09-01 n=4 r 0.5632->0.6224 LOPO +0.0381
+rit_floor = 0.2333 # FITTED 2026-09-01 n=4 r 0.5632->0.6224 LOPO +0.0381
+vel_bar = 0.0 # FITTED 2026-09-01 n=4 r 0.267->0.3005 LOPO +0.0254
+vel_beat = 4.0 # FITTED 2026-09-01 n=4 r 0.267->0.3005 LOPO +0.0254
+
+[piece.wtc2p07]
+tempo = 146.2 # FITTED 2026-09-01 n=2 human 152.2 vs authority 134.2
+arch_piece = 0.037 # FITTED 2026-09-01 n=2 r 0.4824->0.5481 unvalidated(n<3)
+cadence_depth = 0.05 # FITTED 2026-09-01 n=2 r 0.4824->0.5481 unvalidated(n<3)
+open_push = 0.09 # FITTED 2026-09-01 n=2 r 0.4824->0.5481 unvalidated(n<3)
+rit_floor = 0.375 # FITTED 2026-09-01 n=2 r 0.4824->0.5481 unvalidated(n<3)
+dialogue_vel = 1.0 # FITTED 2026-09-01 n=2 r 0.481->0.4845 unvalidated(n<3)
+vel_highloud = 1.0 # FITTED 2026-09-01 n=2 r 0.481->0.4845 unvalidated(n<3)
+
+[piece.wtc2p08]
+tempo = 73.5 # FITTED 2026-09-01 n=1 human 67.9 vs authority 79.1
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.6688->0.735 unvalidated(n<3)
+boundary_ease = 0.0067 # FITTED 2026-09-01 n=1 r 0.6688->0.735 unvalidated(n<3)
+cadence_depth = 0.02 # FITTED 2026-09-01 n=1 r 0.6688->0.735 unvalidated(n<3)
+open_push = 0.08 # FITTED 2026-09-01 n=1 r 0.6688->0.735 unvalidated(n<3)
+rit_floor = 0.35 # FITTED 2026-09-01 n=1 r 0.6688->0.735 unvalidated(n<3)
+vel_highloud = 0.9333 # FITTED 2026-09-01 n=1 r 0.3829->0.3858 unvalidated(n<3)
+
+[piece.wtc2p11]
+tempo = 125.9 # FITTED 2026-09-01 n=3 human 127.2 vs authority 122.0
+arch_piece = 0.0096 # FITTED 2026-09-01 n=3 r 0.2182->0.5863 LOPO +0.299
+cadence_depth = 0.06 # FITTED 2026-09-01 n=3 r 0.2182->0.5863 LOPO +0.299
+open_push = 0.042 # FITTED 2026-09-01 n=3 r 0.2182->0.5863 LOPO +0.299
+rit_floor = 0.24 # FITTED 2026-09-01 n=3 r 0.2182->0.5863 LOPO +0.299
+rit_span = 3.2 # FITTED 2026-09-01 n=3 r 0.2182->0.5863 LOPO +0.299
+dialogue_vel = 3.8 # FITTED 2026-09-01 n=3 r 0.3273->0.3341 LOPO +0.0005
+
+[piece.wtc2p14]
+tempo = 43.2 # FITTED 2026-09-01 n=5 human 39.6 vs authority 61.2
+arch_piece = 0.0069 # FITTED 2026-09-01 n=5 r 0.4481->0.5073 LOPO +0.0917
+boundary_ease = 0.0143 # FITTED 2026-09-01 n=5 r 0.4481->0.5073 LOPO +0.0917
+cadence_depth = 0.0714 # FITTED 2026-09-01 n=5 r 0.4481->0.5073 LOPO +0.0917
+open_push = 0.0171 # FITTED 2026-09-01 n=5 r 0.4481->0.5073 LOPO +0.0917
+rit_floor = 0.2286 # FITTED 2026-09-01 n=5 r 0.4481->0.5073 LOPO +0.0917
+dialogue_vel = 0.5714 # FITTED 2026-09-01 n=5 r 0.6382->0.6404 LOPO +0.0015
+vel_highloud = 1.0857 # FITTED 2026-09-01 n=5 r 0.6382->0.6404 LOPO +0.0015
+
+[piece.wtc2p15]
+tempo = 101.3 # FITTED 2026-09-01 n=1 human 126.1 vs authority 76.4
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.4233->0.5223 unvalidated(n<3)
+boundary_ease = 0.0267 # FITTED 2026-09-01 n=1 r 0.4233->0.5223 unvalidated(n<3)
+cadence_depth = 0.0333 # FITTED 2026-09-01 n=1 r 0.4233->0.5223 unvalidated(n<3)
+open_push = 0.08 # FITTED 2026-09-01 n=1 r 0.4233->0.5223 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.4233->0.5223 unvalidated(n<3)
+vel_highloud = 0.9333 # FITTED 2026-09-01 n=1 r 0.5154->0.5158 unvalidated(n<3)
+
+[piece.wtc2p16]
+tempo = 36.0 # FITTED 2026-09-01 n=6 human 32.0 vs authority 59.9
+cadence_depth = 0.0225 # FITTED 2026-09-01 n=6 r 0.5898->0.6711 LOPO +0.0404
+open_push = 0.0375 # FITTED 2026-09-01 n=6 r 0.5898->0.6711 LOPO +0.0404
+rit_floor = 0.225 # FITTED 2026-09-01 n=6 r 0.5898->0.6711 LOPO +0.0404
+rit_span = 1.25 # FITTED 2026-09-01 n=6 r 0.5898->0.6711 LOPO +0.0404
+vel_highloud = 1.1 # FITTED 2026-09-01 n=6 r 0.3818->0.3844 LOPO +0.0034
+
+[piece.wtc2p18]
+tempo = 92.4 # FITTED 2026-09-01 n=1 human 110.2 vs authority 74.7
+arch_piece = 0.016 # FITTED 2026-09-01 n=1 r 0.7119->0.8143 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.7119->0.8143 unvalidated(n<3)
+vel_bar = 1.3333 # FITTED 2026-09-01 n=1 r 0.3354->0.3488 unvalidated(n<3)
+vel_beat = 2.0 # FITTED 2026-09-01 n=1 r 0.3354->0.3488 unvalidated(n<3)
+vel_highloud = 0.9333 # FITTED 2026-09-01 n=1 r 0.3354->0.3488 unvalidated(n<3)
+
+[piece.wtc2p19]
+tempo = 96.2 # FITTED 2026-09-01 n=1 human 122.1 vs authority 70.3
+arch_piece = 0.02 # FITTED 2026-09-01 n=1 r 0.9502->0.9636 unvalidated(n<3)
+open_push = 0.05 # FITTED 2026-09-01 n=1 r 0.9502->0.9636 unvalidated(n<3)
+rit_floor = 0.2667 # FITTED 2026-09-01 n=1 r 0.9502->0.9636 unvalidated(n<3)
+
+[piece.wtc2p20]
+tempo = 58.3 # FITTED 2026-09-01 n=7 human 56.7 vs authority 68.9
+arch_piece = 0.0053 # FITTED 2026-09-01 n=7 r 0.3408->0.3994 LOPO +0.0224
+boundary_ease = 0.0311 # FITTED 2026-09-01 n=7 r 0.3408->0.3994 LOPO +0.0224
+open_push = 0.0133 # FITTED 2026-09-01 n=7 r 0.3408->0.3994 LOPO +0.0224
+rit_floor = 0.2222 # FITTED 2026-09-01 n=7 r 0.3408->0.3994 LOPO +0.0224
+rit_span = 1.2222 # FITTED 2026-09-01 n=7 r 0.3408->0.3994 LOPO +0.0224
+vel_highloud = 1.1111 # FITTED 2026-09-01 n=7 r 0.5062->0.5063 LOPO +0.0007
+
+[piece.wtc2p22]
+tempo = 108.8 # FITTED 2026-09-01 n=2 human 138.1 vs authority 50.3
+arch_piece = 0.012 # FITTED 2026-09-01 n=2 r 0.5574->0.7757 unvalidated(n<3)
+cadence_depth = 0.05 # FITTED 2026-09-01 n=2 r 0.5574->0.7757 unvalidated(n<3)
+open_push = 0.03 # FITTED 2026-09-01 n=2 r 0.5574->0.7757 unvalidated(n<3)
+rit_floor = 0.25 # FITTED 2026-09-01 n=2 r 0.5574->0.7757 unvalidated(n<3)
+rit_span = 3.0 # FITTED 2026-09-01 n=2 r 0.5574->0.7757 unvalidated(n<3)
+vel_highloud = 1.0 # FITTED 2026-09-01 n=2 r 0.5013->0.5039 unvalidated(n<3)
+
+[piece.wtc2p23]
+tempo = 94.4 # FITTED 2026-09-01 n=2 human 103.4 vs authority 76.4
+arch_piece = 0.012 # FITTED 2026-09-01 n=2 r 0.4107->0.553 unvalidated(n<3)
+open_push = 0.06 # FITTED 2026-09-01 n=2 r 0.4107->0.553 unvalidated(n<3)
+rit_floor = 0.25 # FITTED 2026-09-01 n=2 r 0.4107->0.553 unvalidated(n<3)
+rit_span = 1.25 # FITTED 2026-09-01 n=2 r 0.4107->0.553 unvalidated(n<3)
+vel_beat = 1.5 # FITTED 2026-09-01 n=2 r 0.3099->0.3155 unvalidated(n<3)
+vel_highloud = 1.0 # FITTED 2026-09-01 n=2 r 0.3099->0.3155 unvalidated(n<3)
+
+[piece.wtc2p24]
+tempo = 106.2 # FITTED 2026-09-01 n=3 human 121.8 vs authority 59.6
+arch_piece = 0.0168 # FITTED 2026-09-01 n=3 r 0.5882->0.717 LOPO +0.0823
+boundary_ease = 0.012 # FITTED 2026-09-01 n=3 r 0.5882->0.717 LOPO +0.0823
+rit_floor = 0.48 # FITTED 2026-09-01 n=3 r 0.5882->0.717 LOPO +0.0823
+rit_span = 3.2 # FITTED 2026-09-01 n=3 r 0.5882->0.717 LOPO +0.0823
+vel_highloud = 1.04 # FITTED 2026-09-01 n=3 r 0.5521->0.5538 LOPO +0.0
