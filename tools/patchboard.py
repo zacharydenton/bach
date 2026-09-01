@@ -158,6 +158,22 @@ class Engine:
         self.piece_name = name
         self.sample = 0
         self.events, self.pos = {}, {}
+
+        # ROLE-STABLE routing: snapshot the outgoing piece's settings in
+        # register order (bass..soprano) BEFORE the channel map changes.
+        # Patches, gains and mutes must follow the register ROLE — piece
+        # structures repartition raw channels, and per-channel carry-over
+        # smeared one part's patch across several voices of the next
+        # piece (a prelude's 12-lane solo bleeding into a fugue's
+        # alto/mezzo/soprano).
+        prev_roles = None
+        if getattr(self, "_rank_channels", None):
+            prev_roles = [
+                {"patch": self.ch_patch_path.get(ch, "(init)"),
+                 "gain": self.ch_gain.get(ch, 1.0),
+                 "mute": self.ch_mute.get(ch, False)}
+                for ch in self._rank_channels]
+
         self.parts = []
 
         # kern orders spines bass-first: name parts by register from the
@@ -184,12 +200,37 @@ class Engine:
             self.parts.append(
                 {"name": f"{labels[vi]} (voice {vi})", "channels": chans})
 
+        # map the previous roles onto the new parts by register rank:
+        # equal ranks match, differing voice counts interpolate, and a
+        # single-part piece inherits the TOP role (the solo carries the
+        # lead). Gains/mutes apply directly; patches become the base the
+        # casting resolution starts from (a piece's own casting file
+        # still overrides — it is the exception log).
+        rank_parts = [self.parts[vi] for vi in order]
+        role_base = None
+        if prev_roles:
+            m, n = len(prev_roles), len(rank_parts)
+            role_base = dict(self.ch_patch_path)
+            for r, part in enumerate(rank_parts):
+                if n == 1:
+                    src = prev_roles[-1]
+                elif m == 1:
+                    src = prev_roles[0]
+                else:
+                    src = prev_roles[round(r * (m - 1) / (n - 1))]
+                for ch in part["channels"]:
+                    self.ch_gain[ch] = src["gain"]
+                    self.ch_mute[ch] = src["mute"]
+                    role_base[ch] = src["patch"]
+        self._rank_channels = [p["channels"][0] for p in rank_parts]
+
         # resolve THIS piece's effective patches BEFORE building events:
         # calibration compensation must see the patches that will play,
         # not whatever was loaded when the previous piece ended
-        eff = self._resolve_casting(name)
+        eff = self._resolve_casting(name, base=role_base)
         for ch, path in eff.items():
-            if path != self.ch_patch_path.get(ch) and os.path.isfile(path):
+            if path != self.ch_patch_path.get(ch) \
+                    and (path == "(init)" or os.path.isfile(path)):
                 self.request_patch_ch(ch, path)
 
         end = 0.0
@@ -238,7 +279,7 @@ class Engine:
                 return v
         return None
 
-    def _resolve_casting(self, name):
+    def _resolve_casting(self, name, base=None):
         """Effective patch per channel for a piece about to load.
 
         Current patches survive (auditioning continuity); on the very
@@ -248,7 +289,7 @@ class Engine:
         resolve_patch, so a casting is a statement about the factory
         bank rather than one machine's filesystem.
         """
-        eff = dict(self.ch_patch_path)
+        eff = dict(base if base is not None else self.ch_patch_path)
         if not self.casting_dir:
             return eff
         if not self._default_cast_done:

@@ -371,6 +371,43 @@ class EngineTests(unittest.TestCase):
             playlist = [("t", {"tracks": tracks})]
         return patchboard.Engine(playlist, self.SR, None, **kw)
 
+    def test_voice_routing_follows_register_roles(self):
+        # piece A: one 3-lane solo part; piece B: three parts whose
+        # channels partition differently (bass ch0, alto ch1, sop ch2).
+        # Patches/gains must follow the register ROLE across the switch,
+        # not the raw channels — and the solo inherits the TOP role.
+        import tempfile
+        d = tempfile.mkdtemp()
+        paths = []
+        for nm in ("a.fxp", "b.fxp", "c.fxp"):
+            p = os.path.join(d, nm)
+            open(p, "w").close()
+            paths.append(p)
+        t = 100 * self.B / self.SR
+        solo = [[note(c, 0, t, pitch=60) for c in (0, 1, 2)]]
+        fugue = [[note(0, 0, t, pitch=40)], [note(1, 0, t, pitch=60)],
+                 [note(2, 0, t, pitch=80)]]
+        e = self.make(playlist=[("solo", {"tracks": solo}),
+                                ("fugue", {"tracks": fugue})])
+        # distinct patch per fugue role, tweak a gain
+        e.load_piece(1)
+        for i, p in enumerate(paths):
+            e.request_patch(i, p)
+        e._apply_pending()
+        e.ch_gain[2] = 0.7  # soprano turned down
+        # fugue -> solo: the single part wears the TOP role
+        e.load_piece(0)
+        e._apply_pending()
+        self.assertEqual(len(e.parts), 1)
+        for ch in e.parts[0]["channels"]:
+            self.assertEqual(e.ch_patch_path[ch], paths[2])
+            self.assertEqual(e.ch_gain[ch], 0.7)
+        # solo -> fugue: uniform inheritance, no partial smear
+        e.load_piece(1)
+        e._apply_pending()
+        worn = {e.ch_patch_path[p["channels"][0]] for p in e.parts}
+        self.assertEqual(worn, {paths[2]})
+
     def test_render_splits_spans_at_event_blocks(self):
         # one note: on at block 100, off at block 120, inside one chunk
         e = self.make()
