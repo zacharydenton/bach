@@ -11,7 +11,7 @@
 module Main (main) where
 
 import Control.DeepSeq (force)
-import Control.Monad (forM_, when)
+import Control.Monad (forM, forM_, when)
 import Control.Parallel.Strategies (parMap, rdeepseq)
 import Data.ByteString.Lazy qualified as BL
 import Data.List (isSuffixOf, sort, sortOn)
@@ -23,9 +23,13 @@ import OTB.Config
   , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
 import OTB.Config qualified
 import OTB.Edition (editionsFor, readKernSource)
+import OTB.Eval (PerfR (..), loadDirAnnotations, scorePerformances)
+import OTB.Bridge qualified as B
 import OTB.Emit.Midi (renderSmf, writeSmf)
 import OTB.Generate (generateScore)
 import Data.List (intercalate)
+import Data.Map.Strict qualified as Map
+import Numeric (showFFloat)
 import OTB.Analysis.Grouping (groupSpans)
 import OTB.Analysis.Harmony (Harmony (..), analyzeHarmony)
 import OTB.Analysis.Imitation (Imitation (..), findImitation)
@@ -74,6 +78,8 @@ data Cmd
   = Compile Common FilePath (Maybe FilePath) (Maybe FilePath) String
   | Explain Common (Maybe Int) (Maybe (Int, Int))
   | Album FilePath FilePath FilePath TempoOpt String (Maybe FilePath)
+  | Eval FilePath FilePath TempoOpt String (Maybe FilePath) [FilePath] [String]
+  | BridgeDump FilePath FilePath FilePath
   | Stats FilePath FilePath Double
   | Ground String Int Double String FilePath (Maybe FilePath) (Maybe FilePath)
   | Analyze Common
@@ -126,6 +132,28 @@ explainCmd =
           ((,) <$> option auto (long "ch" <> metavar "C")
                <*> option auto (long "note" <> metavar "I"))
 
+bridgeDumpCmd :: Parser Cmd
+bridgeDumpCmd =
+  BridgeDump
+    <$> argument str (metavar "SCORE.krn")
+    <*> argument str (metavar "PERF.match")
+    <*> strOption (long "config" <> value "config/default.toml")
+
+evalCmd :: Parser Cmd
+evalCmd =
+  Eval
+    <$> argument str (metavar "CORPUS_DIR")
+    <*> strOption (long "config" <> value "config/default.toml")
+    <*> option (eitherReader tempoR)
+          (long "tempo" <> metavar "BPM|giusto" <> value TempoDefault)
+    <*> strOption (long "temperament" <> value "werckmeister3")
+    <*> optional (strOption (long "editions" <> metavar "DIR"))
+    <*> many (strOption (long "root" <> metavar "DIR"
+          <> help ("performance source root (repeatable; default: "
+                     <> "corpus/asap and corpus/maestro-wtc)")))
+    <*> many (strOption (long "piece" <> metavar "NAME"
+          <> help "restrict to these pieces (repeatable)"))
+
 albumCmd :: Parser Cmd
 albumCmd =
   Album
@@ -170,6 +198,14 @@ cmdP =
         <> command "album"
              (info albumCmd
                 (progDesc "compile a corpus directory in parallel"))
+        <> command "eval"
+             (info evalCmd
+                (progDesc ("beat-level tempo r vs human performances, "
+                             <> "whole corpus in one process")))
+        <> command "bridge-dump"
+             (info bridgeDumpCmd
+                (progDesc ("canonical TSV of the note bridge's rows — "
+                             <> "the porting parity gate")))
         <> command "stats"
              (info statsCmd
                 (progDesc "whole-corpus interpretation statistics"))
@@ -190,6 +226,9 @@ main = do
     Compile com out mscl mjson tgt -> runCompile com out mscl mjson tgt
     Explain com mbar mnote -> runExplain com mbar mnote
     Album corpus outDir cfgPath tempo temp eds -> runAlbum corpus outDir cfgPath tempo temp eds
+    Eval corpus cfgPath tempo temp eds roots ps ->
+      runEval corpus cfgPath tempo temp eds roots ps
+    BridgeDump krn match cfgPath -> runBridgeDump krn match cfgPath
     Stats corpus cfgPath tempo -> runStats corpus cfgPath tempo
     Ground bass nvar tempo temp out mscl mjson ->
       runGround bass nvar tempo temp out mscl mjson
@@ -434,6 +473,126 @@ runAlbum corpus outDir cfgPath tempo temp meds = do
   when (failed > 0)
     (die (show failed <> " of " <> show (length results)
             <> " pieces failed; artifacts above are incomplete"))
+
+-- | The hot loop of every fitting campaign, in one process: compile
+-- each piece (pure, in parallel) and correlate its tempo curve with
+-- every human performance's beat annotations. Output is TSV
+-- (piece, performer, r, beats) plus a grand-mean footer — the Python
+-- rigs parse it instead of orchestrating one subprocess per piece.
+runEval :: FilePath -> FilePath -> TempoOpt -> String -> Maybe FilePath
+        -> [FilePath] -> [String] -> IO ()
+runEval corpus cfgPath tempo temp meds roots0 wanted = do
+  cfg <- loadCfg cfgPath
+  let adaptive = temp == "adaptive"
+  table <- resolveTemperament (if adaptive then "werckmeister3" else temp)
+  let eds = maybe (editionsFor cfgPath) id meds
+      roots = if null roots0
+                then ["corpus" </> "asap", "corpus" </> "maestro-wtc"]
+                else roots0
+  files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
+  let pieces0 = sort (map takeBaseName files)
+      pieces = if null wanted then pieces0
+               else filter (`elem` wanted) pieces0
+  inputs <- fmap concat . forM pieces $ \piece ->
+    case bwvDir piece of
+      Nothing -> pure []
+      Just sub -> do
+        anns <- mapM (\r -> loadDirAnnotations (r </> sub)) roots
+        if all (== Nothing) anns
+          then pure []
+          else do
+            src <- readKernSource eds (corpus </> piece <> ".krn")
+            pure [(piece, src, [a | Just a <- anns])]
+  let one (piece, src, anns) =
+        let r = do
+              s0 <- parseKern (tempoFallback tempo) src
+              let s1 = applyTempoOpt tempo s0
+                  s = maybe s1 (\b -> s1 {scTempo = Bpm b})
+                        (pieceTempo cfg (T.pack piece))
+              p <- perform (mkInterp cfg table adaptive piece) s
+              pure (concatMap (scorePerformances (perfTempoMap p)) anns)
+         in ( piece
+            , either (const []) id r
+            )
+      results = parMap rdeepseq
+        (\i -> let (p, rs) = one i
+                in (p, [(prPerformer x, prR x, prBeats x) | x <- rs]))
+        inputs
+  forM_ results $ \(piece, rs) ->
+    forM_ rs $ \(perf, r, nb) ->
+      putStrLn (piece <> "\t" <> perf <> "\t" <> show r
+                  <> "\t" <> show nb)
+  let allRs = [r | (_, rs) <- results, (_, r, _) <- rs, not (isNaN r)]
+  putStrLn ("# grand mean r = "
+              <> show (sum allRs / fromIntegral (max 1 (length allRs)))
+              <> " over " <> show (length allRs) <> " performances")
+
+-- | The parity gate for the bridge port: identical invocation of the
+-- Python reference and this dump must produce byte-identical TSV.
+runBridgeDump :: FilePath -> FilePath -> FilePath -> IO ()
+runBridgeDump krn match cfgPath = do
+  cfg <- loadCfg cfgPath
+  table <- resolveTemperament "werckmeister3"
+  let piece = takeBaseName krn
+  src <- readKernSource (editionsFor cfgPath) krn
+  matchT <- TIO.readFile match
+  case parseKern (tempoFallback TempoDefault) src of
+    Left e -> die ("parse: " <> e)
+    Right s0 -> do
+      let s1 = applyTempoOpt TempoDefault s0
+          s = maybe s1 (\b -> s1 {scTempo = Bpm b})
+                (pieceTempo cfg (T.pack piece))
+      case perform (mkInterp cfg table False piece) s of
+        Left e -> die ("perform: " <> e)
+        Right p -> do
+          let irn = B.loadIrNotes p
+              (rows, c) = B.bridge irn (B.parseMatch matchT)
+              d9 x = showFFloat (Just 9) x ""
+              md9 = maybe "-" d9
+              mi = maybe "-" show
+              mt = maybe "-" T.unpack
+              passName pass = case pass of
+                B.PassExact -> "exact"; B.PassSeg -> "seg"
+                B.PassFuzzy -> "fuzzy"; B.PassOrn -> "orn"
+              rules r = intercalate ";"
+                [ T.unpack k <> "=" <> T.unpack v
+                | (k, v) <- Map.toAscList (B.brRules r) ]
+              bool b = if b then "1" else "0"
+          forM_ rows $ \r -> putStrLn (intercalate "\t"
+            [ d9 (B.brWn r), show (B.brPitch r)
+            , T.unpack (B.brXmlId r), T.unpack (B.brVoice r)
+            , passName (B.brPass r)
+            , show (B.brHumanVel r), d9 (B.brHumanOnS r)
+            , d9 (B.brHumanOffS r)
+            , show (B.brOtbVel r), d9 (B.brOtbOnS r), d9 (B.brOtbDurS r)
+            , md9 (B.brOtbOnWn r), md9 (B.brOtbDurWn r), mi (B.brCh r)
+            , rules r, bool (B.brIsFinal r), bool (B.brGrace r)
+            , mi (B.brGatePct r), mt (B.brGateLabel r)
+            , bool (B.brIsOrn r) ])
+          putStrLn ("# " <> intercalate " "
+            [ "matched=" <> show (B.cMatched c)
+            , "exact=" <> show (B.cExact c)
+            , "seg=" <> show (B.cSeg c)
+            , "fuzzy=" <> show (B.cFuzzy c)
+            , "orn=" <> show (B.cOrn c)
+            , "seg_runs=" <> show (B.cSegRuns c)
+            , "unmatched=" <> show (B.cUnmatched c)
+            , "deleted=" <> show (B.cDeleted c)
+            , "scale=" <> show (B.cScale c)
+            , "offset_wn=" <> showFFloat (Just 9) (B.cOffsetWn c) "" ])
+
+-- | wtc1f01 -> Bach/Fugue/bwv_846 (Nothing for non-WTC names).
+bwvDir :: String -> Maybe FilePath
+bwvDir p = case p of
+  ['w', 't', 'c', b, k, n1, n2]
+    | b `elem` ("12" :: String)
+    , k `elem` ("pf" :: String)
+    , all (`elem` ("0123456789" :: String)) [n1, n2] ->
+      let num = read [n1, n2] :: Int
+          bwv = (if b == '1' then 845 else 869) + num
+          kind = if k == 'p' then "Prelude" else "Fugue"
+       in Just ("Bach" </> kind </> ("bwv_" <> show bwv))
+  _ -> Nothing
 
 runStats :: FilePath -> FilePath -> Double -> IO ()
 runStats corpus cfgPath tempo = do

@@ -214,7 +214,12 @@ def _affine(ir_keys, match_keys):
         diffs = [first_ir[p] - first_m[p] for p in first_ir if p in first_m]
         if not diffs:
             continue
-        for off in {0, max(set(diffs), key=diffs.count)}:
+        # DETERMINISM: iterate candidates in a fixed order — set
+        # iteration order is value-dependent, and a tie between offsets
+        # must break the same way in every implementation (the Haskell
+        # port is golden-tested row-for-row against this reference)
+        mode = max(sorted(set(diffs)), key=diffs.count)
+        for off in ([0] if mode == 0 else [0, mode]):
             got = sum(1 for p, ts in scaled.items() for t in ts
                       if (t + off, p) in ir_keys)
             # identity wins ties: prefer no transform over an equal one
@@ -261,8 +266,9 @@ def _segmented(pool, misses, rows):
     while i < len(misses):
         head = misses[i]
         t0, p0 = head[0], head[2]
-        cands = {it - t0 for (it, ip), reps in pool.items()
-                 if ip == p0 and reps and abs(it - t0) <= 4 * WN_TICKS}
+        cands = sorted({it - t0 for (it, ip), reps in pool.items()
+                        if ip == p0 and reps
+                        and abs(it - t0) <= 4 * WN_TICKS})
         probe = misses[i:i + 12]
         best_off, best_score = None, 0
         for off in cands:
@@ -320,7 +326,9 @@ def _ornament(ir_notes, misses, rows):
     the parent note's notated span — the right velocity comparison for
     trills on both sides."""
     groups = []
-    for (t, _p), reps in ir_notes.items():
+    # DETERMINISM: key order, not insertion order — tie-broken distance
+    # comparisons must agree with the Haskell port's Map iteration
+    for (t, _p), reps in sorted(ir_notes.items()):
         for rep in reps:
             if rep.get("group"):
                 subs = rep["group"]

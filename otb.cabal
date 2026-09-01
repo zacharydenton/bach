@@ -38,6 +38,8 @@ library
         OTB.Kern.Parser
         OTB.Score
         OTB.Edition
+        OTB.Eval
+        OTB.Bridge
         OTB.Config
         OTB.Explain
         OTB.Interp
@@ -84,6 +86,7 @@ executable otb
         text,
         bytestring,
         deepseq,
+        containers,
         directory,
         filepath,
         optparse-applicative,
