@@ -56,7 +56,7 @@ case "${1:-status}" in
       --calibration config/calibration.json \
       > "$LOG" 2>&1 < /dev/null &
     sleep 2
-    [ -n "$(pid)" ] && echo "up (pid $(pid)) — /bach on the tailnet" \
+    [ -n "$(pid)" ] && echo "up (pid $(pid)) on :8766 (the tailnet's /bach serves site/ — the static board)" \
       || { echo "failed to start:"; tail -5 "$LOG"; exit 1; }
     ;;
   stop)

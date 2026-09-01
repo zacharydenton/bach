@@ -39,7 +39,12 @@ python3 -m http.server -d site 8877      # or any static host
 ```
 
 All URLs are relative, so the site works from a subdirectory, GitHub
-Pages, or `tailscale serve` alike. The only server requirement is the
+Pages, or `tailscale serve` alike. Deployed on the tailnet since
+2026-09-01, replacing the live board's proxy:
+
+```
+sudo tailscale serve --bg --set-path /bach /home/zach/code/otb/site
+``` The only server requirement is the
 correct `application/wasm` MIME type (python's http.server and GitHub
 Pages both comply). AudioWorklets need a secure context: https or
 localhost.
