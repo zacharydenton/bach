@@ -108,6 +108,20 @@ stack exec otb -- maestro-align                          # emit corpus/maestro-w
 stack exec otb -- bridge-dump SCORE.krn PERF.match       # score<->performance note pairs
 ```
 
+The landscape is one experiment under three registered conditions —
+unconstrained (zeros allowed, the default), positive-contribution
+(`--zero-floor FRAC`: every rule must participate at least a little),
+and regularized (`--diversity-bonus L`: selection rewards rule
+diversity, reported r stays raw) — plus `--emit-elite DIR`, which
+renders every equally-predictive final as a runnable config for
+perceptual A/B. The open question these conditions triangulate: does
+the human data pick one rule allocation, or an equivalence class of
+expressive realizations? Runs checkpoint per start (resumable), are
+fingerprinted over the effective config, corpus inputs and the binary
+itself, and a completed run writes an `experiments/` manifest — hashes,
+arguments, train/test membership, results — meant to be committed with
+whatever conclusion it backs.
+
 Human data: `corpus/asap` (clone of the ASAP dataset) plus
 `corpus/maestro-wtc`, a derived mirror the aligner builds from MAESTRO v3
 (subsequence DTW; validated 110/114 against ASAP's own alignments, note

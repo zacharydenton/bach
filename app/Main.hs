@@ -103,7 +103,8 @@ data Cmd
   | Album FilePath FilePath FilePath TempoOpt String (Maybe FilePath)
   | Eval FilePath FilePath TempoOpt String (Maybe FilePath) [FilePath] [String] Bool
   | BridgeDump FilePath FilePath FilePath
-  | Landscape FilePath FilePath String Int Int Double
+  | Landscape FilePath FilePath String Int Int Double Double Double
+      (Maybe FilePath)
   | Fit FilePath FilePath Double [String] Bool Bool
   | MaestroFetch Bool
   | MaestroAlign Bool (Maybe String) (Maybe Int)
@@ -220,6 +221,17 @@ landscapeCmd =
     <*> option auto (long "starts" <> value 20)
     <*> option auto (long "seed" <> value 1)
     <*> option auto (long "slack" <> value 0.005)
+    <*> option auto (long "zero-floor" <> value 0.0 <> metavar "FRAC"
+          <> help ("positive-contribution condition: replace each "
+                     <> "grid's 0 with FRAC x its smallest nonzero "
+                     <> "value (0 = unconstrained, zeros allowed)"))
+    <*> option auto (long "diversity-bonus" <> value 0.0
+          <> metavar "LAMBDA"
+          <> help ("regularized condition: descend on r + LAMBDA x "
+                     <> "nonzero-fraction; the reported r stays raw"))
+    <*> optional (strOption (long "emit-elite" <> metavar "DIR"
+          <> help ("write each elite final as a runnable config for "
+                     <> "perceptual A/B (prefit + knob overrides)")))
 
 bridgeDumpCmd :: Parser Cmd
 bridgeDumpCmd =
@@ -339,8 +351,8 @@ main = do
     Eval corpus cfgPath tempo temp eds roots ps vel ->
       runEval corpus cfgPath tempo temp eds roots ps vel
     BridgeDump krn match cfgPath -> runBridgeDump krn match cfgPath
-    Landscape corpus cfgPath fam st sd sl ->
-      runLandscape corpus cfgPath fam st sd sl
+    Landscape corpus cfgPath fam st sd sl zf db ee ->
+      runLandscape corpus cfgPath fam st sd sl zf db ee
     Fit corpus cfgPath sk ps ap dr -> runFit corpus cfgPath sk ps ap dr
     MaestroFetch catOnly -> M.runMaestroFetch catOnly
     BakeSite opts0 -> do
@@ -1113,8 +1125,9 @@ bodyTempo scoreT perfT =
 -- whole run is in-process: a candidate evaluation is a parMap over
 -- the train pieces, cached by knob tuple.
 runLandscape :: FilePath -> FilePath -> String -> Int -> Int -> Double
-             -> IO ()
-runLandscape corpus cfgPath famName starts seed slack = do
+             -> Double -> Double -> Maybe FilePath -> IO ()
+runLandscape corpus cfgPath famName starts seed slack zeroFloor
+             divBonus emitElite = do
   when (starts < 1) $ die "--starts must be at least 1"
   cfgText <- TIO.readFile cfgPath
   prefit <- either (die . ("config: " <>)) pure
@@ -1154,7 +1167,21 @@ runLandscape corpus cfgPath famName starts seed slack = do
          in agg (parMap rdeepseq (score cfg') set)
   cache <- newIORef (Map.empty :: Map.Map [(T.Text, Double)]
                                    (Maybe Double))
-  let objective knobs = do
+  let -- condition 2 (positive contribution): the lattice loses its
+      -- OFF values — each grid's zero becomes FRAC x its smallest
+      -- nonzero step, so every rule must participate at least a little
+      floorVal g = case [v | v <- g, v > 0] of
+        [] -> 0
+        pos -> zeroFloor * minimum pos
+      floorGrid g =
+        [if v == 0 then floorVal g else v | v <- g]
+      grids = if zeroFloor <= 0
+                then F.kfGrids fam
+                else [(k, floorGrid g) | (k, g) <- F.kfGrids fam]
+      nKnobs = fromIntegral (length grids) :: Double
+      nonzeroFrac ks =
+        fromIntegral (length [() | (_, v) <- ks, v /= 0]) / nKnobs
+      objectiveRaw knobs = do
         let key = sortOn fst knobs
         c <- readIORef cache
         case Map.lookup key c of
@@ -1163,13 +1190,22 @@ runLandscape corpus cfgPath famName starts seed slack = do
             let v = evalSet train knobs
             v `seq` modifyIORef' cache (Map.insert key v)
             pure v
-      grids = F.kfGrids fam
+      -- condition 3 (regularized): selection rewards rule diversity;
+      -- every REPORTED r stays the raw statistic
+      objective knobs
+        | divBonus == 0 = objectiveRaw knobs
+        | otherwise =
+            fmap (+ divBonus * nonzeroFrac knobs) <$>
+              objectiveRaw knobs
       baseKnobs =
-        [ (k, Map.findWithDefault 0
-                k (Map.findWithDefault Map.empty
-                     (Map.findWithDefault "agogics" k
-                        (F.kfSections fam)) prefit))
-        | (k, _) <- grids ]
+        [ (k, if zeroFloor > 0 && v == 0
+                then floorVal (maybe [] id (lookup k (F.kfGrids fam)))
+                else v)
+        | (k, _) <- grids
+        , let v = Map.findWithDefault 0
+                    k (Map.findWithDefault Map.empty
+                         (Map.findWithDefault "agogics" k
+                            (F.kfSections fam)) prefit) ]
       -- randomized-order coordinate descent to a FIXPOINT: sweeps
       -- until a full pass improves nothing (capped), so observed
       -- spread across starts is landscape structure, not incomplete
@@ -1198,12 +1234,11 @@ runLandscape corpus cfgPath famName starts seed slack = do
                         _ -> (c, b, i)
             foldM tryV (cur, best, imp) grid
 
-  -- checkpoint state, resumable by count. The fingerprint must
-  -- identify the EXPERIMENT, not just its knobs: it digests the grids
-  -- and baseline, the effective (prefit) config the objective scores
-  -- against, every corpus input it reads (kern sources, annotations,
-  -- matches), and the binary itself — resuming across any of those
-  -- changing would silently mix incomparable scores
+  -- ---- experiment identity ----
+  -- the checkpoint must identify the EXPERIMENT: results from
+  -- different compiler code, configs, editions or human data must
+  -- never be combined. Each component is digested separately so a
+  -- mismatch names what changed.
   let statePath = "corpus" </> ("knob-landscape-" <> famName <> ".json")
       pieceBlob pd = T.concat
         ( [T.pack (F.pdPiece pd), F.pdSource pd]
@@ -1212,15 +1247,41 @@ runLandscape corpus cfgPath famName starts seed slack = do
                       | (scoreT, perfs) <- F.pdAnnotations pd ]
             <> concat [[T.pack nm, mt] | (nm, mt) <- F.pdMatches pd] )
       sha t = takeWhile (/= ' ') <$> readProcess "sha256sum" [] t
-  corpusDigests <- forM pds (sha . T.unpack . pieceBlob)
+  corpusDigests <- forM pds $ \pd ->
+    (,) (F.pdPiece pd) <$> sha (T.unpack (pieceBlob pd))
   prefitDigest <- sha (T.unpack (F.prefitStrip cfgText))
   binDigest <- do
     exe <- getExecutablePath
     takeWhile (/= ' ') <$> readProcess "sha256sum" [exe] ""
-  let fpInput = show grids <> show (sortOn fst baseKnobs)
-                  <> famName <> show seed <> prefitDigest
-                  <> concat corpusDigests <> binDigest
-  fp <- sha fpInput
+  paramsDigest <- sha (show grids <> show (sortOn fst baseKnobs)
+                         <> famName <> show seed <> show zeroFloor
+                         <> show divBonus)
+  fp <- sha (paramsDigest <> prefitDigest <> binDigest
+               <> concatMap snd corpusDigests)
+  let digestsJson = J.JObj
+        ( [ ("params", J.JStr (T.pack paramsDigest))
+          , ("prefit_config", J.JStr (T.pack prefitDigest))
+          , ("binary", J.JStr (T.pack binDigest))
+          , ("corpus", J.JObj [ (T.pack p, J.JStr (T.pack d))
+                              | (p, d) <- corpusDigests ]) ] )
+      metaJson = J.JObj
+        [ ("fingerprint", J.JStr (T.pack fp))
+        , ("family", J.JStr (T.pack famName))
+        , ("seed", J.JNum (T.pack (show seed)))
+        , ("args", J.JObj
+            [ ("corpus", J.JStr (T.pack corpus))
+            , ("config", J.JStr (T.pack cfgPath))
+            , ("starts", J.JNum (T.pack (show starts)))
+            , ("slack", J.JNum (T.pack (MA.pyRepr slack)))
+            , ("zero_floor", J.JNum (T.pack (MA.pyRepr zeroFloor)))
+            , ("diversity_bonus",
+                J.JNum (T.pack (MA.pyRepr divBonus))) ])
+        , ("digests", digestsJson)
+        , ("train", J.JArr [ J.JStr (T.pack (F.pdPiece pd))
+                           | pd <- train ])
+        , ("test", J.JArr [ J.JStr (T.pack (F.pdPiece pd))
+                          | pd <- test ]) ]
+
   haveState <- doesFileExist statePath
   stored0 <- if not haveState then pure [] else do
     raw <- TIO.readFile statePath
@@ -1230,8 +1291,32 @@ runLandscape corpus cfgPath famName starts seed slack = do
              =<< J.jLookup "_meta" st) == Just (T.pack fp) ->
             pure (J.jArrOf (fromMaybe (J.JArr [])
                               (J.jLookup "finals" st)))
+        | otherwise -> do
+            let old k = J.jStr =<< J.jLookup k
+                  =<< J.jLookup "digests" =<< J.jLookup "_meta" st
+                changed =
+                  [ nm | (nm, cur, stO) <-
+                      [ ("params", paramsDigest, old "params")
+                      , ("config", prefitDigest, old "prefit_config")
+                      , ("binary", binDigest, old "binary") ]
+                  , stO /= Just (T.pack cur) ]
+                oldCorpus = fromMaybe (J.JObj [])
+                  (J.jLookup "corpus" =<< J.jLookup "digests"
+                     =<< J.jLookup "_meta" st)
+                corpusChanged =
+                  [ p | (p, d) <- corpusDigests
+                      , (J.jStr =<< J.jLookup (T.pack p) oldCorpus)
+                          /= Just (T.pack d) ]
+            putStrLn ("landscape inputs changed ("
+              <> intercalate ", "
+                   (changed <> take 3 corpusChanged
+                      <> [ "+" <> show (length corpusChanged - 3)
+                             <> " more pieces"
+                         | length corpusChanged > 3 ])
+              <> ") — starting fresh")
+            pure []
       _ -> do
-        putStrLn "landscape inputs changed — starting fresh"
+        putStrLn "landscape state unreadable — starting fresh"
         pure []
   when (not (null stored0)) $
     putStrLn ("resuming: " <> show (length stored0)
@@ -1239,16 +1324,16 @@ runLandscape corpus cfgPath famName starts seed slack = do
   finalsRef <- newIORef stored0
   let knobsJson ks = J.JObj
         [ (k, J.JNum (T.pack (MA.pyRepr v))) | (k, v) <- ks ]
+      stateJson entries = J.dumpJson (Just 1) (J.JObj
+        [("_meta", metaJson), ("finals", J.JArr entries)])
       saveState = do
         entries <- readIORef finalsRef
         -- atomic: a kill mid-write must not truncate the state (a
-        -- parse failure would read as changed inputs and discard
-        -- every completed start)
+        -- parse failure would discard every completed start)
         let tmpPath = statePath <> ".tmp"
-        TIO.writeFile tmpPath $ J.dumpJson (Just 1) (J.JObj
-          [ ("_meta", J.JObj [("fingerprint", J.JStr (T.pack fp))])
-          , ("finals", J.JArr entries) ])
+        TIO.writeFile tmpPath (stateJson entries)
         renameFile tmpPath statePath
+      r4 x = fromIntegral (round (x * 1e4) :: Integer) / 1e4
       runStart i = do
         let rng = F.mkRng (seed * 1000 + i)
             (initK, rngAfter) =
@@ -1261,21 +1346,25 @@ runLandscape corpus cfgPath famName starts seed slack = do
         case res of
           Nothing -> die ("start " <> show i
                             <> ": objective undefined — empty corpus?")
-          Just (cur, best, sweeps) -> do
-            let testR = evalSet test (Map.toList cur)
-                r4 x = fromIntegral (round (x * 1e4) :: Integer) / 1e4
-            putStrLn ("start " <> show i <> ": train " <> show best
+          Just (cur, sel, sweeps) -> do
+            rawM <- objectiveRaw (Map.toList cur)
+            let raw = fromMaybe sel rawM
+                testR = evalSet test (Map.toList cur)
+            putStrLn ("start " <> show i <> ": train " <> show raw
+                        <> (if divBonus /= 0
+                              then " sel " <> show sel else "")
                         <> " test " <> show testR
                         <> " sweeps " <> show sweeps)
             modifyIORef' finalsRef (<> [J.JObj
-              [ ("start", J.JNum (T.pack (show i)))
-              , ("init", knobsJson initK)
-              , ("final", knobsJson (Map.toList cur))
-              , ("sweeps", J.JNum (T.pack (show sweeps)))
-              , ("train_r", J.JNum (T.pack (MA.pyRepr (r4 best))))
-              , ("test_r", maybe J.JNull
-                   (J.JNum . T.pack . MA.pyRepr . r4) testR)
-              ]])
+              ( [ ("start", J.JNum (T.pack (show i)))
+                , ("init", knobsJson initK)
+                , ("final", knobsJson (Map.toList cur))
+                , ("sweeps", J.JNum (T.pack (show sweeps)))
+                , ("train_r", J.JNum (T.pack (MA.pyRepr (r4 raw)))) ]
+                <> [ ("sel_r", J.JNum (T.pack (MA.pyRepr (r4 sel))))
+                   | divBonus /= 0 ]
+                <> [ ("test_r", maybe J.JNull
+                       (J.JNum . T.pack . MA.pyRepr . r4) testR) ] )])
             saveState
   forM_ [length stored0 .. starts - 1] runStart
 
@@ -1292,12 +1381,20 @@ runLandscape corpus cfgPath famName starts seed slack = do
                    , (k, jv) <- kvs, Just v <- [J.jNum jv] ] ]
   when (null finals) $ die "no completed starts"
   let bestTrain = maximum [b | (_, b, _) <- finals]
-      elite = [f | f@(_, b, _) <- finals, b >= bestTrain - slack]
+      elite = sortOn (\(_, b, _) -> negate b)
+        [f | f@(_, b, _) <- finals, b >= bestTrain - slack]
       eliteTests = [t | (_, _, Just t) <- elite]
       spread = if null eliteTests then "" else
         " (test spread " <> show (minimum eliteTests) <> ".."
           <> show (maximum eliteTests) <> ")"
-  putStrLn ("\n" <> show (length finals) <> " starts; best train "
+      condition
+        | zeroFloor > 0 = "positive-contribution (zero-floor "
+            <> show zeroFloor <> ")"
+        | divBonus /= 0 = "regularized (diversity-bonus "
+            <> show divBonus <> ")"
+        | otherwise = "unconstrained (zeros allowed)"
+  putStrLn ("\ncondition: " <> condition)
+  putStrLn (show (length finals) <> " starts; best train "
               <> show bestTrain <> "; " <> show (length elite)
               <> " within slack " <> show slack <> spread)
   forM_ (map fst grids) $ \k -> do
@@ -1309,6 +1406,45 @@ runLandscape corpus cfgPath famName starts seed slack = do
                 <> show (length finals) <> " elite-zero " <> show ze
                 <> "/" <> show (length elite) <> "  elite values "
                 <> show (uniqSorted (vals elite)))
+
+  -- ---- experiment manifest: the committed record of a completed run
+  when (length finals >= starts) $ do
+    createDirectoryIfMissing True "experiments"
+    date <- takeWhile (/= '\n') <$> readProcess "date" ["+%F"] ""
+    let manifestPath = "experiments"
+          </> ("landscape-" <> famName <> "-" <> date <> "-"
+                 <> take 12 fp <> ".json")
+    TIO.writeFile manifestPath (stateJson entries)
+    putStrLn ("\nmanifest: " <> manifestPath
+                <> " — hashes, arguments, membership, results; "
+                <> "commit it with the conclusions it backs")
+
+  -- ---- condition 4 bridge: equally predictive solutions, rendered
+  forM_ emitElite $ \dir -> do
+    createDirectoryIfMissing True dir
+    let prefitText = F.prefitStrip cfgText
+        secOf k = Map.findWithDefault "agogics" k (F.kfSections fam)
+        overrides ks = T.concat
+          [ "\n[" <> sec <> "]\n" <> T.concat
+              [ k <> " = " <> T.pack (MA.pyRepr v) <> "\n"
+              | (k, v) <- kvs ]
+          | (sec, kvs) <- Map.toList (foldl'
+              (\mm (k, v) -> Map.insertWith (flip (<>))
+                 (secOf k) [(k, v)] mm)
+              Map.empty ks) ]
+    forM_ (zip [1 :: Int ..] elite) $ \(rank, (ks, tr, _)) -> do
+      let path = dir </> ("elite-"
+            <> (if rank < 10 then "0" else "") <> show rank
+            <> ".toml")
+      TIO.writeFile path
+        ( prefitText
+            <> "\n# landscape elite " <> T.pack (show rank)
+            <> ": family " <> T.pack famName
+            <> ", train r " <> T.pack (show tr)
+            <> " — appended overrides win\n"
+            <> overrides ks )
+    putStrLn ("elite configs: " <> show (length elite) <> " -> "
+                <> dir <> " (compile with --config for A/B)")
 
 -- | The parity gate for the bridge port: identical invocation of the
 -- Python reference and this dump must produce byte-identical TSV.
