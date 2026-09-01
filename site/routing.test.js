@@ -104,6 +104,29 @@ test("casting: default seeds once, piece casting lands on register slots", () =>
   assert.deepEqual(again, ["(init)", "(init)", "(init)", "(init)"]);
 });
 
+test("slot-name casting keys win over channel keys and any ranking", () => {
+  // the standing rig speaks the rig's own vocabulary: whatever channels
+  // a piece has and however they rank, bass is bass
+  const castings = {
+    default: {
+      bass: "data/patches/Leads/DNA Sequencer.fxp",
+      tenor: "data/patches/Polysynths/Poly Lala.fxp",
+      alto: "data/patches/Winds/Dreamy Flute.fxp",
+      soprano: "data/patches/Leads/Lera.fxp",
+      0: "data/patches/Keys/EP 2.fxp", // channel keys lose to names
+    },
+  };
+  // a prelude-like ranking where channel 0 is NOT the bass
+  const rig = resolveSlots(castings, "wtc1p01", [[1], [2], [4, 0], [3]],
+    ["(init)", "(init)", "(init)", "(init)"], { defaultDone: false });
+  assert.deepEqual(rig, [
+    "data/patches/Leads/DNA Sequencer.fxp",
+    "data/patches/Polysynths/Poly Lala.fxp",
+    "data/patches/Winds/Dreamy Flute.fxp",
+    "data/patches/Leads/Lera.fxp",
+  ]);
+});
+
 test("casting falls through to a later channel in the slot", () => {
   // the slot's bass-most channel is uncast; its other channel is
   const castings = { t: { 2: "data/patches/Pads/Warm.fxp" } };

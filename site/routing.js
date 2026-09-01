@@ -50,14 +50,20 @@ export function slotMap(perf) {
 // Effective patch per slot for a piece about to load: current slot
 // patches survive (the rig is standing); on the very first load the
 // "default" casting seeds it; a piece with its own casting overrides.
-// Castings are keyed by source channel (bass-first, as cast on the live
-// board) — a slot wears the entry of its bass-most cast channel.
+// A casting key is either a slot NAME ("bass".."soprano" — the rig's
+// own piece-independent vocabulary, preferred) or a source channel
+// number (bass-first, as cast on the live board), where a slot wears
+// the entry of its bass-most cast channel of THIS piece.
 export function resolveSlots(castings, name, slotChannels, current,
                              castState) {
   const eff = [...current];
   const apply = (cast) => {
     if (!cast) return;
     slotChannels.forEach((chs, s) => {
+      if (cast[SLOTS[s]]) {
+        eff[s] = cast[SLOTS[s]];
+        return;
+      }
       for (const ch of chs) {
         const url = cast[String(ch)];
         if (url) {

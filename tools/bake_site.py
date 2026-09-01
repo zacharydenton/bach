@@ -190,8 +190,11 @@ def bake_casting(data_dir, casting_dir, calibration_file):
                 continue
             with open(os.path.join(casting_dir, f)) as fh:
                 raw = json.load(fh)
-            entry = {ch: patch_url(p) for ch, p in raw.items()
-                     if ch.isdigit()}
+            # keys are slot names (the static board's own vocabulary) or
+            # channel numbers (the live board's); "_" comments drop out
+            entry = {k: patch_url(p) for k, p in raw.items()
+                     if k.isdigit()
+                     or k in ("bass", "tenor", "alto", "soprano")}
             if entry:
                 castings[f[:-5]] = entry
     with open(os.path.join(data_dir, "casting.json"), "w") as f:

@@ -38,7 +38,8 @@ class CastingBake(unittest.TestCase):
             os.makedirs(castdir)
             with open(os.path.join(castdir, "default.json"), "w") as f:
                 json.dump({"_": "a comment, not a channel",
-                           "0": "/mac/Leads/Deep.fxp"}, f)
+                           "0": "/mac/Leads/Deep.fxp",
+                           "soprano": "/mac/Leads/Lera.fxp"}, f)
             with open(os.path.join(castdir, "wtc1f01.json"), "w") as f:
                 json.dump({"0": "/other/Pads/Warm.fxp"}, f)
             calfile = os.path.join(tmp, "calibration.json")
@@ -50,7 +51,8 @@ class CastingBake(unittest.TestCase):
             with open(os.path.join(data, "casting.json")) as f:
                 cast = json.load(f)
             self.assertEqual(cast["default"],
-                             {"0": "data/patches/Leads/Deep.fxp"})
+                             {"0": "data/patches/Leads/Deep.fxp",
+                              "soprano": "data/patches/Leads/Lera.fxp"})
             self.assertEqual(cast["wtc1f01"],
                              {"0": "data/patches/Pads/Warm.fxp"})
             with open(os.path.join(data, "calibration.json")) as f:
