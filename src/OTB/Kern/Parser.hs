@@ -255,7 +255,7 @@ noteTok voice lane onset st (NoteTok d dots (Just pit) mspell tie marks) =
 isOrnamentMark :: Mark -> Bool
 isOrnamentMark m = case m of
   Trill _ -> True; Mordent _ -> True; InvMordent _ -> True
-  Turn -> True; InvTurn -> True
+  Turn _ _ -> True; InvTurn _ _ -> True
   _ -> False
 
 mapLeft :: (a -> a') -> Either a b -> Either a' b

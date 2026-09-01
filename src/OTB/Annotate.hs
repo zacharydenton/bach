@@ -71,6 +71,8 @@ data Ctx = Ctx
     -- ^ global fermata spans (rest holds) already realised through the
     -- tempo map — a note fermata covered by one is the SAME event and
     -- must not stretch its duration on top
+  , cKeyAt :: WholeNotes -> Int -- ^ tonic pitch class (harmony model)
+  , cMajorAt :: WholeNotes -> Bool
   }
 
 -- | The interpreter's output payload, plus provenance.
@@ -98,9 +100,40 @@ data Ev = Ev
 -- (Player.prepareLaneW) so the reshapers' decisions reach the explain
 -- output alongside everything decided here.
 annotateLane :: Interp -> Ctx -> [[Why]] -> [ScoreNote] -> Annotated
-annotateLane ip ctx preWs l = Annotated (go 0 decided)
+annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
   where
     ex = iExpress ip
+    -- the turn's auxiliaries: kern states no interval, so the lexer's
+    -- whole-tone default is refined here to the diatonic neighbours of
+    -- the prevailing key — Bach's Explication realises turns in the
+    -- scale. Minor admits the leading tone beside the natural seventh
+    -- (a turn on the tonic closes from a semitone below). Marks live in
+    -- snMarks AND snSegs; both are rewritten together.
+    l = map refineTurns l0
+    refineTurns sn =
+      let (up, down) = auxes sn
+          fix m = case m of
+            K.Turn _ _ -> K.Turn up down
+            K.InvTurn _ _ -> K.InvTurn up down
+            _ -> m
+       in if any isTurn (snMarks sn)
+            then sn { snMarks = map fix (snMarks sn)
+                    , snSegs = [(d, map fix ms) | (d, ms) <- snSegs sn] }
+            else sn
+    isTurn m = case m of
+      K.Turn _ _ -> True; K.InvTurn _ _ -> True; _ -> False
+    auxes sn =
+      let tonic = cKeyAt ctx (snOnset sn)
+          major = cMajorAt ctx (snOnset sn)
+          degrees =
+            if major then [0, 2, 4, 5, 7, 9, 11] else [0, 2, 3, 5, 7, 8, 10, 11]
+          scale = [(tonic + s) `mod` 12 | s <- degrees]
+          pc = snPitch sn `mod` 12
+          step dir =
+            case [s | s <- [1, 2], ((pc + dir * s) `mod` 12) `elem` scale] of
+              (s : _) -> s
+              [] -> 2 -- chromatic surroundings: keep the whole tone
+       in (step 1, step (-1))
     arts = articulateLane' (iArt ip) l
     -- cadence arrivals from the harmony model bolster the boundary
     -- strength a lane's surface alone would compute
@@ -248,15 +281,16 @@ annotateLane ip ctx preWs l = Annotated (go 0 decided)
       K.Trill _ -> Just (Orn Trill)
       K.Mordent _ -> Just (Orn Mordent)
       K.InvMordent _ -> Just (Orn InvMordent)
-      K.Turn -> Just (Orn Turn)
-      K.InvTurn -> Just (Orn TrilledTurn)
+      K.Turn _ _ -> Just (Orn Turn)
+      K.InvTurn _ _ -> Just (Orn TrilledTurn)
       _ -> Nothing
     ornName m = case m of
       K.Trill i -> "trill (aux +" <> show i <> ")"
       K.Mordent i -> "mordent (aux -" <> show i <> ")"
       K.InvMordent i -> "inverted mordent (aux +" <> show i <> ")"
-      K.Turn -> "turn"
-      K.InvTurn -> "inverted turn"
+      K.Turn u dn -> "turn (aux +" <> show u <> "/-" <> show dn <> ", in key)"
+      K.InvTurn u dn ->
+        "inverted turn (aux +" <> show u <> "/-" <> show dn <> ", in key)"
       _ -> "?"
 
     go _ [] = rest 0

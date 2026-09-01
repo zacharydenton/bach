@@ -403,7 +403,7 @@ runStats corpus cfgPath tempo = do
             , m <- snMarks n, isOrn m ]
       isOrn m = case m of
         Trill _ -> True; Mordent _ -> True; InvMordent _ -> True
-        Turn -> True; InvTurn -> True; _ -> False
+        Turn _ _ -> True; InvTurn _ _ -> True; _ -> False
       placeholders =
         [n | (n, s) <- scores, scTempo s == Bpm 72]
   putStrLn ("pieces parsed: " <> show (length scores) <> "/"

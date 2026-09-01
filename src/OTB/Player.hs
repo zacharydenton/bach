@@ -358,7 +358,9 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
                     , cCadences = hCadences harm
                     , cSubject = inSubject
                     , cFloor = floorAt vi
-                    , cHolds = restHolds }
+                    , cHolds = restHolds
+                    , cKeyAt = hKeyAt harm
+                    , cMajorAt = hMajorAt harm }
 
     tracks = snd (foldl deal (usableChannels, []) (zip [0 ..] voiceLanes))
     deal (chans, acc) (vi, (_, ls)) =

@@ -63,8 +63,11 @@ data Mark
   | Trill !Int      -- ^ @T@=2 / @t@=1 semitones above
   | Mordent !Int    -- ^ @M@=2 / @m@=1 semitones below (lower neighbour)
   | InvMordent !Int -- ^ @W@=2 / @w@=1 semitones above (Pralltriller)
-  | Turn            -- ^ @S@
-  | InvTurn         -- ^ @$@
+  | Turn !Int !Int
+    -- ^ @S@: (semitones above, semitones below). Kern states no interval
+    -- for turns, so the lexer defaults to whole tones; the annotation
+    -- layer refines both from the prevailing key (diatonic neighbours)
+  | InvTurn !Int !Int -- ^ @$@ — same convention, starts below
   | GenericOrn      -- ^ @O@ — ornament with no interval stated; retained
                     --   unrealised (realising it would need the scale
                     --   inference this module's convention avoids)

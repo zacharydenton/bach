@@ -14,8 +14,9 @@
 --   * **turn** — upper, main, lower, main in equal quarters.
 --
 -- Auxiliary intervals come from the kern marks themselves (T=whole,
--- t=half — see Token.hs); the turn's auxiliaries default to whole tones,
--- a simplification noted here honestly (13 turns in the corpus).
+-- t=half — see Token.hs); the turn's auxiliaries, which kern does not
+-- state, are refined from the prevailing key by the annotation layer
+-- (diatonic neighbours via the harmony model — see Annotate).
 --
 -- Realisation happens on raw lanes *before* articulation and phrasing,
 -- so downstream rules see real notes; realised subnotes are slurred
@@ -140,7 +141,7 @@ realizeNote op bpm = realize
 
     isOrnament m = case m of
       Trill _ -> True; Mordent _ -> True; InvMordent _ -> True
-      Turn -> True; InvTurn -> True
+      Turn _ _ -> True; InvTurn _ _ -> True
       _ -> False
 
     -- subdivide sn into (pitch, dur) subnotes: legato marks stripped from
@@ -192,8 +193,10 @@ realizeNote op bpm = realize
             InvMordent aux ->
               let s = min step (d / 4)
                in subdivide sn [(p, s), (p + aux, s), (p, d - 2 * s)]
-            Turn ->
-              subdivide sn [(p + 2, d / 4), (p, d / 4), (p - 2, d / 4), (p, d / 4)]
-            InvTurn ->
-              subdivide sn [(p - 2, d / 4), (p, d / 4), (p + 2, d / 4), (p, d / 4)]
+            Turn up down ->
+              subdivide sn
+                [(p + up, d / 4), (p, d / 4), (p - down, d / 4), (p, d / 4)]
+            InvTurn up down ->
+              subdivide sn
+                [(p - down, d / 4), (p, d / 4), (p + up, d / 4), (p, d / 4)]
             _ -> [sn]

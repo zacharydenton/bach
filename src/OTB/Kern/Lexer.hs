@@ -114,8 +114,8 @@ lexNoteTok tok = NoteTok dur dots pit spell tie marks
         , [Mordent 1 | 'm' `elem` cs]
         , [InvMordent 2 | 'W' `elem` cs]
         , [InvMordent 1 | 'w' `elem` cs]
-        , [Turn | 'S' `elem` cs]
-        , [InvTurn | '$' `elem` cs]
+        , [Turn 2 2 | 'S' `elem` cs] -- whole tones until the key refines
+        , [InvTurn 2 2 | '$' `elem` cs]
         , [GenericOrn | 'O' `elem` cs]
         , [Sforzando | 'z' `elem` cs]
         , [Grace | isGrace]

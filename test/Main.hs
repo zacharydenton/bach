@@ -352,7 +352,7 @@ units = testGroup "otb"
           sum (map snDur out) @?= (1 / 4)
       , testCase "turn: upper main lower main" $ do
           let out = realizeLane defaultOrnamentParams (Bpm 120)
-                      [scoreNote 0 (1 / 4) 60 [Turn]]
+                      [scoreNote 0 (1 / 4) 60 [Turn 2 2]]
           map snPitch out @?= [62, 60, 58, 60]
       , testCase "unornamented notes pass through untouched" $ do
           let sn = scoreNote 0 (1 / 4) 60 [Staccato]
@@ -977,6 +977,27 @@ review = testGroup "review regressions"
       map snPitch (out 3) @?= [63]
       map snSpell (out 3) @?= [Nothing]
       map snSpell (out 0) @?= [Just (Spelled 0 0 4)] -- identity keeps it
+  , testCase "turn: realised from its mark's intervals" $ do
+      map snPitch
+        (realizeNote defaultOrnamentParams (Bpm 96)
+           (scoreNote 0 (1 / 4) 60 [Turn 1 2]))
+        @?= [61, 60, 58, 60]
+      map snPitch
+        (realizeNote defaultOrnamentParams (Bpm 96)
+           (scoreNote 0 (1 / 4) 60 [InvTurn 1 2]))
+        @?= [58, 60, 61, 60]
+  , testCase "turn: auxiliaries are the key's diatonic neighbours" $ do
+      -- a C major context; the turn sits on E, whose diatonic neighbours
+      -- are F (+1) and D (-2) — the old whole-tone default said F#
+      let src = T.unlines
+            [ "**kern", "*MM96", "8c", "8d", "8e", "8f"
+            , "8g", "8a", "8b", "8cc", "2eS", "4c", "*-" ]
+      case parseKern (Bpm 96) src >>= perform calmInterp of
+        Left e -> assertFailure e
+        Right p -> do
+          let subs = [ pnPitch n
+                     | n <- concat (perfTracks p), pnSrcOn n == 1 ]
+          subs @?= [65, 64, 62, 64]
   , testCase "scl: a bare integer is a ratio (2 = the octave)" $ do
       let scl = T.unlines $
             ["! t", "t", "12", "!"]
