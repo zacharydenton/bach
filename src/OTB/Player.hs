@@ -41,7 +41,6 @@ import OTB.Interp
 import OTB.Interp.Agogics (AgogicParams (..), tempoMap)
 import OTB.Interp.Express
 import OTB.Interp.Ornament (realizeGraceLane)
-import OTB.Kern.Token (Mark (Fermata))
 import OTB.Score
 import OTB.Tuning (adaptiveCents, bendValue, offsetFor)
 import OTB.Units (Cents (..))
@@ -321,20 +320,14 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
         go s e (x : xs) | x - e <= 1 / 2 = go s x xs
         go s e xs = (s, e + 1 / 4) : spansOf xs
 
-    -- a rest fermata that coincides with a fermata-marked NOTE is the
-    -- same musical event notated per-spine (wtc1p21: 8bb-; against 8r;):
-    -- the note's own hold carries it, so the global span is dropped.
-    -- What survives is silence-only holds — and a trailing one (wtc2p07
-    -- ends on a held all-rest bar) extends the curve's domain past the
-    -- last sounding note, so the piece ends through its held silence
-    -- rather than before it.
-    restHolds =
-      [ (a, d)
-      | (a, d) <- scRestHolds score
-      , not (any (\n -> Fermata `elem` snMarks n
-                          && snOnset n < a + d
-                          && a < snOnset n + snDur n)
-               (concatMap vNotes voices)) ]
+    -- rest holds are the GLOBAL pause: only the tempo map delays every
+    -- voice's successors (a note-level stretch cannot — mono
+    -- enforcement would clamp it against the next note). A fermata-
+    -- marked note covered by one of these spans is the same event
+    -- notated per-spine; the annotation layer suppresses its local
+    -- hold (cHolds). A trailing hold (wtc2p07 ends on a held all-rest
+    -- bar) extends the piece past its last sounding note.
+    restHolds = scRestHolds score
     fullEnd = maximum (end : [a + d | (a, d) <- restHolds])
 
     -- curve -> conductor Music -> derived map: the conductor is the
@@ -364,7 +357,8 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
                     , cChargeAt = hChargeAt harm
                     , cCadences = hCadences harm
                     , cSubject = inSubject
-                    , cFloor = floorAt vi }
+                    , cFloor = floorAt vi
+                    , cHolds = restHolds }
 
     tracks = snd (foldl deal (usableChannels, []) (zip [0 ..] voiceLanes))
     deal (chans, acc) (vi, (_, ls)) =

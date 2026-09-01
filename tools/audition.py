@@ -97,7 +97,10 @@ def render(perf, sr, scl=None, patches=None, tail=3.0, bend_range=2.0,
     if not events:
         sys.exit("empty performance")
 
-    total = events[-1][0] + int(tail * sr)
+    # endS is the piece's full extent — past the last event when a held
+    # silence closes the piece (wtc2p07); the synthesis tail rides on top
+    last = max(events[-1][0], int(perf.get("endS", 0.0) * sr))
+    total = last + int(tail * sr)
     synths = {}
     for ch in sorted(channels):
         s = surgepy.createSurge(sr)

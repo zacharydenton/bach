@@ -779,16 +779,25 @@ review = testGroup "review regressions"
           assertBool ("held once, not squared: " <> show held)
             (abs (held - 120 / hold) < 0.01)
   , testCase "rest fermata: a concurrent note fermata is the same event" $ do
-      -- wtc1p21: 8bb-; against 8r; — the note's own hold carries it; the
-      -- global span must not double it
+      -- wtc1p21: 8bb-; against 8r; — ONE pause. The global hold owns it
+      -- (only the tempo map pushes every voice's successors); the
+      -- covered note must not stretch its duration on top
       let src = T.unlines
             [ "**kern\t**kern", "4c\t4e", "4c;\t4r;", "4c\t4e", "*-\t*-" ]
-      case parseKern (Bpm 120) src >>= perform (calmInterp) of
+          plain = T.unlines
+            [ "**kern\t**kern", "4c\t4e", "4c\t4r", "4c\t4e", "*-\t*-" ]
+      case (,) <$> (parseKern (Bpm 120) src >>= perform calmInterp)
+               <*> (parseKern (Bpm 120) plain >>= perform calmInterp) of
         Left e -> assertFailure e
-        Right p -> do
+        Right (p, q) -> do
           let Bpm held = tempoAt (perfTempoMap p) (3 / 8)
-          assertBool ("tempo untouched (note hold owns it): " <> show held)
-            (abs (held - 120) < 0.01)
+              hold = fromRational (agFermataHold defaultAgogicParams)
+          assertBool ("global hold applies: " <> show held)
+            (abs (held - 120 / hold) < 0.01)
+          -- notated durations identical to the fermata-free variant:
+          -- the pause lives in the tempo map, not in the note
+          map pnDur (concat (perfTracks p))
+            @?= map pnDur (concat (perfTracks q))
   , testCase "rest fermata: a trailing held silence stays in the piece" $ do
       -- wtc2p07 ends on an all-rest held bar AFTER the last sounding
       -- note: the curve's domain must extend through it

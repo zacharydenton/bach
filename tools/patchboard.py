@@ -128,6 +128,9 @@ class Engine:
         for _, perf in playlist:
             pend = max((n["onS"] + n["durS"]
                         for tr in perf["tracks"] for n in tr), default=0.0)
+            # endS extends past the last note-off when a held silence
+            # closes the piece; the loop must run out that clock too
+            pend = max(pend, perf.get("endS", 0.0))
             self.piece_lengths.append(
                 (-(-int((pend + 2.0) * sr) // BLOCK) * BLOCK) / sr)
         self.anchors = collections.OrderedDict()  # token -> anchor

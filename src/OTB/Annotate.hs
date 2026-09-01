@@ -67,6 +67,10 @@ data Ctx = Ctx
   , cFloor :: WholeNotes -> Bool
     -- ^ does THIS voice hold the floor (cross-voice imitation) at the
     -- notated onset — the dialogue rule's question
+  , cHolds :: [(WholeNotes, WholeNotes)]
+    -- ^ global fermata spans (rest holds) already realised through the
+    -- tempo map — a note fermata covered by one is the SAME event and
+    -- must not stretch its duration on top
   }
 
 -- | The interpreter's output payload, plus provenance.
@@ -180,7 +184,16 @@ annotateLane ip ctx preWs l = Annotated (go 0 decided)
         attrs = concat
           [ [Art (if gate < 1 then Staccato gate else Legato gate)]
           , [Art Breath | isJust mBreath]
-          , [Art Fermata | K.Fermata `elem` snMarks sn]
+          -- a note fermata covered by a global hold span is the same
+          -- pause, notated per-spine (wtc1p21: 8bb-; against 8r;): the
+          -- tempo map stretches it already, so no local hold on top —
+          -- and unlike the local stretch, the tempo map pushes the
+          -- successors of every voice
+          , [ Art Fermata
+            | K.Fermata `elem` snMarks sn
+            , not (any (\(a, d) -> snOnset sn < a + d
+                                     && a < snOnset sn + snDur sn)
+                     (cHolds ctx)) ]
           , [Dyn (Loudness (fromIntegral vOut))]
           , [Dyn (Accent (charge1000 charge)) | charge > 0]
           , mapMaybe ornAttr (snMarks sn)
