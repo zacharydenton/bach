@@ -1,23 +1,26 @@
 /*
  * The static patchboard's AudioWorkletProcessor: one Surge wasm module,
- * TWO SurgeWasm instances carrying the four voices — each instance holds
- * two voices as scene A / scene B in MIDI channel-split mode (bridge
- * loadScenePatches), and renderScenes exposes each scene's post-insert-FX
- * stereo separately, so per-voice gain and mute still happen here at the
- * mix, exactly as when every voice had its own instance.
- *
- * Slot s (0=bass 1=tenor 2=alto 3=soprano) lives on instance s>>1 as
- * scene s&1; scene routing is by MIDI channel (0 -> A, 1+ -> B).
+ * one scene per LANE — each SurgeWasm instance carries two lanes as
+ * scene A / scene B in MIDI channel-split mode (bridge loadScenePatches),
+ * lane r living on instance r>>1 as scene r&1. Every lane keeps its own
+ * voice pool: lanes that share a UI slot share only patch/gain/mute,
+ * never polyphony, so mono presets stay mono per lane and overlapping
+ * same-pitch notes in different lanes cannot release each other.
+ * renderScenes exposes each scene's post-insert-FX stereo separately, so
+ * per-lane gain and mute happen here at the mix.
  *
  * Scheduling matches tools/patchboard.py render(): the walk is in 32-frame
  * engine blocks and every event lands at the boundary of the block that
  * contains it (≤1 ms quantization). Pause simply stops walking — synth
  * state freezes and resume continues mid-note, like the live engine.
+ * Seeks chase the score: notes that should already be sounding at the
+ * target are re-struck (routing.js heldAt).
  */
 
 // Must come first: installs globals the Emscripten runtime reads at load time.
 import "./engine/worklet-shim.js";
 import createSurgeModule from "./engine/surge-worklet.js";
+import { heldAt } from "./routing.js";
 
 const BLOCK = 32;
 const N_SLOTS = 4;
@@ -25,7 +28,7 @@ const N_SLOTS = 4;
 class Board extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    const { wasmBinary } = options.processorOptions;
+    const { wasmBinary, nInstances } = options.processorOptions;
 
     this.ready = false;
     this.queued = [];
@@ -35,9 +38,10 @@ class Board extends AudioWorkletProcessor {
     this.ev = null;
     this.evI = 0;
     this.tempoI = 0;
-    this.gain = new Array(N_SLOTS).fill(0.25); // summing headroom (live default)
+    this.gain = new Array(N_SLOTS).fill(0.25); // per SLOT (live default)
     this.mute = new Array(N_SLOTS).fill(false);
-    this.views = []; // per slot: {l, r} into its instance's scene lanes
+    this.laneSlots = []; // per lane: which slot's gain/mute/patch it wears
+    this.views = []; // per lane: {l, r} into its instance's scene lanes
     // riding limiter state (patchboard._limit, rates rescaled from its
     // 4096-frame chunk to the 128-frame quantum: 0.94^(128/4096),
     // 1.02^(128/4096))
@@ -58,7 +62,7 @@ class Board extends AudioWorkletProcessor {
         this.mod = mod;
         this.synths = [];
         this.scenePtrs = [];
-        for (let i = 0; i < N_SLOTS / 2; i++) {
+        for (let i = 0; i < nInstances; i++) {
           const s = new mod.SurgeWasm(sampleRate, 128);
           if (!s.ok()) throw new Error(s.initError());
           this.synths.push(s);
@@ -84,6 +88,7 @@ class Board extends AudioWorkletProcessor {
       case "score":
         this.allOff();
         this.ev = msg;
+        this.laneSlots = msg.laneSlots;
         this.cursor = 0;
         this.evI = 0;
         this.tempoI = 0;
@@ -152,19 +157,26 @@ class Board extends AudioWorkletProcessor {
       const bpm = this.ev.tempoBpm[ti - 1];
       for (const s of this.synths) s.setTempo(bpm);
     }
+    // chase: re-strike what should already be sounding at the target
+    // (their note-offs all lie at or beyond evI, so they end naturally)
+    for (const h of heldAt(this.ev, frame)) {
+      const s = this.synths[h.lane >> 1];
+      if (s) s.noteOn(h.lane & 1, h.key, h.vel);
+    }
     this.ended = false;
     this.postPos();
   }
 
   refreshViews() {
     const heap = this.mod.HEAPF32;
-    for (let slot = 0; slot < N_SLOTS; slot++) {
-      if (!this.views[slot] || this.views[slot].l.buffer !== heap.buffer) {
-        const base = this.scenePtrs[slot >> 1];
-        const lane = (slot & 1) * 2; // [A_L][A_R][B_L][B_R]
-        this.views[slot] = {
-          l: new Float32Array(heap.buffer, base + lane * this.maxFrames * 4, BLOCK),
-          r: new Float32Array(heap.buffer, base + (lane + 1) * this.maxFrames * 4, BLOCK),
+    const n = this.synths.length * 2;
+    for (let lane = 0; lane < n; lane++) {
+      if (!this.views[lane] || this.views[lane].l.buffer !== heap.buffer) {
+        const base = this.scenePtrs[lane >> 1];
+        const off = (lane & 1) * 2; // [A_L][A_R][B_L][B_R]
+        this.views[lane] = {
+          l: new Float32Array(heap.buffer, base + off * this.maxFrames * 4, BLOCK),
+          r: new Float32Array(heap.buffer, base + (off + 1) * this.maxFrames * 4, BLOCK),
         };
       }
     }
@@ -201,7 +213,7 @@ class Board extends AudioWorkletProcessor {
 
         while (this.evI < frames.length && frames[this.evI] < blockEnd) {
           const i = this.evI++;
-          const s = this.synths[chans[i] >> 1];
+          const s = this.synths[chans[i] >> 1]; // lane -> instance
           const scene = chans[i] & 1; // MIDI channel selects the scene
           if (!s) continue;
           if (kinds[i] === 1) s.noteOn(scene, a[i], b[i]);
@@ -216,15 +228,16 @@ class Board extends AudioWorkletProcessor {
           for (const s of this.synths) s.setTempo(bpm);
         }
 
-        // muted voices still render (their scenes keep evolving, like the
+        // muted lanes still render (their scenes keep evolving, like the
         // live board, whose mute is applied at the mix) — they just don't sum
         for (const s of this.synths) s.renderScenes(BLOCK);
         this.refreshViews();
-        for (let slot = 0; slot < N_SLOTS; slot++) {
-          if (this.mute[slot]) continue;
+        for (let lane = 0; lane < this.laneSlots.length; lane++) {
+          const slot = this.laneSlots[lane];
+          if (this.mute[slot] || !this.views[lane]) continue;
           const g = this.gain[slot];
           if (g <= 0) continue;
-          const { l, r } = this.views[slot];
+          const { l, r } = this.views[lane];
           for (let i = 0; i < BLOCK; i++) {
             L[done + i] += l[i] * g;
             R[done + i] += r[i] * g;

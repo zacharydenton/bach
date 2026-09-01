@@ -10,7 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SLOTS, slotMap, resolveSlots, calFor, buildEvents,
+  SLOTS, slotMap, resolveSlots, calFor, buildEvents, heldAt,
   whyIndex, whysAt, pieceTitle, BLOCK,
 } from "./routing.js";
 
@@ -37,9 +37,12 @@ test("more channels than slots spread contiguously by rank", () => {
   const perf = {
     tracks: [[0, 1, 2, 3, 4, 5].map((c) => note(c, 0, 1, { pitch: 40 + c * 8 }))],
   };
-  const { chToSlot, slotChannels } = slotMap(perf);
+  const { chToSlot, chToLane, laneSlots, slotChannels } = slotMap(perf);
   assert.deepEqual(slotChannels, [[0], [1, 2], [3, 4], [5]]);
   assert.equal(chToSlot[2], 1);
+  // lanes are the register ranks: each keeps its own synth voice pool
+  assert.deepEqual(chToLane, { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 });
+  assert.deepEqual(laneSlots, [0, 1, 1, 2, 2, 3]);
 });
 
 test("fewer channels than slots leave slots tacet; a solo takes the top", () => {
@@ -96,37 +99,59 @@ test("calibration matches by bank tail and shaves half the release", () => {
   const cal = { "/mac/paths/Leads/Good.fxp": { attackS: 0.01, releaseS: 0.4 } };
   const slotUrls = ["data/patches/Leads/Good.fxp", "(init)", "(init)", "(init)"];
   const perf = { tracks: [[note(0, 0.0, 1.0)]] };
-  const ev = buildEvents(perf, SR, { 0: 0 }, slotUrls, cal, true);
+  const ev = buildEvents(perf, SR, { 0: 0 }, { 0: 0 }, slotUrls, cal, true);
   const offs = [...ev.frames].filter((_, i) => ev.kinds[i] === 2);
   assert.equal(offs[0], Math.floor(0.8 * SR)); // 1.0 - 0.4/2
   // a hand-edited entry without releaseS is a no-op, not a crash
-  const ev2 = buildEvents(perf, SR, { 0: 0 }, slotUrls,
+  const ev2 = buildEvents(perf, SR, { 0: 0 }, { 0: 0 }, slotUrls,
     { "/mac/paths/Leads/Good.fxp": { attackS: 0.01 } }, true);
   assert.equal([...ev2.frames].filter((_, i) => ev2.kinds[i] === 2)[0], SR);
   assert.equal(calFor({}, "(init)"), null);
 });
 
-test("events land on slots; same-frame order off<bend<on; scl drops bends", () => {
+test("events land on LANES; same-frame order off<bend<on; scl drops bends", () => {
   const perf = {
     tracks: [[note(5, 0.0, 0.5, { pitch: 60 }),
       note(5, 0.5, 0.5, { pitch: 62, bend: 8000 })]],
   };
-  const map = { 5: 2 };
-  const ev = buildEvents(perf, SR, map, [], {}, false);
-  assert.ok([...ev.chans].every((c) => c === 2));
+  const ev = buildEvents(perf, SR, { 5: 2 }, { 5: 4 }, [], {}, false);
+  assert.ok([...ev.chans].every((c) => c === 4)); // the lane, not the slot
   const at = Math.floor(0.5 * SR);
   const idx = [...ev.frames].map((f, i) => [f, ev.kinds[i]])
     .filter(([f]) => f === at).map(([, k]) => k);
   assert.deepEqual(idx, [2, 0, 1]); // off, then bend, then on
-  const scl = buildEvents(perf, SR, map, [], {}, true);
+  const scl = buildEvents(perf, SR, { 5: 2 }, { 5: 4 }, [], {}, true);
   assert.ok(![...scl.kinds].includes(0));
 });
 
 test("loop length runs out endS and is BLOCK-aligned", () => {
   const perf = { tracks: [[note(0, 0.0, 1.0)]], endS: 5.0 };
-  const ev = buildEvents(perf, SR, { 0: 0 }, [], {}, true);
+  const ev = buildEvents(perf, SR, { 0: 0 }, { 0: 0 }, [], {}, true);
   assert.equal(ev.loopFrames % BLOCK, 0);
   assert.ok(ev.loopFrames >= 7.0 * SR); // endS + 2 s ring-out
+});
+
+test("heldAt finds the notes sounding across a seek point", () => {
+  // lane 0: a long pedal under two short notes on lane 1; seek into the
+  // second short note — the pedal AND that note should be re-struck
+  const perf = {
+    tracks: [
+      [note(0, 0.0, 4.0, { pitch: 36, vel: 90 })],
+      [note(1, 0.0, 1.0, { pitch: 60 }), note(1, 2.0, 1.0, { pitch: 62 })],
+    ],
+  };
+  const ev = buildEvents(perf, SR, { 0: 0, 1: 3 }, { 0: 0, 1: 1 }, [], {}, true);
+  const held = heldAt(ev, Math.floor(2.5 * SR))
+    .sort((x, y) => x.lane - y.lane);
+  assert.deepEqual(held, [
+    { lane: 0, key: 36, vel: 90 },
+    { lane: 1, key: 62, vel: 100 },
+  ]);
+  // between the two short notes only the pedal sounds
+  assert.deepEqual(heldAt(ev, Math.floor(1.5 * SR)),
+    [{ lane: 0, key: 36, vel: 90 }]);
+  // at frame 0 nothing has been struck yet
+  assert.deepEqual(heldAt(ev, 0), []);
 });
 
 test("whysAt returns sounding rules, capped at 16", () => {

@@ -112,27 +112,40 @@ def bake_wasm(surge_dir, engine_dir, emscripten_bin):
           f"({os.path.getsize(wasm) // 1024} KB wasm)")
 
 
-def bake_perf(perf_dir, data_dir, jobs=None):
+def bake_perf(perf_dir, data_dir):
+    # build into a clean staging directory and swap it in, so a re-bake
+    # never inherits performances the source no longer produces
     out = os.path.join(data_dir, "perf")
-    os.makedirs(out, exist_ok=True)
+    stage = out + ".staging"
+    if os.path.isdir(stage):
+        shutil.rmtree(stage)
+    os.makedirs(stage)
     if perf_dir:
         n = 0
         for f in sorted(os.listdir(perf_dir)):
             if f.endswith(".json") or f.endswith(".scl"):
-                shutil.copy2(os.path.join(perf_dir, f), os.path.join(out, f))
+                shutil.copy2(os.path.join(perf_dir, f),
+                             os.path.join(stage, f))
                 n += 1
         print(f"perf: copied {n} files from {perf_dir}")
     else:
         # house rule: the committed board regenerates from HEAD
         subprocess.run(
             ["stack", "exec", "otb", "--", "album",
-             "corpus/bach-wtc/kern", out], cwd=ROOT, check=True)
+             "corpus/bach-wtc/kern", stage], cwd=ROOT, check=True)
+        for f in os.listdir(stage):  # the album's .mid siblings: not served
+            if f.endswith(".mid"):
+                os.remove(os.path.join(stage, f))
         print("perf: regenerated via otb album")
-    scl = os.path.join(out, "w3.scl")
-    if os.path.isfile(scl):
-        shutil.copy2(scl, os.path.join(data_dir, "w3.scl"))
-    else:
-        sys.exit(f"no w3.scl landed in {out}")
+    scl = os.path.join(stage, "w3.scl")
+    if not os.path.isfile(scl):
+        shutil.rmtree(stage)
+        sys.exit(f"no w3.scl landed in {stage}")
+    if os.path.isdir(out):
+        shutil.rmtree(out)
+    os.replace(stage, out)
+    shutil.copy2(os.path.join(out, "w3.scl"),
+                 os.path.join(data_dir, "w3.scl"))
 
 
 def bake_patches(data_dir):

@@ -13,6 +13,12 @@ import {
   whyIndex, whysAt, pieceTitle,
 } from "./routing.js";
 
+// async guards: fetches resolve in any order, so every load carries a
+// generation and only the latest generation is allowed to take effect
+let pieceGen = 0;
+const instGen = {};
+const lastShipped = {};
+
 let MANIFEST, CASTINGS, CAL, CATS;
 let ctx, node, SR;
 let INIT_BYTES; // Init Saw — what "(init)" loads as a scene partner
@@ -49,8 +55,9 @@ async function init() {
   $("title").textContent = t.main;
   $("idx").textContent = `${t.bwv ? t.bwv + " · " : ""}1 / ${MANIFEST.pieces.length}`;
   $("stats").textContent =
-    `${MANIFEST.pieces.length} pieces baked · four voices on two Surge` +
-    ` synths will render in this tab — press Start`;
+    `${MANIFEST.pieces.length} pieces baked · four voices on ` +
+    `${Math.ceil(MANIFEST.nInstances / 2)} Surge synths` +
+    ` will render in this tab — press Start`;
   renderRig();
 
   $("start").addEventListener("click", start);
@@ -90,7 +97,11 @@ async function start() {
       numberOfInputs: 0,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { wasmBinary },
+      // one scene per lane: two lanes per instance
+      processorOptions: {
+        wasmBinary,
+        nInstances: Math.ceil(MANIFEST.nInstances / 2),
+      },
     });
     const ready = new Promise((res, rej) => {
       node.port.onmessage = (e) => {
@@ -132,32 +143,37 @@ function onMsg(d) {
 }
 
 async function loadPiece(idx) {
+  const gen = ++pieceGen;
   const p = MANIFEST.pieces[idx];
   node.port.postMessage({ type: "pause" });
   const perf = await (await fetch(encUrl(p.url))).json();
-  const { chToSlot, slotChannels } = slotMap(perf);
+  if (gen !== pieceGen) return; // a newer navigation superseded this one
+  const { chToSlot, chToLane, laneSlots, slotChannels } = slotMap(perf);
 
   const eff = resolveSlots(CASTINGS, p.name, slotChannels, slotPatch,
     castState);
-  const dirty = new Set();
-  for (let s = 0; s < SLOTS.length; s++) {
-    if (eff[s] !== slotPatch[s]) {
-      slotPatch[s] = eff[s];
-      dirty.add(s >> 1);
-    }
+  for (let s = 0; s < SLOTS.length; s++) slotPatch[s] = eff[s];
+
+  // every instance whose (sceneA, sceneB) pair changes — piece changes
+  // reassign lanes to slots, so this is not just "whose patch changed"
+  const ships = [];
+  for (let inst = 0; inst < Math.ceil(laneSlots.length / 2); inst++) {
+    ships.push(shipInstance(inst, laneSlots));
   }
-  for (const inst of dirty) await shipInstance(inst);
+  await Promise.all(ships);
+  if (gen !== pieceGen) return;
 
   // calibration compensation sees the patches that will play
-  const score = buildEvents(perf, SR, chToSlot, eff, CAL, true);
+  const score = buildEvents(perf, SR, chToSlot, chToLane, eff, CAL, true);
   PIECE = {
-    idx, name: p.name, chToSlot, slotChannels,
+    idx, name: p.name, chToSlot, laneSlots, slotChannels,
     whyIdx: whyIndex(perf), loopFrames: score.loopFrames,
   };
-  node.port.postMessage({ type: "score", ...score }, [
+  const laneSlotArr = Int8Array.from(laneSlots);
+  node.port.postMessage({ type: "score", ...score, laneSlots: laneSlotArr }, [
     score.frames.buffer, score.kinds.buffer, score.chans.buffer,
     score.a.buffer, score.b.buffer,
-    score.tempoFrames.buffer, score.tempoBpm.buffer,
+    score.tempoFrames.buffer, score.tempoBpm.buffer, laneSlotArr.buffer,
   ]);
   for (let s = 0; s < SLOTS.length; s++) {
     node.port.postMessage({ type: "gain", ch: s, v: slotGain[s] });
@@ -179,13 +195,22 @@ async function patchBytes(url) {
   return bytes;
 }
 
-// The scene merge is a whole-patch operation, so an instance's two voices
-// always ship together: slot 2i as scene A, slot 2i+1 as scene B.
-async function shipInstance(inst) {
+// The scene merge is a whole-patch operation, so an instance's two LANES
+// always ship together: lane 2i as scene A, lane 2i+1 as scene B, each
+// wearing its slot's patch. Guarded by a per-instance generation so a
+// slow fetch can never overwrite a newer selection; identical pairs are
+// skipped so piece changes only reload what actually changed.
+async function shipInstance(inst, laneSlots) {
   if (!node) return;
-  const urlA = slotPatch[inst * 2];
-  const urlB = slotPatch[inst * 2 + 1];
+  const urlOf = (lane) =>
+    lane < laneSlots.length ? slotPatch[laneSlots[lane]] : "(init)";
+  const urlA = urlOf(inst * 2);
+  const urlB = urlOf(inst * 2 + 1);
+  const pair = urlA + "\n" + urlB;
+  if (lastShipped[inst] === pair) return;
+  const gen = (instGen[inst] = (instGen[inst] || 0) + 1);
   const [bytesA, bytesB] = await Promise.all([patchBytes(urlA), patchBytes(urlB)]);
+  if (gen !== instGen[inst]) return; // a newer pair is on its way
   const copyA = new Uint8Array(bytesA.slice(0)); // transfer must not eat the cache
   const copyB = new Uint8Array(bytesB.slice(0));
   node.port.postMessage(
@@ -193,6 +218,7 @@ async function shipInstance(inst) {
       bytesB: copyB, nameB: patchDisplay(urlB) },
     [copyA.buffer, copyB.buffer],
   );
+  lastShipped[inst] = pair;
 }
 
 // ---- transport -------------------------------------------------------------
@@ -307,7 +333,14 @@ function refreshRig() {
 
 async function setPatch(s, url) {
   slotPatch[s] = url;
-  await shipInstance(s >> 1);
+  if (PIECE) {
+    // every instance carrying one of this slot's lanes
+    const insts = new Set();
+    PIECE.laneSlots.forEach((slot, lane) => {
+      if (slot === s) insts.add(lane >> 1);
+    });
+    await Promise.all([...insts].map((i) => shipInstance(i, PIECE.laneSlots)));
+  }
   refreshRig();
 }
 
@@ -332,7 +365,7 @@ function renderStats() {
   const bits = [
     `peak ${STAT.peak.toFixed(3)}`,
     `engine load ${(STAT.load * 100).toFixed(0)}%`,
-    `${SLOTS.length} voices · 2 synths`,
+    `${SLOTS.length} voices · ${Math.ceil(MANIFEST.nInstances / 2)} synths`,
   ];
   $("stats").innerHTML = bits.join(" · ") +
     (STAT.riding ? ' · <span class=clip>limiter riding</span>' : "");

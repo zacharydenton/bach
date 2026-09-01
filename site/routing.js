@@ -14,6 +14,13 @@ export const SLOTS = ["bass", "tenor", "alto", "soprano"];
 // bass-first, but the notes are the ground truth) and spread the ranks
 // across the four slots. A single-channel piece takes the TOP slot —
 // the solo carries the lead, the live board's rule.
+//
+// Each ranked channel is also a LANE: lanes keep their own synth voice
+// pool underneath the four slots (lane r = instance r>>1, scene r&1 in
+// the worklet), because lanes that merely share a UI slot must not share
+// polyphony — a mono preset would collapse a three-lane slot to one
+// sounding note, and overlapping same-pitch notes would release each
+// other's voices.
 export function slotMap(perf) {
   const sum = {};
   const cnt = {};
@@ -27,13 +34,17 @@ export function slotMap(perf) {
     (a, b) => sum[a] / cnt[a] - sum[b] / cnt[b] || a - b);
   const n = chans.length;
   const chToSlot = {};
+  const chToLane = {};
   const slotChannels = [[], [], [], []];
+  const laneSlots = [];
   chans.forEach((ch, r) => {
     const s = n === 1 ? 3 : Math.round((r * 3) / (n - 1));
     chToSlot[ch] = s;
+    chToLane[ch] = r;
+    laneSlots.push(s);
     slotChannels[s].push(ch);
   });
-  return { chToSlot, slotChannels };
+  return { chToSlot, chToLane, laneSlots, slotChannels };
 }
 
 // Effective patch per slot for a piece about to load: current slot
@@ -79,17 +90,18 @@ export function calFor(calibration, url) {
 export const BLOCK = 32;
 
 // The event list the worklet plays: patchboard.load_piece's build, with
-// each note routed to its register slot and packed into transferable
-// typed arrays. kind 0=bend 1=on 2=off; same-frame order off < bend < on.
-// `sclActive` drops per-note bends (native SCL tuning applies the
-// temperament; bends would tune twice) — which is also what lets several
-// lanes share one synth instance without fighting over the bend wheel.
-export function buildEvents(perf, sr, chToSlot, slotUrls, calibration,
-                            sclActive) {
+// each note routed to its LANE (per-lane synth state; the slot only
+// chooses patch/gain/mute) and packed into transferable typed arrays.
+// kind 0=bend 1=on 2=off; same-frame order off < bend < on. `sclActive`
+// drops per-note bends (native SCL tuning applies the temperament; bends
+// would tune twice).
+export function buildEvents(perf, sr, chToSlot, chToLane, slotUrls,
+                            calibration, sclActive) {
   const evs = [];
   let end = 0;
   for (const tr of perf.tracks) {
     for (const n of tr) {
+      const lane = chToLane[n.ch] ?? 0;
       const slot = chToSlot[n.ch] ?? 3;
       const on = Math.floor(n.onS * sr);
       // timbre-aware articulation: subtract part of the slot's measured
@@ -99,9 +111,9 @@ export function buildEvents(perf, sr, chToSlot, slotUrls, calibration,
       const durS = Math.max(n.durS * 0.5, n.durS - comp);
       const off = Math.max(on + 1, Math.floor((n.onS + durS) * sr));
       end = Math.max(end, n.onS + n.durS);
-      if (!sclActive) evs.push({ frame: on, kind: 0, ch: slot, a: n.bend, b: 0 });
-      evs.push({ frame: on, kind: 1, ch: slot, a: n.pitch, b: n.vel });
-      evs.push({ frame: off, kind: 2, ch: slot, a: n.pitch, b: 0 });
+      if (!sclActive) evs.push({ frame: on, kind: 0, ch: lane, a: n.bend, b: 0 });
+      evs.push({ frame: on, kind: 1, ch: lane, a: n.pitch, b: n.vel });
+      evs.push({ frame: off, kind: 2, ch: lane, a: n.pitch, b: 0 });
     }
   }
   const KO = { 2: 0, 0: 1, 1: 2 };
@@ -127,6 +139,22 @@ export function buildEvents(perf, sr, chToSlot, slotUrls, calibration,
     tempoBpm: Float32Array.from(tempo, (t) => t.bpm),
     loopFrames,
   };
+}
+
+// Notes sounding across `frame`: walk the event stream up to the seek
+// point tracking held (lane, key) pairs, so a seek can re-strike what
+// should already be ringing instead of landing in silence until the
+// next attack. Envelopes restart — a re-struck note is an honest
+// approximation, not a reconstruction.
+export function heldAt(score, frame) {
+  const { frames, kinds, chans, a, b } = score;
+  const held = new Map();
+  for (let i = 0; i < frames.length && frames[i] < frame; i++) {
+    const key = chans[i] * 128 + a[i];
+    if (kinds[i] === 1) held.set(key, { lane: chans[i], key: a[i], vel: b[i] });
+    else if (kinds[i] === 2) held.delete(key);
+  }
+  return [...held.values()];
 }
 
 // The executable edition's subtitle track: every note's rule citations,
