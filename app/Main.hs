@@ -23,7 +23,8 @@ import OTB.Config
   , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
 import OTB.Config qualified
 import OTB.Edition (editionsFor, readKernSource)
-import OTB.Eval (PerfR (..), loadDirAnnotations, scorePerformances)
+import OTB.Eval
+  (PerfR (..), loadDirAnnotations, pearson, scorePerformances)
 import OTB.Bridge qualified as B
 import OTB.Emit.Midi (renderSmf, writeSmf)
 import OTB.Generate (generateScore)
@@ -56,7 +57,8 @@ import OTB.Score (Score (..), ScoreNote (..), Voice (..))
 import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
 import OTB.Units (Bpm (..), WholeNotes (..))
 import Options.Applicative
-import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory)
+import System.Directory
+  (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, listDirectory)
 import System.Exit (die)
 import System.FilePath (takeBaseName, (</>))
 
@@ -78,7 +80,7 @@ data Cmd
   = Compile Common FilePath (Maybe FilePath) (Maybe FilePath) String
   | Explain Common (Maybe Int) (Maybe (Int, Int))
   | Album FilePath FilePath FilePath TempoOpt String (Maybe FilePath)
-  | Eval FilePath FilePath TempoOpt String (Maybe FilePath) [FilePath] [String]
+  | Eval FilePath FilePath TempoOpt String (Maybe FilePath) [FilePath] [String] Bool
   | BridgeDump FilePath FilePath FilePath
   | Stats FilePath FilePath Double
   | Ground String Int Double String FilePath (Maybe FilePath) (Maybe FilePath)
@@ -153,6 +155,9 @@ evalCmd =
                      <> "corpus/asap and corpus/maestro-wtc)")))
     <*> many (strOption (long "piece" <> metavar "NAME"
           <> help "restrict to these pieces (repeatable)"))
+    <*> switch (long "velocity"
+          <> help ("note-level velocity r through the bridge instead "
+                     <> "of beat-level tempo r"))
 
 albumCmd :: Parser Cmd
 albumCmd =
@@ -226,8 +231,8 @@ main = do
     Compile com out mscl mjson tgt -> runCompile com out mscl mjson tgt
     Explain com mbar mnote -> runExplain com mbar mnote
     Album corpus outDir cfgPath tempo temp eds -> runAlbum corpus outDir cfgPath tempo temp eds
-    Eval corpus cfgPath tempo temp eds roots ps ->
-      runEval corpus cfgPath tempo temp eds roots ps
+    Eval corpus cfgPath tempo temp eds roots ps vel ->
+      runEval corpus cfgPath tempo temp eds roots ps vel
     BridgeDump krn match cfgPath -> runBridgeDump krn match cfgPath
     Stats corpus cfgPath tempo -> runStats corpus cfgPath tempo
     Ground bass nvar tempo temp out mscl mjson ->
@@ -480,8 +485,8 @@ runAlbum corpus outDir cfgPath tempo temp meds = do
 -- (piece, performer, r, beats) plus a grand-mean footer — the Python
 -- rigs parse it instead of orchestrating one subprocess per piece.
 runEval :: FilePath -> FilePath -> TempoOpt -> String -> Maybe FilePath
-        -> [FilePath] -> [String] -> IO ()
-runEval corpus cfgPath tempo temp meds roots0 wanted = do
+        -> [FilePath] -> [String] -> Bool -> IO ()
+runEval corpus cfgPath tempo temp meds roots0 wanted velocity = do
   cfg <- loadCfg cfgPath
   let adaptive = temp == "adaptive"
   table <- resolveTemperament (if adaptive then "werckmeister3" else temp)
@@ -498,34 +503,68 @@ runEval corpus cfgPath tempo temp meds roots0 wanted = do
       Nothing -> pure []
       Just sub -> do
         anns <- mapM (\r -> loadDirAnnotations (r </> sub)) roots
-        if all (== Nothing) anns
+        matches <- fmap concat . forM roots $ \r -> do
+          let d = r </> sub
+          ok <- doesDirectoryExist d
+          if not ok then pure [] else do
+            fs <- sort <$> listDirectory d
+            forM [f | f <- fs, ".match" `isSuffixOf` f] $ \f -> do
+              t <- TIO.readFile (d </> f)
+              pure (take (length f - 6) f, t)
+        if all (== Nothing) anns && null matches
           then pure []
           else do
             src <- readKernSource eds (corpus </> piece <> ".krn")
-            pure [(piece, src, [a | Just a <- anns])]
-  let one (piece, src, anns) =
+            pure [(piece, src, [a | Just a <- anns], matches)]
+  let pearsonD xs ys = maybe (0 / 0) id (pearson xs ys)
+      velRs p matches =
+        let irn = B.loadIrNotes p
+         in [ (perf, r, length rows)
+            | (perf, mt) <- matches
+            , let (rows, _) = B.bridge irn (B.parseMatch mt)
+            , length rows >= 30
+            , let r = pearsonD [fromIntegral (B.brOtbVel x) | x <- rows]
+                              [fromIntegral (B.brHumanVel x) | x <- rows]
+            ]
+      one (piece, src, anns, matches) =
         let r = do
               s0 <- parseKern (tempoFallback tempo) src
               let s1 = applyTempoOpt tempo s0
                   s = maybe s1 (\b -> s1 {scTempo = Bpm b})
                         (pieceTempo cfg (T.pack piece))
               p <- perform (mkInterp cfg table adaptive piece) s
-              pure (concatMap (scorePerformances (perfTempoMap p)) anns)
-         in ( piece
-            , either (const []) id r
-            )
-      results = parMap rdeepseq
-        (\i -> let (p, rs) = one i
-                in (p, [(prPerformer x, prR x, prBeats x) | x <- rs]))
-        inputs
+              pure $ if velocity
+                then velRs p matches
+                else [ (prPerformer x, prR x, prBeats x)
+                     | x <- concatMap
+                         (scorePerformances (perfTempoMap p)) anns ]
+         in (piece, either (const []) id r)
+      results = parMap rdeepseq one inputs
   forM_ results $ \(piece, rs) ->
     forM_ rs $ \(perf, r, nb) ->
       putStrLn (piece <> "\t" <> perf <> "\t" <> show r
                   <> "\t" <> show nb)
-  let allRs = [r | (_, rs) <- results, (_, r, _) <- rs, not (isNaN r)]
-  putStrLn ("# grand mean r = "
-              <> show (sum allRs / fromIntegral (max 1 (length allRs)))
-              <> " over " <> show (length allRs) <> " performances")
+  if velocity
+    then do
+      let medianD ms =
+            let n = length ms
+             in if even n
+                  then (ms !! (n `div` 2 - 1) + ms !! (n `div` 2)) / 2
+                  else ms !! (n `div` 2)
+          medians =
+            [ medianD ms
+            | (_, rs) <- results
+            , let ms = sort [r | (_, r, _) <- rs, not (isNaN r)]
+            , not (null ms) ]
+      putStrLn ("# " <> show (length medians)
+                  <> " pieces, grand mean velocity r = "
+                  <> show (sum medians
+                             / fromIntegral (max 1 (length medians))))
+    else do
+      let allRs = [r | (_, rs) <- results, (_, r, _) <- rs, not (isNaN r)]
+      putStrLn ("# grand mean r = "
+                  <> show (sum allRs / fromIntegral (max 1 (length allRs)))
+                  <> " over " <> show (length allRs) <> " performances")
 
 -- | The parity gate for the bridge port: identical invocation of the
 -- Python reference and this dump must produce byte-identical TSV.
