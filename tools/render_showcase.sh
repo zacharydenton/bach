@@ -33,12 +33,13 @@ PYTHONPATH=$SURGEPY_DIR $PY tools/audition.py "$OUT/wtc1p01.json" \
   --scl "$OUT/w3.scl" -o "$OUT/wtc1p01_surge_cast.wav" \
   --patch "$FP/Plucks/Nice Pluck 2.fxp"
 
-# Fugue: the canonical voicing lives in config/casting/wtc1f01.json —
-# the same file the patchboard preloads. One source, two consumers.
+# Fugue: the showcase voicing lives in config/showcase-wtc1f01.json —
+# deliberately OUTSIDE config/casting/, where a per-piece file would
+# stomp the boards' standing rig on every visit to the fugue.
 # A plain $(...) rather than a process substitution: a failure inside
 # < <(...) is invisible to set -e and the fugue would silently render
 # on the init patch.
-CASTING=config/casting/wtc1f01.json
+CASTING=config/showcase-wtc1f01.json
 [ -r "$CASTING" ] || { echo "missing casting file: $ROOT/$CASTING" >&2; exit 1; }
 CAST_LINES=$("$PY" -c "
 import json
