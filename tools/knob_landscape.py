@@ -30,6 +30,7 @@ import argparse
 import concurrent.futures
 import json
 import os
+import hashlib
 import random
 import statistics
 import subprocess
@@ -49,11 +50,8 @@ CONFIG = os.path.join(ROOT, "config", "default.toml")
 FAMILIES = {
     "timing": (ae.KNOB_GRIDS, ae.KNOB_SECTIONS),
 }
-try:
-    import vel_fit as vf
-    FAMILIES["velocity"] = (vf.VEL_KNOB_GRIDS, vf.VEL_KNOB_SECTIONS)
-except ImportError:
-    pass
+import vel_fit as vf
+FAMILIES["velocity"] = (vf.VEL_KNOB_GRIDS, vf.VEL_KNOB_SECTIONS)
 
 
 class Objective:
@@ -74,52 +72,56 @@ class Objective:
         # sections would otherwise mask every global knob under test
         self.base, _sha = pf.prefit_config(tmp)
 
-    def _piece_rs(self, knobs, piece):
-        key = (tuple(sorted(knobs.items())), piece)
-        if key in self.cache:
-            return self.cache[key]
-        cfg = (ae.with_knobs(self.base, knobs, self.tmp,
-                             sections=self.sections)
-               if knobs else self.base)
-        try:
-            ir = ae.compile_ir(self.otb, piece, KERN, self.tmp, cfg)
-        except RuntimeError:
-            self.cache[key] = []
-            return []
+    def _piece_rs(self, key, cfg, piece):
+        """Per-piece statistic. Compile failures RAISE — a bad config
+        must stop the search, not bias the objective as a silent empty
+        piece. Timing: per-performance r list (flat-mean overall, the
+        fit_defaults objective). Velocity: vel_fit.piece_r's exact
+        statistic — ornaments INCLUDED, median across performers."""
+        ck = (key, piece)
+        if ck in self.cache:
+            return self.cache[ck]
+        ir = ae.compile_ir(self.otb, piece, KERN, self.tmp, cfg)
         if self.family == "timing":
             rows = ae.eval_piece(ir, os.path.join(ROOT, "corpus", "asap"),
                                  piece) or []
-            rs = [r for _, r in rows if r == r]
+            out = [r for _, r in rows if r == r]
         else:
-            irn = na.load_ir_notes(ir)
-            rs = []
-            for _perf, mpath in na.piece_performances(piece):
-                rows, _ = na.bridge(irn, na.parse_match(mpath))
-                rows = [r for r in rows if not r["is_orn"]]
-                if len(rows) >= 30:
-                    r = ae.pearson([r["otb_vel"] for r in rows],
-                                   [r["human_vel"] for r in rows])
-                    if r == r:
-                        rs.append(r)
-        self.cache[key] = rs
-        return rs
+            med, n = vf.piece_r(ir, piece)
+            out = [med] if n and med == med else []
+        self.cache[ck] = out
+        return out
 
     def __call__(self, knobs, pieces=None):
         pieces = pieces or self.pieces
+        key = tuple(sorted(knobs.items()))
+        # the candidate config is written ONCE, before any worker runs:
+        # per-worker writes of the same knob-hashed filename raced, and
+        # a torn read became a silently-cached empty piece
+        cfg = (ae.with_knobs(self.base, knobs, self.tmp,
+                             sections=self.sections)
+               if knobs else self.base)
         with concurrent.futures.ThreadPoolExecutor(self.jobs) as ex:
             all_rs = list(ex.map(
-                lambda p: self._piece_rs(knobs, p), pieces))
-        flat = [r for rs in all_rs for r in rs]
+                lambda p: self._piece_rs(key, cfg, p), pieces))
+        if self.family == "timing":
+            flat = [r for rs in all_rs for r in rs]
+        else:
+            flat = [rs[0] for rs in all_rs if rs]  # one median per piece
         return statistics.mean(flat) if flat else None
 
 
-def descend(obj, grids, rng, init):
-    """Randomized-order two-sweep coordinate descent from `init`."""
+def descend(obj, grids, rng, init, max_sweeps=8):
+    """Randomized-order coordinate descent to a FIXPOINT: sweeps until
+    one full pass improves nothing (capped), so observed spread across
+    starts is landscape structure, not incomplete convergence."""
     current = dict(init)
     best = obj(current)
     if best is None:
-        return None, None
-    for _sweep in range(2):
+        return None, None, 0
+    sweeps = 0
+    for sweeps in range(1, max_sweeps + 1):
+        improved = False
         order = list(grids)
         rng.shuffle(order)
         for k in order:
@@ -132,7 +134,10 @@ def descend(obj, grids, rng, init):
                 if r is not None and r > best + 1e-4:
                     best = r
                     current = trial
-    return current, best
+                    improved = True
+        if not improved:
+            break
+    return current, best, sweeps
 
 
 def main():
@@ -165,23 +170,38 @@ def main():
 
     with tempfile.TemporaryDirectory() as tmp:
         obj = Objective(otb, args.family, train, tmp, args.jobs)
+        # the CONFIG values of every knob (compiler defaults for the
+        # two that live only in code): starts are fully materialized
+        # dicts, so a missing key can never masquerade as zero
+        CODE_DEFAULTS = {"novelty_brake": 0.0, "mid_drift": 0.0}
+        cfg_vals = pf.base_values(obj.base)
+        base_knobs = {k: cfg_vals.get(k, CODE_DEFAULTS.get(k, 0.0))
+                      for k in grids}
+        fp = hashlib.sha256(
+            (repr(sorted(grids.items())) + repr(sorted(base_knobs.items()))
+             + args.family + str(args.seed)).encode()).hexdigest()
+        if state.get("_meta", {}).get("fingerprint") not in (None, fp):
+            print("landscape inputs changed — starting fresh")
+            state = {"finals": []}
+        state["_meta"] = {"fingerprint": fp}
         while len(state["finals"]) < args.starts:
             i = len(state["finals"])
             rng = random.Random(args.seed * 1000 + i)
-            init = ({} if i == 0  # start 0 = the committed defaults
+            init = (dict(base_knobs) if i == 0  # start 0 = committed
                     else {k: rng.choice(g) for k, g in grids.items()})
-            final, train_r = descend(obj, grids, rng, init)
+            final, train_r, sweeps = descend(obj, grids, rng, init)
             if final is None:
                 continue
             test_r = obj(final, test)
             state["finals"].append({
                 "start": i, "init": init, "final": final,
+                "sweeps": sweeps,
                 "train_r": round(train_r, 4),
                 "test_r": round(test_r, 4) if test_r else None,
             })
             json.dump(state, open(state_path, "w"), indent=1)
             print(f"start {i}: train {train_r:.4f} "
-                  f"test {test_r:.4f} final {final}")
+                  f"test {test_r:.4f} sweeps {sweeps} final {final}")
 
     # ---- report ----
     finals = state["finals"]
@@ -193,8 +213,8 @@ def main():
           f"..{max(f['test_r'] for f in elite):.4f})")
     print(f"\n{'knob':16} zero-rate(all/elite)  elite values")
     for k in grids:
-        allv = [f["final"].get(k, 0.0) for f in finals]
-        ev = [f["final"].get(k, 0.0) for f in elite]
+        allv = [f["final"][k] for f in finals]
+        ev = [f["final"][k] for f in elite]
         z_all = sum(1 for v in allv if v == 0) / len(allv)
         z_el = sum(1 for v in ev if v == 0) / len(ev)
         vals = sorted(set(ev))

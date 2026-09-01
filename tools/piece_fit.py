@@ -52,7 +52,12 @@ import vel_fit as vf  # noqa: E402
 KERN = os.path.join(ROOT, "corpus", "bach-wtc", "kern")
 CONFIG = os.path.join(ROOT, "config", "default.toml")
 STATE = os.path.join(ROOT, "corpus", "piece-fits.json")
-MARK = "# FITTED"
+# the generated-line marker. Deliberately NOT "# FITTED": the global
+# sections' hand-written comments say "# FITTED (was 1.0)" about the
+# 2026-08/09 corpus fits, and an ambiguous marker once made the prefit
+# strip DELETE those global priors — evaluation, fitting and shrinkage
+# ran against three different baselines
+MARK = "# PIECE-FIT"
 
 # knobs a per-piece fit may move, with their global-default fallbacks
 # read from the base config at run time; grids include the global value
@@ -332,8 +337,13 @@ def apply_fits(state, dry_run):
             start = i
     new = list(src)
 
-    # update existing sections in place (bottom-up so spans stay valid)
-    for piece in sorted(sections, reverse=True):
+    # update existing sections in place, bottom-up BY POSITION — the
+    # spans of everything above an edit stay valid; sorting by name
+    # once scattered 23 of 72 pieces' values under their neighbours
+    by_pos = sorted(
+        (p for p in sections if "piece." + p in spans),
+        key=lambda p: -spans["piece." + p][0])
+    for piece in by_pos:
         sec = "piece." + piece
         if sec not in spans:
             continue
@@ -395,12 +405,13 @@ def main():
         pieces = [p for p in pieces if na.piece_performances(p)]
         with tempfile.TemporaryDirectory() as tmp:
             cfg, sha = prefit_config(tmp)
+            fp = run_fingerprint(sha, args.shrink_k)
             meta = state.get("_meta", {})
-            if meta.get("prefit_sha256") not in (None, sha):
-                print("pre-fit config changed since the saved state — "
+            if meta.get("fingerprint") not in (None, fp):
+                print("run inputs changed since the saved state — "
                       "starting fresh")
                 state = {}
-            state["_meta"] = {"prefit_sha256": sha}
+            state["_meta"] = {"fingerprint": fp}
             base = base_values(cfg)
             for piece in pieces:
                 if piece in state and not args.pieces:

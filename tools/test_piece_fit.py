@@ -73,14 +73,14 @@ class Apply(unittest.TestCase):
         self.assertIn("cadence_depth = 0.09 # by ear, veto", out)
         self.assertEqual(out.count("cadence_depth"), 1)
         # tempo (no hand key) IS added to the existing section
-        self.assertIn("tempo = 84.0 # FITTED", out)
+        self.assertIn("tempo = 84.0 " + pf.MARK, out)
 
     def test_new_piece_gets_banner_section(self):
         toml = "[agogics]\nrit_span = 2.0\n"
         out = self.run_apply(toml, Sections.STATE)
         self.assertIn("[piece.wtc1p03]", out)
         self.assertIn("fitted per piece", out)
-        self.assertIn("cadence_depth = 0.04 # FITTED", out)
+        self.assertIn("cadence_depth = 0.04 " + pf.MARK, out)
 
     def test_idempotent_regeneration(self):
         toml = "[agogics]\nrit_span = 2.0\n"
@@ -97,6 +97,46 @@ class BaseValues(unittest.TestCase):
         self.assertIn("cadence_depth", vals)
         self.assertEqual(vals["cadence_depth"], 0.0)  # the global veto
         self.assertIn("vel_highloud", vals)
+
+
+class ApplyOrdering(unittest.TestCase):
+    def test_positional_not_lexical(self):
+        # three sections whose POSITIONAL order disagrees with lexical
+        # order: values must land under their own headers (the lexical
+        # sort once scattered 23 of 72 pieces under their neighbours)
+        state = {}
+        for p in ("wtc1f04", "wtc1f03", "wtc1f05"):
+            state[p] = {
+                "piece": p, "n": 3, "performers": ["a", "b", "c"],
+                "tempo": {"human_median": float(p[-1]) * 10,
+                          "authority": 100.0,
+                          "fitted": float(p[-1]) * 10 + 1},
+            }
+        toml = ("[agogics]\nrit_span = 2.0\n\n"
+                "[piece.wtc1f05]\noverhold = 0.5 # hand\n\n"
+                "[piece.wtc1f03]\ninegal = 0.1 # hand\n\n"
+                "[piece.wtc1f04]\nbase = 0.8 # hand\n")
+        out = Apply().run_apply(toml, state)
+        import re
+        for p, want in (("wtc1f03", "31.0"), ("wtc1f04", "41.0"),
+                        ("wtc1f05", "51.0")):
+            m = re.search(rf"\[piece\.{p}\]([^[]*)", out)
+            self.assertIn(f"tempo = {want}", m.group(1),
+                          f"{p} got: {m.group(1)!r}")
+
+
+class PrefitScope(unittest.TestCase):
+    def test_global_fitted_comments_survive(self):
+        # the hand-written global sections say "# FITTED (was ...)"
+        # about the corpus fits — those lines are PRIORS, not generated
+        # content, and the strip must keep them
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path, _ = pf.prefit_config(tmp)
+            text = open(path).read()
+            self.assertIn("rit_span = 2.0", text)
+            self.assertIn("vel_highloud = 0.8", text)
+            self.assertIn("FITTED (was", text)
 
 
 class Prefit(unittest.TestCase):
