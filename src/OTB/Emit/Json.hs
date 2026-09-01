@@ -52,6 +52,11 @@ renderJson piece (Performance tmap tracks whys cads end) =
             , ("durS", num (offS - onS))
             , ("onWn", num (fromRational onW))
             , ("durWn", num (fromRational durW))
+            -- score-level identity: ornament subnotes and reshaped notes
+            -- keep their notated onset and pitch, so the ASAP note
+            -- bridge can join a performed keystroke back to its snote
+            , ("srcWn", num (let WholeNotes s = pnSrcOn pn in fromRational s))
+            , ("srcPitch", show (pnSrcPitch pn))
             , ("pitch", show (pnPitch pn))
             , ("vel", show (pnVel pn))
             , ("bend", show (pnBend pn))

@@ -215,7 +215,7 @@ KNOB_GRIDS = {
 }
 
 
-def with_knobs(base_config, knobs, tmpdir):
+def with_knobs(base_config, knobs, tmpdir, sections=None):
     # a None would serialize as invalid TOML and kill the whole fit at
     # load time; absent means "keep the config's default", which is
     # what an unfittable knob deserves
@@ -228,7 +228,7 @@ def with_knobs(base_config, knobs, tmpdir):
             out.write("\n")
         by_sec = {}
         for k, v in knobs.items():
-            by_sec.setdefault(KNOB_SECTIONS[k], []).append((k, v))
+            by_sec.setdefault((sections or KNOB_SECTIONS)[k], []).append((k, v))
         for sec, kvs in by_sec.items():
             out.write(f"[{sec}]\n")
             for k, v in kvs:
@@ -236,7 +236,7 @@ def with_knobs(base_config, knobs, tmpdir):
     return path
 
 
-def merge_toml(base, knobs):
+def merge_toml(base, knobs, sections=None):
     """Merge fitted values into the base config's existing tables.
 
     Appending duplicate [table] headers is invalid TOML (the config
@@ -247,7 +247,7 @@ def merge_toml(base, knobs):
     """
     by_sec = {}
     for k, v in knobs.items():
-        by_sec.setdefault(KNOB_SECTIONS[k], {})[k] = v
+        by_sec.setdefault((sections or KNOB_SECTIONS)[k], {})[k] = v
     lines = base.splitlines()
     out = []
     sec = None

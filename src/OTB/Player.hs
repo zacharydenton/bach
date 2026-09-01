@@ -57,6 +57,9 @@ data PerfNote = PerfNote
   , pnSrcOn :: !WholeNotes
     -- ^ notated score onset — bar selection must use this, not 'pnOnset',
     -- which melody lead and jitter have already moved
+  , pnSrcPitch :: !Int
+    -- ^ notated pitch — with 'pnSrcOn', the score-level identity that
+    -- survives ornament realisation (the ASAP note bridge's join key)
   , pnCharge :: !Double
     -- ^ dissonance charge; velocity-blind hardware converts it to agogics
   }
@@ -484,7 +487,8 @@ assemble ip tempo tmap finalOnset melodyVi (floorAt, floorAny)
            in ( ( evFinal ev
                 , PerfNote (max 0 (fromRational t - lead + jit))
                     (fromRational (d * evGate ev * evHold ev))
-                    (evPitch ev) vel bend ch i (evSrcOn ev) (evCharge ev) )
+                    (evPitch ev) vel bend ch i (evSrcOn ev)
+                    (evSrcPitch ev) (evCharge ev) )
               , ((ch, i), ws) )
         showMs v = showD v
         showD v =

@@ -54,7 +54,7 @@ defaultArtParams = ArtParams
   , apStaccato = 0.40
   , apTenuto = 0.95
   , apLegato = 1.00
-  , apRepeated = 0.60
+  , apRepeated = 0.45
   , apCantabile = 0.90
   , apMinGate = 0.10
   }

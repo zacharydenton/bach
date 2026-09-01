@@ -7,7 +7,11 @@ base = 0.78       # détaché: the default speech of a baroque line
 staccato = 0.40
 tenuto = 0.95
 legato = 1.00
-repeated = 0.60   # repeated notes need separation to speak
+repeated = 0.45   # MEASURED (note-level ASAP, 2026-09-01): humans cut
+                  # repeated notes to 0.43 of the IOI against 0.86 for
+                  # détaché — a far deeper relative separation than the
+                  # 0.60 hand value (vel_fit --measure; contrast readout,
+                  # pedal-safe)
 cantabile = 0.90  # stepwise motion at singing values leans legato
 min_gate = 0.10
 
@@ -93,7 +97,11 @@ arch_group = 0.004 # the humans actually take (group arches nearly off —
 arch_bars = 4
 
 [performance]
-lead_ms = 20      # Palmer 1996: the melody anticipates by 20-30 ms
+lead_ms = 2       # MEASURED (note-level ASAP, 2026-09-01): in WTC
+                  # counterpoint the top voice leads by only ~2 ms
+                  # (median -2.1, IQR -10..+7, n=47230). Palmer 1996's
+                  # 20-30 ms is melody-over-accompaniment texture, not
+                  # polyphony — the voices are near-synchronous here
 roll_ms = 12      # final chord rolled bass-upward, per note
 jitter_ms = 3     # KTH noise rules — seeded by piece name: deterministic
 jitter_vel = 2

@@ -17,6 +17,7 @@ import OTB.Interp.Articulation (articulateLane)
 import OTB.Kern.Lexer (lexNoteTok)
 import OTB.Kern.Parser (parseKern)
 import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
+import OTB.Emit.Json (renderJson)
 import OTB.Emit.Midi (renderSmf)
 import OTB.Interp.Agogics
 import OTB.Interp.Dynamics
@@ -722,7 +723,7 @@ review = testGroup "review regressions"
       -- enforceMono can clamp a duration below one tick; at the same tick
       -- the off<on sort order would emit the release BEFORE its own
       -- attack — a stuck note on the default (non-hardware) path
-      let tiny = PerfNote 0 (1 / 16384) 60 96 8192 0 0 0 0
+      let tiny = PerfNote 0 (1 / 16384) 60 96 8192 0 0 0 60 0
           p = Performance [(0, Bpm 120)] [[tiny]] [] [] (1 / 4)
       notes <- either assertFailure pure (readSmf (BL.toStrict (renderSmf p)))
       [(smfPitch n, smfDurQ n > 0) | n <- notes] @?= [(60, True)]
@@ -834,6 +835,14 @@ review = testGroup "review regressions"
       assertBool "still accelerates" (head ds > last ds)
       assertBool ("first/last ratio: " <> show (maximum ds / minimum ds))
         (maximum ds / minimum ds < 2.5)
+  , testCase "IR carries score-level identity (srcWn/srcPitch)" $ do
+      -- the ASAP note bridge joins on the notated onset and pitch;
+      -- both must survive into the JSON seam
+      let n = PerfNote (1 / 8) (1 / 4) 74 96 8192 0 0 (1 / 8) 72 0
+          p = Performance [(0, Bpm 120)] [[n]] [] [] (1 / 2)
+          js = renderJson "t" p
+      assertBool "srcWn present" ("\"srcWn\":0.125" `isInfixOf` js)
+      assertBool "srcPitch present" ("\"srcPitch\":72" `isInfixOf` js)
   , testCase "grace: lexed as a zero-duration Grace-marked note" $ do
       let t' = lexNoteTok "cc#q/"
       ntDur t' @?= 0

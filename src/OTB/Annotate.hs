@@ -91,6 +91,10 @@ data Ev = Ev
   , evChannel :: !Int
   , evIndex :: !Int
   , evSrcOn :: !WholeNotes -- ^ notated onset (explain's bar selector key)
+  , evSrcPitch :: !Int
+    -- ^ notated pitch — with 'evSrcOn', the score-level identity that
+    -- ornament subnotes and reshaped notes keep (the ASAP note bridge
+    -- joins on it)
   , evCharge :: !Double -- ^ dissonance charge — velocity-blind targets
                         -- convert it to agogics downstream
   , evFinal :: !(Maybe Int)
@@ -465,6 +469,7 @@ interpret ip tempo ch (Annotated m0) = snd (go [] 0 m0)
       , evChannel = ch
       , evIndex = i
       , evSrcOn = fst (snSource sn)
+      , evSrcPitch = snd (snSource sn)
       , evCharge = case [c | Dyn (Accent c) <- env] of
           (c : _) -> fromRational c
           [] -> 0
