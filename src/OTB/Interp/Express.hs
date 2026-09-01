@@ -47,7 +47,7 @@ data ExpressParams = ExpressParams
   , exArchPiece :: !Double -- ^ Todd arch depth, whole-piece level
   , exArchGroup :: !Double -- ^ Todd arch depth, bar-group level
   , exArchBars :: !Int -- ^ bars per group at the inner level
-  , exLeadMs :: !Double -- ^ melody (highest voice) anticipation
+  , exLeadMs :: !Double -- ^ melody (highest lane) anticipation
   , exRollMs :: !Double -- ^ final-chord spread per note, bass upward
   , exJitterMs :: !Double -- ^ onset jitter, 1 sigma-ish
   , exJitterVel :: !Double -- ^ velocity jitter

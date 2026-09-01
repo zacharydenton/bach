@@ -36,7 +36,7 @@ import OTB.Pitch (spLetter)
 import EuterpeaLite.Music
 import OTB.Explain (Why (..), why)
 import OTB.Interp
-import OTB.Interp.Agogics (fermataFactor)
+import OTB.Interp.Agogics (AgogicParams (agFermataHold), fermataFactor)
 import OTB.Interp.Articulation (articulateLane')
 import OTB.Interp.Dynamics (dynamicsLane')
 import OTB.Interp.Express
@@ -80,6 +80,12 @@ data Ctx = Ctx
     -- must not stretch its duration on top
   , cKeyAt :: WholeNotes -> Int -- ^ tonic pitch class (harmony model)
   , cMajorAt :: WholeNotes -> Bool
+  , cChordFermata :: (WholeNotes, WholeNotes) -> Bool
+    -- ^ some note with this (onset, duration) carries a fermata in ANY
+    -- voice: engraving puts one sign above the system, so kern often
+    -- marks only the outer voices of a final chord (wtc1p08: @;@ on the
+    -- two E-flats, not the four inner notes) — the hold belongs to the
+    -- whole sonority, not to whoever got the glyph
   }
 
 -- | The interpreter's output payload, plus provenance.
@@ -313,6 +319,7 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
           -- successors of every voice
           , [ Art Fermata
             | K.Fermata `elem` snMarks sn
+                || cChordFermata ctx (snOnset sn, snDur sn)
             , not (any (\(a, d) -> snOnset sn < a + d
                                      && a < snOnset sn + snDur sn)
                      (cHolds ctx)) ]
@@ -458,7 +465,14 @@ interpret ip tempo ch (Annotated m0) = snd (go [] 0 m0)
       _ -> Nothing
 
     holdOf env sn
-      | or [True | Art Fermata <- env] = fermataFactor (iAgogics ip) sn
+      -- a note whose own segments carry the mark holds only the marked
+      -- segments (a tied close under a fermata); a chord member that
+      -- INHERITED it (cChordFermata) holds its whole length — the
+      -- sonority pauses together
+      | or [True | Art Fermata <- env] =
+          if K.Fermata `elem` snMarks sn
+            then fermataFactor (iAgogics ip) sn
+            else agFermataHold (iAgogics ip)
       | otherwise = 1
 
     mkEv env i sn ws gate hold = Ev

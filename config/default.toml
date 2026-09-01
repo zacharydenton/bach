@@ -156,3 +156,16 @@ overhold = 0.9    # finger pedal a la Czerny: the arpeggios bloom to the bar
 [piece.wtc1p05]
 inegal = 0.18     # audition: French-style D major sixteenths, gently swung
                   # (Quantz XI says yes, Neumann says not for Bach — ears decide)
+
+[piece.wtc1p08]
+# The E-flat minor lament (BWV 853). No BWV 853 performance in the local
+# ASAP subset, so the globally fitted defaults are unvalidated here — and
+# this is exactly the piece where their honest vetoes (boundary_ease,
+# cadence_depth: real in the residuals, shape unfound) cost the most.
+# Per-piece entries by audition, 2026-09-01:
+cadence_depth = 0.06 # phrase-scale breathing at the detected cadences
+boundary_ease = 0.04 # ...and easing into group boundaries
+overhold = 0.5       # finger-pedal legato in the chordal texture
+repeated = 0.7       # the corpus median 0.45 gate reads clipped at this
+                     # tempo; a lament rearticulates, it does not detach
+trill_rate = 10      # 12/s is keyboard-brilliant; grave asks for fewer

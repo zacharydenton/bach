@@ -41,6 +41,7 @@ import OTB.Interp
 import OTB.Interp.Agogics (AgogicParams (..), tempoMap)
 import OTB.Interp.Express
 import OTB.Interp.Ornament (realizeGraceLane)
+import qualified OTB.Kern.Token as K
 import OTB.Score
 import OTB.Tuning (adaptiveCents, bendValue, offsetFor)
 import OTB.Units (Cents (..))
@@ -226,7 +227,7 @@ perform ip score@(Score tempo voices _ _ meter _ _ _) =
                  <> " monophonic lanes; only "
                  <> show (length usableChannels)
                  <> " MIDI channels available")
-    else Right (assemble ip tempo tmap finalOnset melodyVi
+    else Right (assemble ip tempo tmap finalOnset melodyCh
                   (floorAt, floorAnyAt)
                   (hRootAt harm, hStabilityAt harm)
                   (hCadences harm) fullEnd tracks)
@@ -370,12 +371,26 @@ perform ip score@(Score tempo voices _ _ meter _ _ _) =
     conductor = annotateConductor curve tempo fullEnd
     tmap = deriveTempoMap tempo conductor
 
-    meanPitch v =
-      let ps = map snPitch (vNotes v)
-       in if null ps then 0 else sum ps `div` length ps
-    melodyVi =
+    -- the melody is the highest LANE, not the highest voice: a piece
+    -- that parses as one splitting spine (wtc1p08) is one "voice" of
+    -- many lanes, and calling all of them the melody shifted every
+    -- note by the same lead — no asynchrony at all. Channels are dealt
+    -- to lanes in voice order (deal), so this zip mirrors it exactly.
+    laneChans = zip usableChannels [l | (_, ls) <- voiceLanes, (l, _) <- ls]
+    melodyCh =
       fst (last (sortOn snd
-        [(vi, meanPitch v) | (vi, (v, _)) <- zip [0 :: Int ..] voiceLanes]))
+        [ (ch, sum (map snPitch l) `div` length l)
+        | (ch, l) <- laneChans, not (null l) ]))
+
+    -- a fermata belongs to the whole sonority: collect the (onset, dur)
+    -- coordinates that carry one anywhere, so chord members whose spine
+    -- missed the glyph (wtc1p08's final chord marks only the outer
+    -- E-flats) hold just as long. Prepared lanes, so the coordinates
+    -- match what annotateLane sees.
+    fermataCoords = nub
+      [ (snOnset n, snDur n)
+      | (_, ls) <- voiceLanes, (l, _) <- ls, n <- l
+      , K.Fermata `elem` snMarks n ]
 
     finalOnset = maximum (0 : [snOnset n | v <- voices, n <- vNotes v])
     finalTag sn
@@ -395,7 +410,8 @@ perform ip score@(Score tempo voices _ _ meter _ _ _) =
                     , cHolds = restHolds
                     , cKeyAt = hKeyAt harm
                     , cMajorAt = hMajorAt harm
-                    , cEchoAt = echoAt }
+                    , cEchoAt = echoAt
+                    , cChordFermata = (`elem` fermataCoords) }
 
     tracks = snd (foldl deal (usableChannels, []) (zip [0 ..] voiceLanes))
     deal (chans, acc) (vi, (_, ls)) =
@@ -414,7 +430,7 @@ assemble
   -> (Int -> WholeNotes -> Bool, WholeNotes -> Bool)
   -> (WholeNotes -> Maybe Int, WholeNotes -> Double) -> [WholeNotes]
   -> WholeNotes -> [[(Rational, Rational, Ev)]] -> Performance
-assemble ip tempo tmap finalOnset melodyVi (floorAt, floorAny)
+assemble ip tempo tmap finalOnset melodyCh (floorAt, floorAny)
          (rootAt, stabAt) cads fullEnd trs =
   Performance tmap
     (map enforceMono (rollFinal perturbed))
@@ -442,7 +458,7 @@ assemble ip tempo tmap finalOnset melodyVi (floorAt, floorAny)
           let ch = evChannel ev
               i = evIndex ev
               leadMs = exEnsemble ex * exLeadMs ex
-              isMelody = vi == melodyVi
+              isMelody = ch == melodyCh
               -- Klangrede: whoever takes the floor leads — and the
               -- standing melody YIELDS while any voice holds it, or a
               -- two-voice exchange would shift both parts identically

@@ -450,11 +450,62 @@ units = testGroup "otb"
               pnDur a @?= d / 4
               assertBool "channel overlap" (pnOnset a + pnDur a < pnOnset b)
             Right pf -> assertFailure ("unexpected tracks: " <> show (perfTracks pf))
+      , testCase "a fermata on one chord member holds the whole sonority" $ do
+          -- engraving puts one sign above the system, so kern often marks
+          -- only the outer voices (wtc1p08's final chord: ; on the two
+          -- E-flats, nothing on the four inner notes) — the hold belongs
+          -- to the sonority, not to whoever got the glyph
+          let src marks = T.unlines
+                [ "**kern\t**kern"
+                , "*MM96\t*"
+                , "2C" <> marks <> "\t2e"
+                , "*-\t*-"
+                ]
+              durs s = case parseKern (Bpm 72) s >>= perform defaultInterp of
+                Left e -> error e
+                Right pf -> [pnDur n | tr <- perfTracks pf, n <- tr]
+          case (durs (src ";"), durs (src "")) of
+            ([dm, dp], [um, up]) -> do
+              -- each keeps its own articulation gate; the HOLD (1.75x)
+              -- must reach both
+              assertBool ("marked not held: " <> show (dm, um))
+                (dm > 1.5 * um)
+              assertBool ("partner not held: " <> show (dp, up))
+                (dp > 1.5 * up)
+            shape -> assertFailure ("unexpected notes: " <> show shape)
+      , testCase "melody-lead belongs to the top lane, not the whole voice" $ do
+          -- one voice, split spine (wtc1p08's texture): only the highest
+          -- LANE anticipates — the old voice-level melody shifted every
+          -- lane identically and produced no asynchrony at all
+          let src = T.unlines
+                [ "**kern"
+                , "*MM96"
+                , "*^"
+                , "4c\t4e"
+                , "4c\t4e"
+                , "*v\t*v"
+                , "*-"
+                ]
+              interp = defaultInterp
+                { iExpress = defaultExpressParams
+                    -- no jitter, and no final-chord roll: the second
+                    -- beat IS the final chord here, and the bass-up
+                    -- roll would reorder exactly the pair under test
+                    { exJitterMs = 0, exJitterVel = 0, exRollMs = 0 } }
+          case parseKern (Bpm 72) src >>= perform interp of
+            Left e -> assertFailure e
+            Right pf -> do
+              let ns = [n | tr <- perfTracks pf, n <- tr]
+                  -- the second beat, clear of any clamp at zero
+                  later p = minimum
+                    [pnOnset n | n <- ns, pnPitch n == p, pnOnset n > 1 / 8]
+              assertBool "top lane does not lead its chord partner"
+                (later 64 < later 60)
       ]
   , testGroup "tools"
-      [ testCase "patchboard HTTP boundary (python3 -m unittest)" $ do
+      [ testCase "site bake contracts (python3 -m unittest)" $ do
           (code, out, err) <- readProcessWithExitCode "python3"
-            ["-m", "unittest", "-q", "tools/test_patchboard.py"] ""
+            ["-m", "unittest", "-q", "tools/test_bake_site.py"] ""
           case code of
             ExitSuccess -> pure ()
             _ -> assertFailure (out <> err)
