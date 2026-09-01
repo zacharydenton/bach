@@ -1189,6 +1189,37 @@ review = testGroup "review regressions"
                    , Voice 1 (line' [72, 76, 74, 77] (-2) 4) ]
                    0 0 [(0, (4, 4))] 0 [] True
       sqSeams (findSequences twoV) @?= sqSeams (findSequences oneV)
+  , testCase "a vetoed (zero-depth) easing is a true no-op" $ do
+      -- with an arch active, an off-grid easing boundary would change
+      -- where the arch is sampled even at depth 0 — the vetoed cadence
+      -- and boundary rules must leave the map byte-identical
+      let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
+          with0 = tempoMap ag [(0, 8, 0.05)] [(4 + 1 / 32, 0, 1 / 2)]
+                    [] [] [] (Bpm 100) 8
+          without = tempoMap ag [(0, 8, 0.05)] [] [] [] [] (Bpm 100) 8
+      with0 @?= without
+  , testCase "suspension: a re-attack or a still-dissonant step is no resolution" $ do
+      let mkS second =
+            Score (Bpm 120)
+              [ Voice 0 [scoreNote 0 (1 / 2) 60 [], second]
+              , Voice 1 [ scoreNote 0 (1 / 4) 67 []
+                        , scoreNote (1 / 4) (3 / 4) 62 [] ] ]
+              0 0 [(0, (4, 4))] 0 [] True
+          interp = calmInterp
+            { iExpress = defaultExpressParams
+                {exEnsemble = 0, exArchPiece = 0, exArchGroup = 0} }
+          rulesOf s = case perform interp s of
+            Left e -> error e
+            Right p -> [whyRule w | (_, ws) <- perfWhys p, w <- ws]
+          -- adjacent, but the same pitch again: a re-attack
+          reattack = mkS (scoreNote (1 / 2) (1 / 4) 60 [])
+          -- adjacent and a step, but C#4 against the held D is MORE
+          -- dissonant than the suspension's peak — nothing resolved
+          stillDiss = mkS (scoreNote (1 / 2) (1 / 4) 61 [])
+      assertBool "re-attack: no resolution label"
+        ("resolution" `notElem` rulesOf reattack)
+      assertBool "still dissonant: no resolution label"
+        ("resolution" `notElem` rulesOf stillDiss)
   , testCase "easing shape: kinematic braking, not the vetoed line" $ do
       let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
           tm = tempoMap ag [] [(4, 0.3, 1)] [] [] [] (Bpm 100) 8

@@ -125,7 +125,11 @@ tempoMap ag arches easings subjSpans steps holds (Bpm base) end
       sort . nub $
         takeWhile (< end) (iterate (+ agTempoStep ag) 0)
           <> [ t | (a, d) <- holds, t <- [a, a + d], 0 <= t, t < end ]
-          <> [ t | (c, _, sp) <- easings, t <- [c - sp, c], 0 <= t, t < end ]
+          -- ONLY live easings contribute grid points: a zero-depth
+          -- (vetoed) easing must be a true no-op, not a change to where
+          -- the other layers get sampled
+          <> [ t | (c, depth, sp) <- easings, depth > 0, sp > 0
+             , t <- [c - sp, c], 0 <= t, t < end ]
     -- the total factor is floored: however hostile the (validated-per-
     -- knob but unbounded-in-product) configuration, tempo stays positive
     factor t = max 0.1 (product [arch d a b t | (a, b, d) <- arches]

@@ -6,7 +6,8 @@
 -- tempos of the ASAP human performances (log-linear regression,
 -- 2026-09-01: train Book I n=28 r=0.610, held-out Book II n=30
 -- r=0.373, mean |log error| 0.352 vs 0.421 for a constant 72 — a
--- real improvement, honestly modest).
+-- real improvement, honestly modest). Regenerate with
+-- tools/GiustoFeatures.hs + tools/giusto_fit.py (see its docstring).
 --
 -- The data overturned two literature-shaped priors: dense sixteenth
 -- figuration predicts a FASTER beat, not a slower one (the sixteenths
