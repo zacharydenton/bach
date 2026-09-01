@@ -46,6 +46,7 @@ import OTB.Kern.Parser (parseKern)
 import OTB.Player
   ( Interp (..), PerfNote (..), Performance (..), Structure (..)
   , analyzeStructure, defaultInterp, perform )
+import OTB.TempoGiusto (tempoGiusto)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..))
 import OTB.Tuning (TuningTable, equalTable, parseScl, renderScl, werckmeister3)
 import OTB.Units (Bpm (..), WholeNotes (..))
@@ -57,9 +58,15 @@ import System.FilePath (takeBaseName, (</>))
 data Common = Common
   { cInput :: FilePath
   , cConfig :: FilePath
-  , cTempo :: Double
+  , cTempo :: TempoOpt
   , cTemperament :: String
   }
+
+-- | @--tempo@: a number is the fallback for scores with no @*MM@;
+-- @giusto@ FORCES the notation-derived tempo (Kirnberger/Quantz) even
+-- over a declared one — useful against the corpus's 72-BPM encoder
+-- placeholders. With no flag at all, giusto is the fallback.
+data TempoOpt = TempoDefault | TempoGiusto | TempoBpm Double
 
 data Cmd
   = Compile Common FilePath (Maybe FilePath) (Maybe FilePath) String
@@ -76,8 +83,12 @@ common =
     <*> strOption (long "config" <> metavar "RULES.toml"
           <> value "config/default.toml"
           <> help "interpretation rules + per-piece override log")
-    <*> option auto (long "tempo" <> metavar "BPM" <> value 72
-          <> help "fallback tempo when the score has no *MM")
+    <*> option (eitherReader tempoR)
+          (long "tempo" <> metavar "BPM|giusto" <> value TempoDefault
+             <> help ("fallback tempo when the score has no *MM "
+                        <> "(default: tempo giusto, derived from the "
+                        <> "notation); 'giusto' forces the derivation "
+                        <> "even over a declared *MM"))
     <*> strOption (long "temperament" <> metavar "NAME|FILE.scl"
           <> value "werckmeister3"
           <> help "werckmeister3 (default), equal, or a Scala .scl file")
@@ -189,12 +200,20 @@ badBpm b
 checkBpm :: String -> Double -> IO ()
 checkBpm ctx b = mapM_ (die . ((ctx <> ": ") <>)) (badBpm b)
 
+tempoR :: String -> Either String TempoOpt
+tempoR "giusto" = Right TempoGiusto
+tempoR s = case reads s of
+  [(b, "")] -> maybe (Right (TempoBpm b)) Left (badBpm b)
+  _ -> Left ("expected a BPM number or 'giusto', got '" <> s <> "'")
+
 load :: Common -> IO (String, Score, Performance, TuningTable, Bool, Interp)
 load com = do
-  checkBpm "--tempo" (cTempo com)
   src <- TIO.readFile (cInput com)
+  let parseFallback = case cTempo com of
+        TempoBpm b -> Bpm b
+        _ -> Bpm 72 -- placeholder; giusto lands below, post-parse
   score0 <- either (die . ("parse: " <>)) pure
-              (parseKern (Bpm (cTempo com)) src)
+              (parseKern parseFallback src)
   haveCfg <- doesFileExist (cConfig com)
   cfg <- if haveCfg
            then either (die . (("config " <> cConfig com <> ": ") <>)) pure
@@ -204,7 +223,17 @@ load com = do
   table <- resolveTemperament
              (if adaptive then "werckmeister3" else cTemperament com)
   let piece = T.pack (takeBaseName (cInput com))
-      score = maybe score0 (\bpm -> score0 {scTempo = Bpm bpm})
+      -- tempo authority, outermost last: notation-derived giusto when
+      -- nothing better is known, the score's own *MM, an explicit
+      -- --tempo BPM as fallback, --tempo giusto forcing the derivation,
+      -- and the per-piece config override (the exception log) over all
+      score1 = case cTempo com of
+        TempoGiusto -> score0 {scTempo = tempoGiusto score0}
+        TempoBpm _ -> score0
+        TempoDefault
+          | scTempoDeclared score0 -> score0
+          | otherwise -> score0 {scTempo = tempoGiusto score0}
+      score = maybe score1 (\bpm -> score1 {scTempo = Bpm bpm})
                 (pieceTempo cfg piece)
   mapM_ (checkBpm ("config tempo for " <> T.unpack piece))
     (pieceTempo cfg piece)

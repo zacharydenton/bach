@@ -31,6 +31,7 @@ import OTB.Analysis.Subject (subjectEntries)
 import OTB.Instrument (hardwareTracks)
 import OTB.Annotate (annEvents)
 import OTB.Pitch (Spelled (..), spMidi, spName)
+import OTB.TempoGiusto (tempoGiusto)
 import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, perform)
 import OTB.Score (Score (..), ScoreNote (..), Voice (..), scoreNote)
 import OTB.Tuning
@@ -142,7 +143,7 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score (Bpm t) vs 0 _ _ _ _) -> do
+            Right (Score (Bpm t) vs 0 _ _ _ _ _) -> do
               t @?= 96
               map (length . vNotes) vs @?= [2, 2]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -155,14 +156,14 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ [n]] 0 _ _ _ _) ->
+            Right (Score _ [Voice _ [n]] 0 _ _ _ _ _) ->
               snDur n @?= (1 / 2)
             Right s -> assertFailure ("unexpected shape: " <> show s)
       , testCase "fermata on a tied close holds only the close" $ do
           let src = T.unlines ["**kern", "[2c", "4c;]", "*-"]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ [n]] 0 _ _ _ _) -> do
+            Right (Score _ [Voice _ [n]] 0 _ _ _ _ _) -> do
               snDur n @?= (3 / 4)
               snMarks n @?= [Fermata]
               snSegs n @?= [(1 / 2, []), (1 / 4, [Fermata])]
@@ -184,7 +185,7 @@ units = testGroup "otb"
                 ]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ ns] 0 _ _ _ _) ->
+            Right (Score _ [Voice _ ns] 0 _ _ _ _ _) ->
               sort [(snLane n, snPitch n) | n <- ns]
                 @?= [(0, 60), (0, 60), (0, 60), (1, 64), (1, 67)]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -194,7 +195,7 @@ units = testGroup "otb"
           let src = T.unlines ["**kern", "[2c", "4cT]", "*-"]
           case parseKern (Bpm 72) src of
             Left e -> assertFailure e
-            Right (Score _ [Voice _ ns] 0 _ _ _ _) ->
+            Right (Score _ [Voice _ ns] 0 _ _ _ _ _) ->
               [(snOnset n, snDur n, snMarks n) | n <- ns]
                 @?= [(0, 1 / 2, []), (1 / 2, 1 / 4, [Trill 2])]
             Right s -> assertFailure ("unexpected shape: " <> show s)
@@ -307,7 +308,7 @@ units = testGroup "otb"
             (abs (at 3 - 100) < 0.5)
       , testCase "boundary easing slows into the arrival, recovers after" $ do
           let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
-              tm = tempoMap ag [] [(4, 0.08)] [] [] [] (Bpm 100) 8
+              tm = tempoMap ag [] [(4, 0.08, 3 / 4)] [] [] [] (Bpm 100) 8
               at x = case takeWhile ((<= x) . fst) tm of
                 [] -> 100; xs -> let Bpm b = snd (last xs) in b
           assertBool "eases before" (at 3.9 < 96)
@@ -322,7 +323,7 @@ units = testGroup "otb"
           assertBool "base outside" (abs (at 3 - 100) < 0.5)
       , testCase "hostile arch depths never take tempo non-positive" $ do
           let ag = defaultAgogicParams {agRitSpan = 0}
-              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [(2, 5.0), (4, 0.2)] [] [] [] (Bpm 100) 8
+              tm = tempoMap ag [(0, 8, 5.0), (0, 4, 2.0)] [(2, 5.0, 3 / 4), (4, 0.2, 3 / 4)] [] [] [] (Bpm 100) 8
           assertBool "all positive" (all (\(_, Bpm b) -> b > 0) tm)
       , testCase "short piece: no rit, single tempo" $
           length (tempoMap (defaultAgogicParams {agOpenPush = 0})
@@ -418,7 +419,7 @@ units = testGroup "otb"
                 }
               score bpm = Score (Bpm bpm)
                 [Voice 0 [scoreNote 0 (1/4) 60 [],
-                          scoreNote (1/4) (1/4) 62 []]] 0 0 [(0, (4, 4))] 0 []
+                          scoreNote (1/4) (1/4) 62 []]] 0 0 [(0, (4, 4))] 0 [] True
               gapMs bpm = case perform interp (score bpm) of
                 Left e -> error e
                 Right pf -> case perfTracks pf of
@@ -441,7 +442,7 @@ units = testGroup "otb"
                 }
               score = Score (Bpm 120)
                 [Voice 0 [scoreNote 0 (d/4) 60 [], scoreNote d d 67 []]]
-                0 0 [(0, (4, 4))] 0 []
+                0 0 [(0, (4, 4))] 0 [] True
           case perform interp score of
             Left e -> assertFailure e
             Right pf | [[a, b]] <- perfTracks pf -> do
@@ -565,7 +566,7 @@ genScore = do
   nv <- chooseInt (1, 3)
   vs <- vectorOf nv genLane
   pure (Score (Bpm 96) [Voice i l | (i, l) <- zip [0 ..] vs]
-          0 0 [(0, (4, 4))] 0 [])
+          0 0 [(0, (4, 4))] 0 [] True)
 
 transposeScore :: Int -> Score -> Score
 transposeScore n s =
@@ -947,7 +948,7 @@ review = testGroup "review regressions"
   , testCase "counterpoint: a diminished sixth is not a fifth" $ do
       let sp l a o m t = (scoreNote t (1 / 4) m []) {snSpell = Just (Spelled l a o)}
           mkS v1 v2 =
-            Score (Bpm 96) [Voice 0 v1, Voice 1 v2] 0 0 [(0, (4, 4))] 0 []
+            Score (Bpm 96) [Voice 0 v1, Voice 1 v2] 0 0 [(0, (4, 4))] 0 [] True
           -- C4->D4 under Abb4->Bbb4: seven semitones both times, but a
           -- sixth by letter — similar motion, and not parallel fifths
           dim6 = mkS [sp 0 0 4 60 0, sp 1 0 4 62 (1 / 4)]
@@ -967,7 +968,7 @@ review = testGroup "review regressions"
             Score (Bpm 96)
               [ Voice 0 [sp 0 0 4 60 0, bare 62 (1 / 4)]
               , Voice 1 [sp 4 0 4 67 0, bare 69 (1 / 4)] ]
-              0 0 [(0, (4, 4))] 0 []
+              0 0 [(0, (4, 4))] 0 [] True
       parallelPerfects mixed @?= 1
   , testCase "transpose clears spelling (it cannot keep the notation)" $ do
       let sn = (scoreNote 0 (1 / 4) 60 []) {snSpell = Just (Spelled 0 0 4)}
@@ -1080,6 +1081,98 @@ review = testGroup "review regressions"
       let lf = T.unlines ["**kern", "*M4/4", "4c", ".", "4d", "*-"]
           crlf = T.replace "\n" "\r\n" lf
       show (parseKern (Bpm 72) crlf) @?= show (parseKern (Bpm 72) lf)
+  , testCase "suspension: the prepared dissonance is seen and spoken" $ do
+      -- v0 holds C4 for a whole note; v1 strikes G4 (consonant with it)
+      -- then D4 beneath the held C — a 2nd forms MID-NOTE. The held
+      -- note goes fully legato, the next lane note resolves gently,
+      -- and the tempo leans into the dissonant moment.
+      let s = Score (Bpm 120)
+                [ Voice 0 [ scoreNote 0 1 60 []
+                          , scoreNote 1 (1 / 2) 59 [] ]
+                , Voice 1 [ scoreNote 0 (1 / 2) 67 []
+                          , scoreNote (1 / 2) 1 62 [] ] ]
+                0 0 [(0, (4, 4))] 0 [] True
+          interp = calmInterp
+            { iExpress = defaultExpressParams
+                { exEnsemble = 0, exArchPiece = 0, exArchGroup = 0
+                , exDisVel = 0, exMelCharge = 0, exHarmCharge = 0
+                , exSubjectVel = 0 } }
+      case perform interp s of
+        Left e -> assertFailure e
+        Right p -> do
+          let rules = [whyRule w | (_, ws) <- perfWhys p, w <- ws]
+          assertBool ("suspension why in " <> show (nub rules))
+            ("suspension" `elem` rules)
+          assertBool "resolution why" ("resolution" `elem` rules)
+          -- the agogic lean: tempo dips just before the mid-note
+          -- dissonance at 1/2, and only there
+          let Bpm before = tempoAt (perfTempoMap p) (3 / 8)
+              Bpm clear = tempoAt (perfTempoMap p) (5 / 4)
+          assertBool ("leans in: " <> show before) (before < 119.9)
+          assertBool ("a tempo elsewhere: " <> show clear)
+            (abs (clear - 120) < 0.01)
+  , testCase "dialogue: the listeners yield while a voice speaks" $ do
+      let mk vi ons ps =
+            Voice vi [scoreNote o (1 / 8) p [] | (o, p) <- zip ons ps]
+          motif = [60, 64, 62, 67, 65, 69]
+          a = mk 0 [fromIntegral i / 8 | i <- [0 :: Int ..]] motif
+          b = mk 1 [1/2 + fromIntegral i / 8 | i <- [0 :: Int ..]]
+                (map (+ 5) motif)
+          s = Score (Bpm 96) [a, b] 0 0 [(0, (4, 4))] 0 [] True
+      case perform defaultInterp s of
+        Left e -> assertFailure e
+        Right p -> do
+          let deltas = [whyDelta w | (_, ws) <- perfWhys p, w <- ws
+                       , whyRule w == "dialogue" ]
+          assertBool ("takes the floor: " <> show deltas)
+            (any ("takes the floor" `isInfixOf`) deltas)
+          assertBool ("yields: " <> show deltas)
+            (any ("yields" `isInfixOf`) deltas)
+  , testCase "echo: sequence repetitions terrace down" $ do
+      -- the sequence fixture from the detector's own test: a figure
+      -- restated at a consistent step — later statements step down
+      let line' fig step k =
+            [ scoreNote (fromIntegral (it * 4 + j) / 8) (1 / 8)
+                (p + it * step) []
+            | it <- [0 .. k - 1], (j, p) <- zip [0 ..] fig ]
+          s = Score (Bpm 96) [Voice 0 (line' [60, 64, 62, 65] (-2) 4)]
+                0 0 [(0, (4, 4))] 0 [] True
+      case perform defaultInterp s of
+        Left e -> assertFailure e
+        Right p -> do
+          let rules = [whyRule w | (_, ws) <- perfWhys p, w <- ws]
+          assertBool ("echo why in " <> show (nub rules))
+            ("echo" `elem` rules)
+  , testCase "easing shape: kinematic braking, not the vetoed line" $ do
+      let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
+          tm = tempoMap ag [] [(4, 0.3, 1)] [] [] [] (Bpm 100) 8
+          at x = case takeWhile ((<= x) . fst) tm of
+            [] -> 100; xs -> let Bpm b = snd (last xs) in b
+          -- Friberg–Sundberg at x = 0.5, w = 0.7, q = 2:
+          -- 100 * sqrt(1 + (0.49 - 1) * 0.5) ≈ 86.31; linear says 85
+          fs = 100 * sqrt (1 + (0.7 ** 2 - 1) * 0.5)
+      assertBool ("kinematic at midpoint: " <> show (at 3.5))
+        (abs (at 3.5 - fs) < 0.1)
+  , testCase "tempo giusto: the notation implies the tempo" $ do
+      let mkS m ds =
+            Score (Bpm 72)
+              [Voice 0 [ scoreNote (fromIntegral i * d) d 60 []
+                       | (i, d) <- zip [0 :: Int ..] ds ]]
+              0 0 [(0, m)] 0 [] False
+          quarters = mkS (4, 4) (replicate 16 (1 / 4))
+          sixteenths = mkS (4, 4) (replicate 64 (1 / 16))
+          gigue = mkS (6, 8) (replicate 16 (1 / 8))
+      assertBool "fast figuration asks for room"
+        (tempoGiusto quarters > tempoGiusto sixteenths)
+      assertBool "compound eighths dance"
+        (tempoGiusto gigue > tempoGiusto quarters)
+      -- and the parser records whether *MM spoke at all
+      case parseKern (Bpm 72) (T.unlines ["**kern", "4c", "*-"]) of
+        Right s -> scTempoDeclared s @?= False
+        Left e -> assertFailure e
+      case parseKern (Bpm 72) (T.unlines ["**kern", "*MM96", "4c", "*-"]) of
+        Right s -> scTempoDeclared s @?= True
+        Left e -> assertFailure e
   , testCase "scl: a bare integer is a ratio (2 = the octave)" $ do
       let scl = T.unlines $
             ["! t", "t", "12", "!"]
@@ -1177,7 +1270,7 @@ sota = testGroup "sota"
             [ scoreNote (fromIntegral (it * 4 + j) / 8) (1 / 8)
                 (p + it * step) []
             | it <- [0 .. k - 1], (j, p) <- zip [0 ..] ps ]
-          mkS ns = Score (Bpm 96) [Voice 0 ns] 0 0 [(0, (4, 4))] 0 []
+          mkS ns = Score (Bpm 96) [Voice 0 ns] 0 0 [(0, (4, 4))] 0 [] True
           figure = [60, 64, 62, 65] -- direction changes, distinctive
           seqS = mkS (line figure (-2) 4)
       assertBool "descending sequence detected"
@@ -1204,7 +1297,7 @@ sota = testGroup "sota"
           motif = [60, 64, 62, 67, 65, 69] -- direction changes galore
           a = mk 0 [fromIntegral i / 8 | i <- [0 :: Int ..]] motif
           b = mk 1 [1/2 + fromIntegral i / 8 | i <- [0 :: Int ..]] (map (+ 5) motif)
-          s = Score (Bpm 96) [a, b] 0 0 [(0, (4, 4))] 0 []
+          s = Score (Bpm 96) [a, b] 0 0 [(0, (4, 4))] 0 [] True
           im = findImitation s
       map (\(t', v, _) -> (t', v)) (imTakes im) @?= [(1 / 2, 1)]
   , testCase "imitation: a scale run is figuration, not speech" $ do
@@ -1213,7 +1306,7 @@ sota = testGroup "sota"
           run = [60, 62, 64, 65, 67, 69]
           s = Score (Bpm 96)
                 [mk 0 [fromIntegral i / 8 | i <- [0 :: Int ..]] run, mk 1 [1/2 + fromIntegral i / 8 | i <- [0 :: Int ..]] run]
-                0 0 [(0, (4, 4))] 0 []
+                0 0 [(0, (4, 4))] 0 [] True
       imTakes (findImitation s) @?= []
   , testCase "dialogue: the fugue converses, the prelude does not" $ do
       present <- doesDirectoryExist corpusDir

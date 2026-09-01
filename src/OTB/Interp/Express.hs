@@ -24,6 +24,7 @@ module OTB.Interp.Express
   , uphillLane
   , doubleDurLane
   , chargesForLane
+  , suspensionsForLane
   , leanGate
   , setDur
   , seededJitter
@@ -33,6 +34,7 @@ module OTB.Interp.Express
 
 import Data.Bits (shiftR, xor)
 import Data.Char (ord)
+import Data.List (nub)
 import Data.Ratio (approxRational)
 import OTB.Score (ScoreNote (..))
 import OTB.Units (WholeNotes (..))
@@ -63,6 +65,19 @@ data ExpressParams = ExpressParams
     -- ^ presence for the voice that takes the floor in cross-voice
     -- imitation (Harnoncourt's Klangrede: polyphony is dialogue;
     -- Czerny marks emphasis at every entry, not only the subject's)
+  , exDialogueYield :: !Double
+    -- ^ the other half of the conversation: voices NOT holding the
+    -- floor yield this much velocity while someone speaks — dialogue
+    -- is also listening
+  , exSeqEcho :: !Double
+    -- ^ velocity step down per sequence repetition (terraced echo on
+    -- restated material — period practice for immediate repetition)
+  , exSusSoft :: !Double
+    -- ^ velocity taken from a suspension's RESOLUTION (the dissonance
+    -- resolves gently — CPE Bach 1753 I.3)
+  , exSusLean :: !Double
+    -- ^ tempo lean into a suspension's dissonant moment, per unit of
+    -- charge rise (the agogic side of dissonance preparation)
   }
   deriving (Show, Eq)
 
@@ -90,6 +105,10 @@ defaultExpressParams = ExpressParams
   , exUphill = 0.03
   , exDoubleDur = 0.07
   , exDialogueVel = 4
+  , exDialogueYield = 2
+  , exSeqEcho = 2
+  , exSusSoft = 4
+  , exSusLean = 0.02
   }
 
 -- | Change a note's duration without breaking the Score invariant that
@@ -206,28 +225,52 @@ doubleDurLane k0 ns
       | otherwise = a : go (b : rest)
     go xs = xs
 
+-- | The dissonance charge of pitch @p@ against everything sounding at
+-- time @t@: minor 2nd/major 7th charge 1, major 2nd/minor 7th 0.7,
+-- tritone 0.6, perfect 4th against the bass 0.3; consonances 0.
+chargeAgainst :: [(WholeNotes, WholeNotes, Int)] -> WholeNotes -> Int -> Double
+chargeAgainst others t p =
+  let sounding =
+        [ q | (o, d, q) <- others, o <= t, t < o + d, q /= p ]
+      lowest = if null sounding then p else minimum sounding
+      ivCharge q =
+        case abs (p - q) `mod` 12 of
+          1 -> 1.0; 11 -> 1.0
+          2 -> 0.7; 10 -> 0.7
+          6 -> 0.6
+          5 | q == lowest || p == lowest -> 0.3
+          _ -> 0.0
+   in case sounding of
+        [] -> 0
+        qs -> maximum (map ivCharge qs)
+
 -- | C.P.E. Bach's rule, computed from what actually sounds: for each note
--- of a lane, the dissonance charge in [0,1] against every other sounding
--- note at its onset. Minor 2nd/major 7th charge 1, major 2nd/minor 7th
--- 0.7, tritone 0.6, perfect 4th against the bass 0.3; consonances 0.
+-- of a lane, the dissonance charge at its own onset.
 chargesForLane :: [(WholeNotes, WholeNotes, Int)] -> [ScoreNote] -> [Double]
-chargesForLane others = map charge
+chargesForLane others =
+  map (\n -> chargeAgainst others (snOnset n) (snPitch n))
+
+-- | Suspensions: a note consonant at its attack whose charge RISES while
+-- it sounds — the harmony moved beneath it. Onset-time charge is blind
+-- to exactly the notes Bach's practice emphasises most (the prepared
+-- dissonance). For each lane note: the moment and size of the largest
+-- mid-note rise, when it clears the threshold of a real dissonance.
+suspensionsForLane
+  :: [(WholeNotes, WholeNotes, Int)] -> [ScoreNote]
+  -> [Maybe (WholeNotes, Double)]
+suspensionsForLane others = map sus
   where
-    charge n =
-      let sounding =
-            [ p | (o, d, p) <- others
-            , o <= snOnset n, snOnset n < o + d, p /= snPitch n ]
-          lowest = if null sounding then snPitch n else minimum sounding
-          ivCharge p =
-            case abs (snPitch n - p) `mod` 12 of
-              1 -> 1.0; 11 -> 1.0
-              2 -> 0.7; 10 -> 0.7
-              6 -> 0.6
-              5 | p == lowest || snPitch n == lowest -> 0.3
-              _ -> 0.0
-       in case sounding of
-            [] -> 0
-            ps -> maximum (map ivCharge ps)
+    sus n =
+      let c0 = chargeAgainst others (snOnset n) (snPitch n)
+          mids = nub [ t | (t, _, _) <- others
+                     , snOnset n < t, t < snOnset n + snDur n ]
+          rises = [ (c - c0, t)
+                  | t <- mids
+                  , let c = chargeAgainst others t (snPitch n)
+                  , c - c0 >= 0.5 ]
+       in case rises of
+            [] -> Nothing
+            rs -> let (r, t) = maximum rs in Just (t, r)
 
 -- | Agogic lean: dissonant notes get held toward legato. approxRational,
 -- not toRational: raw Double rationals carry 2^52-ish denominators that

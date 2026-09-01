@@ -109,7 +109,7 @@ defaultAgogicParams = AgogicParams
 -- rit). Subject spans get agSubjectPush of forward motion; the
 -- opening gets agOpenPush, decaying over agOpenSpan.
 tempoMap :: AgogicParams -> [(WholeNotes, WholeNotes, Double)]
-         -> [(WholeNotes, Double)] -> [(WholeNotes, WholeNotes)]
+         -> [(WholeNotes, Double, WholeNotes)] -> [(WholeNotes, WholeNotes)]
          -> [(WholeNotes, Double)] -> [(WholeNotes, WholeNotes)]
          -> Bpm -> WholeNotes -> [(WholeNotes, Bpm)]
 tempoMap ag arches easings subjSpans steps holds (Bpm base) end
@@ -146,17 +146,22 @@ tempoMap ag arches easings subjSpans steps holds (Bpm base) end
         -- effective depth is expression x arch_*: clamp the PRODUCT
         -- here, where it exists (per-knob validation cannot bound it)
         depth = min 0.9 depth0
-    easeF t
-      | agCadenceSpan ag <= 0 = 1
-      | otherwise =
-          product
-            [ 1 - min 0.9 depth * ramp
-            | (c, depth) <- easings
-            , depth > 0
-            , t >= c - agCadenceSpan ag, t < c
-            , let WholeNotes pr = (t - (c - agCadenceSpan ag))
-                                    / agCadenceSpan ag
-                  ramp = realToFrac pr :: Double ]
+    -- each easing is (arrival, depth, span). The shape is the
+    -- Friberg–Sundberg kinematic braking curve — the final rit's own —
+    -- applied at every easing: the fit vetoed a LINEAR boundary ease
+    -- ("a better shape awaits"), and Todd's claim is that phrase-final
+    -- lengthening is the same gesture at smaller scale. Recovery is
+    -- instant: the next phrase starts a tempo.
+    easeF t =
+      product
+        [ (1 + (w ** q - 1) * x) ** (1 / q)
+        | (c, depth, span') <- easings
+        , depth > 0, span' > 0
+        , t >= c - span', t < c
+        , let WholeNotes pr = (t - (c - span')) / span'
+              x = realToFrac pr :: Double
+              w = 1 - min 0.9 depth
+              q = max 1 (agRitCurve ag) ]
     openF t
       | agOpenPush ag <= 0 || agOpenSpan ag <= 0 || t >= agOpenSpan ag = 1
       | otherwise =

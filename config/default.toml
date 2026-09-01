@@ -76,6 +76,10 @@ ensemble = 1.0    # melody lead, chord roll, seeded micro-jitter
 [dissonance]
 dis_vel = 10      # CPE Bach 1753: dissonances louder — vel units per charge
 dis_lean = 0.10   # ...and leaned on: gate boost toward legato per charge
+sus_soft = 4      # a suspension's RESOLUTION arrives gently (vel taken)
+sus_lean = 0.02   # tempo lean into the dissonant moment, per unit of
+                  # mid-note charge rise (the prepared dissonance the
+                  # onset-time charge cannot see)
 
 [arches]
 arch_piece = 0.024 # FITTED (was 0.03): Todd 1992 piece arch, at the depth
@@ -88,6 +92,9 @@ lead_ms = 20      # Palmer 1996: the melody anticipates by 20-30 ms
 roll_ms = 12      # final chord rolled bass-upward, per note
 jitter_ms = 3     # KTH noise rules — seeded by piece name: deterministic
 jitter_vel = 2
+dialogue_yield = 2 # the other half of Klangrede: listeners yield while
+                   # a voice holds the floor
+seq_echo = 2      # terraced echo: vel step down per sequence repetition
 
 [piece.wtc1p01]
 base = 0.85       # pure arpeggiated figuration: let it ring toward pedal

@@ -120,7 +120,8 @@ loadConfig src = do
       , "breath_threshold", "w_gap", "w_dur", "w_leap"
       , "w_cadence", "cadence_span", "open_span", "mel_charge", "harm_charge"
       , "subject_vel", "leap_dur", "trill_termination", "grace_long"
-      , "dialogue_vel" ]
+      , "dialogue_vel", "dialogue_yield", "seq_echo", "sus_soft"
+      , "sus_lean" ]
     gates = ["base", "staccato", "tenuto", "legato", "repeated", "cantabile"
             , "min_gate", "rit_floor"]
     -- these scale a duration or tempo multiplicatively: >= 1 would
@@ -248,6 +249,10 @@ expressFor cfg piece dflt =
         , exUphill = g "uphill" (exUphill p)
         , exDoubleDur = g "double_dur" (exDoubleDur p)
         , exDialogueVel = g "dialogue_vel" (exDialogueVel p)
+        , exDialogueYield = g "dialogue_yield" (exDialogueYield p)
+        , exSeqEcho = g "seq_echo" (exSeqEcho p)
+        , exSusSoft = g "sus_soft" (exSusSoft p)
+        , exSusLean = g "sus_lean" (exSusLean p)
         }
       where
         g k dflt' = maybe dflt' id (Map.lookup k m)

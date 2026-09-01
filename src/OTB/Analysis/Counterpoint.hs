@@ -25,7 +25,7 @@ import OTB.Units (WholeNotes)
 -- sixth spans seven semitones but is not a fifth; unspelled (generated)
 -- scores fall back to semitones alone.
 parallelPerfects :: Score -> Int
-parallelPerfects (Score _ voices _ _ _ _ _) =
+parallelPerfects (Score _ voices _ _ _ _ _ _) =
   sum [pairCount a b | (a, bs) <- zip voices (drop 1 (iterate (drop 1) voices)), b <- bs]
 
 pairCount :: Voice -> Voice -> Int

@@ -217,7 +217,7 @@ analyzeStructure ip score =
 -- perform
 
 perform :: Interp -> Score -> Either String Performance
-perform ip score@(Score tempo voices _ _ meter _ _) =
+perform ip score@(Score tempo voices _ _ meter _ _ _) =
   if totalLanes > length usableChannels
     then Left ("score needs " <> show totalLanes
                  <> " monophonic lanes; only "
@@ -290,16 +290,46 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
       | t2 - t1 <= 1 / 8 = mergeNearB ((t1, max d1 d2) : more)
       | otherwise = (t1, d1) : mergeNearB ((t2, d2) : more)
     mergeNearB xs = xs
+    -- cadences are not all equal: one whose arrival coincides with a
+    -- strong grouping boundary is STRUCTURAL and takes the full ease;
+    -- a passing V-I mid-flow takes a fraction. (The uniform knob was
+    -- vetoed by the fit — averaging sectional arrivals with passing
+    -- motion is exactly the condition where a real effect washes out.)
     easings =
-      [(c, agCadenceDepth (iAgogics ip)) | c <- hCadences harm]
-        <> strongBounds
+      [ ( c
+        , agCadenceDepth (iAgogics ip) * (if structural then 1 else 0.4)
+        , agCadenceSpan (iAgogics ip) )
+      | c <- hCadences harm
+      , let structural =
+              any (\(t, str) -> str > 1.5 && abs' (t - c) <= 1 / 8) allBounds ]
+        <> [ (t, d, agCadenceSpan (iAgogics ip)) | (t, d) <- strongBounds ]
+        <> susEase
+    abs' (WholeNotes r) = WholeNotes (abs r)
+
+    -- suspensions bend time for everyone: the agogic lean into the
+    -- dissonant moment (a short ease — a beat's worth, not a cadence's)
+    susEase =
+      mergeNearB'
+        [ (t, min 0.15 (exN * exSusLean ex * r))
+        | (_, ls) <- voiceLanes, (l, _) <- ls
+        , Just (t, r) <- suspensionsForLane allSounding l ]
+    mergeNearB' xs0 =
+      [ (t, d, 1 / 4) | (t, d) <- mergeNearB (sortOn fst xs0), d > 0 ]
+
+    -- the sequence structure, analysed once: novelty (below) and the
+    -- terraced echo (Annotate reads cEchoAt)
+    sq = findSequences score
+    echoAt t =
+      case [ a | (a, b) <- sqSpans sq, a <= t, t < b ] of
+        [] -> 0
+        (a : _) -> length [ s | s <- sqSeams sq, a < s, s <= t ]
 
     -- the novelty brake: mean first-appearance rate per beat, applied
     -- from the FOLLOWING beat (humans respond, not anticipate)
     noveltySteps
       | agNoveltyBrake (iAgogics ip) <= 0 = []
       | otherwise =
-          let nov = sqNovelty (findSequences score)
+          let nov = sqNovelty sq
               beatLen = case meter of
                 ((_, (_, d)) : _) ->
                   WholeNotes (1 / fromIntegral d)
@@ -358,9 +388,11 @@ perform ip score@(Score tempo voices _ _ meter _ _) =
                     , cCadences = hCadences harm
                     , cSubject = inSubject
                     , cFloor = floorAt vi
+                    , cFloorAny = floorAnyAt
                     , cHolds = restHolds
                     , cKeyAt = hKeyAt harm
-                    , cMajorAt = hMajorAt harm }
+                    , cMajorAt = hMajorAt harm
+                    , cEchoAt = echoAt }
 
     tracks = snd (foldl deal (usableChannels, []) (zip [0 ..] voiceLanes))
     deal (chans, acc) (vi, (_, ls)) =

@@ -80,5 +80,8 @@ data Score = Score
     -- has no note to stretch, so the Player realises these through the
     -- tempo map (Agogics: tempo divides by the fermata hold across the
     -- span, pushing every voice together).
+  , scTempoDeclared :: !Bool
+    -- ^ whether 'scTempo' came from a @*MM@ in the source (False = the
+    -- parse-time fallback landed; tempo giusto may replace it)
   }
   deriving (Show)

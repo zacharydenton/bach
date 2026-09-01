@@ -30,6 +30,7 @@ library
     exposed-modules:
         OTB.Units
         OTB.Pitch
+        OTB.TempoGiusto
         OTB.Kern.Token
         OTB.Kern.Lexer
         OTB.Kern.Spine

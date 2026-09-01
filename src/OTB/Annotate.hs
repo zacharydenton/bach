@@ -69,6 +69,11 @@ data Ctx = Ctx
   , cFloor :: WholeNotes -> Bool
     -- ^ does THIS voice hold the floor (cross-voice imitation) at the
     -- notated onset — the dialogue rule's question
+  , cFloorAny :: WholeNotes -> Bool
+    -- ^ does ANY voice hold the floor — the listeners yield
+  , cEchoAt :: WholeNotes -> Int
+    -- ^ sequence repetition index at a notated onset (0 = first
+    -- statement or outside any sequence) — the terraced echo's step
   , cHolds :: [(WholeNotes, WholeNotes)]
     -- ^ global fermata spans (rest holds) already realised through the
     -- tempo map — a note fermata covered by one is the SAME event and
@@ -188,6 +193,12 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
     breaths = breatheLane' (iPhrasing ip) cadBonus l
                 [(n, g) | (n, g, _) <- arts]
     charges = chargesForLane (cSounding ctx) l
+    -- suspensions: consonant at the attack, dissonant while held (the
+    -- harmony moves beneath) — the prepared dissonance onset-time
+    -- charge cannot see. The suspended note holds legato into its
+    -- resolution; the resolution itself arrives gently.
+    suss = suspensionsForLane (cSounding ctx) l
+    resolves = False : map isJust suss
     bounds = map (>= ppThreshold (iPhrasing ip))
                (zipWith (+) (boundaryStrengths (iPhrasing ip) l) cadBonus)
     vels = dynamicsLane' (iDynamics ip) (cMeters ctx) bounds l
@@ -210,14 +221,15 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
     -- preWs padded: it is positionally aligned but the pad keeps this
     -- total if a caller supplies fewer (the other lists bound the zip)
     decided =
-      zipWith7 build (preWs <> repeat []) arts breaths charges vels
-        nextIv prevIv
-    zipWith7 f (p : ps) (a : as) (b : bs) (c : cs) (d : ds) (e : es) (g : gs) =
-      f p a b c d e g : zipWith7 f ps as bs cs ds es gs
-    zipWith7 _ _ _ _ _ _ _ _ = []
+      zipWith8 build (preWs <> repeat []) arts breaths charges vels
+        nextIv prevIv (zip suss resolves)
+    zipWith8 f (p : ps) (a : as) (b : bs) (c : cs) (d : ds) (e : es)
+      (g : gs) (h : hs) =
+        f p a b c d e g h : zipWith8 f ps as bs cs ds es gs hs
+    zipWith8 _ _ _ _ _ _ _ _ _ = []
 
     build preW (_, _, artWhy) (sn, gateBreathed, mBreath) charge (v, velWhys)
-          mNextIv mPrevIv =
+          mNextIv mPrevIv (mSus, isRes) =
       (sn, attrs, whys)
       where
         leapCut = case mNextIv of
@@ -239,7 +251,11 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
           gateBreathed * approx ((1 - leapCut) * (1 - dcCut))
             + approx leapHold
         approx x = toRational (fromIntegral (round (x * 1e6) :: Int)) / 1e6
-        gate = leanGate ex charge gateK
+        -- a suspended note holds fully legato into its resolution:
+        -- breaking the line mid-dissonance is the one thing every
+        -- treatise forbids
+        gate | isJust mSus = max 1 (leanGate ex charge gateK)
+             | otherwise = leanGate ex charge gateK
 
         -- harmony model: melodic + harmonic charge (Friberg 1991), and
         -- the fugue subject speaks up (Czerny's practice)
@@ -252,10 +268,23 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
         sBump = if cSubject ctx (snSource sn)
                   then round (exExpression ex * exSubjectVel ex)
                   else 0 :: Int
-        dBump = if cFloor ctx (fst (snSource sn))
-                  then round (exEnsemble ex * exDialogueVel ex)
+        -- the dialogue, both halves: the floor-holder speaks up, and
+        -- everyone else yields while someone else is speaking
+        dBump
+          | cFloor ctx (fst (snSource sn)) =
+              round (exEnsemble ex * exDialogueVel ex)
+          | cFloorAny ctx (fst (snSource sn)) =
+              negate (round (exEnsemble ex * exDialogueYield ex))
+          | otherwise = 0 :: Int
+        -- terraced echo: each sequence repetition steps down
+        echoIx = min 3 (cEchoAt ctx (fst (snSource sn)))
+        eBump = negate
+          (round (exExpression ex * exSeqEcho ex * fromIntegral echoIx))
+        -- the resolution of a suspension arrives gently
+        rBump = if isRes
+                  then negate (round (exExpression ex * exSusSoft ex))
                   else 0 :: Int
-        vOut = v + mcBump + hcBump + sBump + dBump
+        vOut = v + mcBump + hcBump + sBump + dBump + eBump + rBump
         attrs = concat
           [ [Art (if gate < 1 then Staccato gate else Legato gate)]
           , [Art Breath | isJust mBreath]
@@ -307,6 +336,24 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
                 ("+" <> show dBump <> " vel — takes the floor")
                 "Harnoncourt, Musik als Klangrede; Czerny's WTC edition"
             | dBump > 0 ]
+          , [ why "dialogue"
+                (show dBump <> " vel — yields while another voice speaks")
+                "Harnoncourt, Musik als Klangrede"
+            | dBump < 0 ]
+          , [ why "echo"
+                (show eBump <> " vel — sequence repetition "
+                   <> show echoIx)
+                "terraced echo on restated material"
+            | eBump < 0 ]
+          , [ why "suspension"
+                ("held legato into the resolution; charge rises +"
+                   <> showD2 r <> " mid-note")
+                "CPE Bach 1753 I.3 (the prepared dissonance)"
+            | Just (_, r) <- [mSus] ]
+          , [ why "resolution"
+                (show rBump <> " vel — the dissonance resolves gently")
+                "CPE Bach 1753 I.3"
+            | rBump < 0 ]
           , [ why "ornament" (ornName m) "Bach's Explication; CPE Bach 1753"
             | m <- snMarks sn, isJust (ornAttr m) ]
           , [ why "final-chord" "member: rolled bass-upward in assembly"

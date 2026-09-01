@@ -102,7 +102,8 @@ parseKern defaultTempo src = do
   Right
     (Score (fromMaybe defaultTempo (psTempo final)) voices
        (length leftovers) (psDrifts final) meter'
-       (psGrace final) (reverse (psRestHolds final)))
+       (psGrace final) (reverse (psRestHolds final))
+       (psTempo final /= Nothing))
   where
     foldM f z = foldl (\acc x -> acc >>= \s -> f s x) (Right z)
 
