@@ -998,6 +998,19 @@ review = testGroup "review regressions"
           let subs = [ pnPitch n
                      | n <- concat (perfTracks p), pnSrcOn n == 1 ]
           subs @?= [65, 64, 62, 64]
+  , testCase "turn: the minor tonic closes from its leading tone" $ do
+      -- G# minor, turn on the tonic: the lower neighbour is F## — one
+      -- semitone below, a double accidental no single-accidental letter
+      -- search could reach; the upper is A# (+2)
+      let src = T.unlines
+            [ "**kern", "*MM96", "8g#", "8b", "8d#", "8g#"
+            , "8g#", "8b", "8d#", "8g#", "2g#S", "4g#", "*-" ]
+      case parseKern (Bpm 96) src >>= perform calmInterp of
+        Left e -> assertFailure e
+        Right p -> do
+          let subs = [ pnPitch n
+                     | n <- concat (perfTracks p), pnSrcOn n == 1 ]
+          subs @?= [70, 68, 67, 68]
   , testCase "turn: neighbours are letters, not accidentals (wtc1p04)" $ do
       -- the C#-minor A# turn (wtc1p04:179): the scale's pc set contains
       -- A-natural one semitone below A#, but a same-letter accidental is
@@ -1041,6 +1054,21 @@ review = testGroup "review regressions"
       case parseKern (Bpm 72) same of
         Left e -> assertFailure e
         Right s -> scTempo s @?= Bpm 96
+      -- a late FIRST *MM would retroactively re-tempo the music already
+      -- heard at the fallback: same guard, even with no earlier *MM
+      let late = T.unlines ["**kern", "4c", "*MM120", "4d", "*-"]
+      case parseKern (Bpm 72) late of
+        Left e -> assertBool e ("*MM" `isInfixOf` e)
+        Right _ -> assertFailure "late first *MM absorbed silently"
+      -- unless it merely states the effective (fallback) tempo
+      case parseKern (Bpm 120) late of
+        Left e -> assertFailure e
+        Right s -> scTempo s @?= Bpm 120
+  , testCase "parser: conflicting *MM in one record is an error" $ do
+      let src = T.unlines ["**kern\t**kern", "*MM96\t*MM120", "4c\t4e", "*-\t*-"]
+      case parseKern (Bpm 72) src of
+        Left e -> assertBool e ("conflicting" `isInfixOf` e)
+        Right _ -> assertFailure "conflicting record tempos accepted"
   , testCase "parser: additive meters are not quietly truncated" $ do
       -- *M3+2/8 must not read as 3/8; with no valid meter record the
       -- map stays empty (metrical dynamics degrade gracefully)

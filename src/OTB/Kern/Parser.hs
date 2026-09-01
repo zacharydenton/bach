@@ -11,7 +11,7 @@ module OTB.Kern.Parser
   , ParseError
   ) where
 
-import Data.List (sortOn)
+import Data.List (nub, sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
@@ -67,7 +67,8 @@ parseKern defaultTempo src = do
     _ -> Left "no **kern exclusive interpretation record found"
   st0 <- initFromHeader header
   final <-
-    foldM step (PSt st0 Nothing [] 0 0 [] Nothing Map.empty Map.empty) body
+    foldM (step defaultTempo)
+      (PSt st0 Nothing [] 0 0 [] Nothing Map.empty Map.empty) body
   -- flush unclosed ties as sounding notes: they *were* heard for their
   -- accumulated duration (usually an enharmonic respelling at the close, or
   -- an editorial quirk); the count is surfaced, not fatal
@@ -121,8 +122,8 @@ initFromHeader (Record n fs) = do
     interpOf (FInterp i) = Right i
     interpOf f = Left ("line " <> show n <> ": non-interpretation in header: " <> show f)
 
-step :: PSt -> Record -> Either ParseError PSt
-step st (Record n fs)
+step :: Bpm -> PSt -> Record -> Either ParseError PSt
+step dflt st (Record n fs)
   -- barline record: no time semantics, but the FIRST one's clock marks
   -- where the bar grid begins (see the anacrusis note in parseKern)
   | all isBarOrNull fs =
@@ -131,12 +132,19 @@ step st (Record n fs)
                   fb -> fb}
   | any isInterp fs = do
       is <- traverse asInterp fs
-      let tempo' = firstTempo is
-      -- the Score holds ONE tempo; a differing mid-piece *MM cannot be
-      -- represented and must not be silently ignored (none in the
-      -- corpus — this is the loud guard for other kern input)
-      case (psTempo st, tempo') of
-        (Just t, Just t') | t /= t' ->
+      -- the Score holds ONE tempo, so (a) a record's tempo fields must
+      -- agree with each other, and (b) once music has sounded the
+      -- EFFECTIVE tempo (declared, or the fallback) may not change —
+      -- which also catches a late FIRST *MM that would retroactively
+      -- re-tempo everything already heard. (None in the corpus — these
+      -- are the loud guards for other kern input.)
+      tempo' <- case nub [b | ITempo b <- is] of
+        [] -> Right Nothing
+        [t] -> Right (Just t)
+        ts -> Left ("line " <> show n
+                      <> ": conflicting *MM in one record: " <> show ts)
+      case tempo' of
+        Just t' | now > 0, t' /= fromMaybe dflt (psTempo st) ->
           Left ("line " <> show n
                   <> ": mid-piece *MM tempo change is not supported")
         _ -> Right ()
@@ -166,7 +174,6 @@ step st (Record n fs)
     now = case [pClock p | p <- psSpines st, pKern p] of
       (c : _) -> c
       [] -> 0
-    firstTempo is = case [b | ITempo b <- is] of (b : _) -> Just b; [] -> Nothing
     firstMeter is = case [m | IMeter txt <- is, Just m <- [readMeter txt]] of
       (m : _) -> Just m; [] -> Nothing
     -- full consumption required: *M3+2/8 (an additive meter) must not

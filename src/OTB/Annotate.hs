@@ -127,17 +127,33 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
     auxes sn =
       let tonic = cKeyAt ctx (snOnset sn)
           major = cMajorAt ctx (snOnset sn)
-          degrees =
-            if major then [0, 2, 4, 5, 7, 9, 11] else [0, 2, 3, 5, 7, 8, 10, 11]
-          scale = [(tonic + s) `mod` 12 | s <- degrees]
           pc = snPitch sn `mod` 12
+          -- the SEVEN degrees, each a small set of chromatic variants:
+          -- minor's seventh offers the natural and the raised form (so a
+          -- turn on the tonic closes from the leading tone — F## under
+          -- G#, a double accidental no letter search with single
+          -- accidentals could reach)
+          degreePcs i
+            | major = [(tonic + [0, 2, 4, 5, 7, 9, 11] !! i) `mod` 12]
+            | i == 6 = [(tonic + 10) `mod` 12, (tonic + 11) `mod` 12]
+            | otherwise = [(tonic + [0, 2, 3, 5, 7, 8, 10] !! i) `mod` 12]
+          scale = concatMap degreePcs [0 .. 6]
+          noteDeg = [i | i <- [0 .. 6], pc `elem` degreePcs i]
+          -- diatonic note: its neighbours are the ADJACENT DEGREES —
+          -- never a chromatic variant of its own degree (A-natural is
+          -- no lower neighbour for A#) — taking the closer variant
+          -- where the seventh offers two
+          degreeStep i dir =
+            let cands = [ s | npc <- degreePcs ((i + dir) `mod` 7)
+                            , let s = (dir * (npc - pc)) `mod` 12
+                            , s == 1 || s == 2 ]
+             in case sort cands of
+                  (s : _) -> s
+                  [] -> 2
+          -- chromatic note with spelling: candidates from the adjacent
+          -- staff letter, one accidental at most, in-scale first, then
+          -- the closer, then the plainer
           naturals = [0, 2, 4, 5, 7, 9, 11]
-          -- a neighbour is the ADJACENT STAFF LETTER — a same-letter
-          -- accidental is not one (A-natural is no lower neighbour for
-          -- A#; G# is). Candidates carry one accidental at most, ranked
-          -- in-scale first, then the closer, then the plainer; so the
-          -- C#-minor scale set holding both B and B# picks B# under the
-          -- tonic (leading tone) but never A-natural under A#.
           spelledStep sp dir =
             let ln = (spLetter sp + dir) `mod` 7
                 cands =
@@ -150,14 +166,15 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
              in case sort cands of
                   ((_, s, _) : _) -> s
                   [] -> 2
-          -- unspelled notes (generated scores): nearest scale member
+          -- chromatic and unspelled (generated): nearest scale member
           chromaticStep dir =
             case [s | s <- [1, 2], ((pc + dir * s) `mod` 12) `elem` scale] of
               (s : _) -> s
-              [] -> 2 -- chromatic surroundings: keep the whole tone
-          step dir = case snSpell sn of
-            Just sp -> spelledStep sp dir
-            Nothing -> chromaticStep dir
+              [] -> 2
+          step dir = case (noteDeg, snSpell sn) of
+            (i : _, _) -> degreeStep i dir
+            ([], Just sp) -> spelledStep sp dir
+            ([], Nothing) -> chromaticStep dir
        in (step 1, step (-1))
     arts = articulateLane' (iArt ip) l
     -- cadence arrivals from the harmony model bolster the boundary
