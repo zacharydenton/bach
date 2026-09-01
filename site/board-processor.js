@@ -115,6 +115,24 @@ class Board extends AudioWorkletProcessor {
         }
         break;
       }
+      case "warmup": {
+        // exercise every instance's full signal path — voices on both
+        // scenes, filters, insert/send/global FX — while output is still
+        // silent, so first-run wasm compilation and voice-allocation
+        // costs are paid here instead of as dropouts in the opening
+        // bars. Velocity 10: identical code paths, negligible FX tails.
+        const t0 = Date.now();
+        for (const s of this.synths) {
+          s.noteOn(0, 48, 10);
+          s.noteOn(1, 60, 10);
+          s.noteOn(0, 72, 10);
+          for (let q = 0; q < (msg.quanta || 300); q++) s.render(128);
+          s.allNotesOff();
+          for (let q = 0; q < 100; q++) s.render(128);
+        }
+        this.port.postMessage({ type: "warmed", ms: Date.now() - t0 });
+        break;
+      }
       case "scl": {
         let err = "";
         for (const s of this.synths) err = s.loadSCLString(msg.text) || err;

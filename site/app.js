@@ -19,6 +19,7 @@ import {
 // rapid stepping advances from the request, not the committed piece.
 let pieceGen = 0;
 let reqIdx = null;
+let warmedUp = false;
 const instGen = {};
 const lastShipped = {};
 
@@ -87,7 +88,10 @@ async function start() {
   $("start").disabled = true;
   $("stats").textContent = "loading engine…";
   try {
-    ctx = new AudioContext();
+    // playback-sized buffers: this is a player, not an instrument — the
+    // larger latency absorbs cold-start and GC hiccups that would
+    // otherwise crackle
+    ctx = new AudioContext({ latencyHint: "playback" });
     await ctx.resume();
     SR = ctx.sampleRate;
     const [wasmBinary, initBytes] = await Promise.all([
@@ -136,6 +140,8 @@ function onMsg(d) {
     renderStats();
   } else if (d.type === "ended") {
     loadPiece((PIECE.idx + 1) % MANIFEST.pieces.length);
+  } else if (d.type === "warmed") {
+    console.log(`engine warmed in ${d.ms} ms`);
   } else if (d.type === "scl") {
     if (d.err) $("stats").textContent = "SCL error: " + d.err;
   } else if (d.type === "error") {
@@ -194,6 +200,12 @@ async function loadPiece(idx) {
   POS = { frame: 0, t: Date.now(), playing: PLAYING };
   renderHeader();
   refreshRig();
+  if (!warmedUp) {
+    // queued between the patches and "play": port messages are FIFO, so
+    // the engine warms through the loaded presets while still silent
+    warmedUp = true;
+    node.port.postMessage({ type: "warmup" });
+  }
   if (PLAYING) node.port.postMessage({ type: "play" });
 }
 
