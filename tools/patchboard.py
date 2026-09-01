@@ -946,9 +946,17 @@ async function refresh(){
     document.getElementById('part'+i).classList.toggle('muted', !!p.mute);
     // keep the select showing what's actually loaded (piece changes and
     // casting preloads happen server-side), but not while it has focus
+    // and not while OUR change is still in flight
+    const pend = PENDING[i];
+    if (pend && (p.patchPath === pend.path || Date.now() - pend.t > 4000))
+      delete PENDING[i];
+    const showPath = PENDING[i] ? PENDING[i].path : p.patchPath;
     const s = document.getElementById('sel'+i);
-    if (s && document.activeElement !== s && s.value !== p.patchPath)
-      s.value = p.patchPath;
+    if (s && document.activeElement !== s && s.value !== showPath)
+      s.value = showPath;
+    if (PENDING[i] && s && s.selectedIndex >= 0)
+      document.getElementById('pn'+i).textContent =
+        s.options[s.selectedIndex].text + ' \u2026';
   });
   document.getElementById('cast').textContent = STATE.parts.map((p,i)=>
     p.patch=='(init)'?'':p.channels.map(c=>
@@ -958,7 +966,14 @@ function sel(i){ return document.getElementById('sel'+i).value; }
 async function post(url, body){
   await fetch(api(url),{method:'POST',body:JSON.stringify(body)}); refresh();
 }
-function setPatch(i,path){ post('patch',{part:i,path}); }
+// optimistic: the server applies a patch at the next render chunk, so
+// state echoes the OLD patch for up to a second — suppress that echo
+// until the server confirms (or 4 s pass), or the select snaps back
+const PENDING = {};
+function setPatch(i,path){
+  PENDING[i] = {path, t: Date.now()};
+  post('patch',{part:i,path});
+}
 function step(i,d){
   const s = document.getElementById('sel'+i);
   s.selectedIndex = Math.max(0, Math.min(s.length-1, s.selectedIndex+d));
