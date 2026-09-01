@@ -1143,6 +1143,51 @@ review = testGroup "review regressions"
           let rules = [whyRule w | (_, ws) <- perfWhys p, w <- ws]
           assertBool ("echo why in " <> show (nub rules))
             ("echo" `elem` rules)
+  , testCase "easing recovery is instant even off the tempo grid" $ do
+      -- arrival at 4 + 1/32 falls between eighth-note grid points; the
+      -- boundary must join the grid so the a tempo lands exactly there
+      let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
+          tm = tempoMap ag [] [(4 + 1 / 32, 0.2, 1 / 2)] [] [] []
+                 (Bpm 100) 8
+          at x = case takeWhile ((<= x) . fst) tm of
+            [] -> 100; xs -> let Bpm b = snd (last xs) in b
+      assertBool "eased just before" (at 4 < 99)
+      assertBool ("a tempo AT the arrival: " <> show (at (4 + 1 / 32)))
+        (abs (at (4 + 1 / 32) - 100) < 0.01)
+  , testCase "suspension: a rest or a leap is not a resolution" $ do
+      let mkS v0notes =
+            Score (Bpm 120)
+              [ Voice 0 v0notes
+              , Voice 1 [ scoreNote 0 (1 / 4) 67 []
+                        , scoreNote (1 / 4) (3 / 4) 62 [] ] ]
+              0 0 [(0, (4, 4))] 0 [] True
+          interp = calmInterp
+            { iExpress = defaultExpressParams
+                {exEnsemble = 0, exArchPiece = 0, exArchGroup = 0} }
+          rulesOf s = case perform interp s of
+            Left e -> error e
+            Right p -> [whyRule w | (_, ws) <- perfWhys p, w <- ws]
+          -- suspension on the held C; the next lane note after a REST
+          gapped = mkS [scoreNote 0 (1 / 2) 60 [], scoreNote 1 (1 / 4) 59 []]
+          -- adjacent but a LEAP down a seventh
+          leapt = mkS [scoreNote 0 (1 / 2) 60 [], scoreNote (1 / 2) (1 / 4) 50 []]
+      assertBool "gapped: suspension seen" ("suspension" `elem` rulesOf gapped)
+      assertBool "gapped: no resolution label"
+        ("resolution" `notElem` rulesOf gapped)
+      assertBool "leapt: no resolution label"
+        ("resolution" `notElem` rulesOf leapt)
+  , testCase "echo: voices repeating together are one seam, not two" $ do
+      let line' fig step k =
+            [ scoreNote (fromIntegral (it * 4 + j) / 8) (1 / 8)
+                (p + it * step) []
+            | it <- [0 .. k - 1], (j, p) <- zip [0 ..] fig ]
+          oneV = Score (Bpm 96) [Voice 0 (line' [60, 64, 62, 65] (-2) 4)]
+                   0 0 [(0, (4, 4))] 0 [] True
+          twoV = Score (Bpm 96)
+                   [ Voice 0 (line' [60, 64, 62, 65] (-2) 4)
+                   , Voice 1 (line' [72, 76, 74, 77] (-2) 4) ]
+                   0 0 [(0, (4, 4))] 0 [] True
+      sqSeams (findSequences twoV) @?= sqSeams (findSequences oneV)
   , testCase "easing shape: kinematic braking, not the vetoed line" $ do
       let ag = defaultAgogicParams {agRitSpan = 0, agOpenPush = 0}
           tm = tempoMap ag [] [(4, 0.3, 1)] [] [] [] (Bpm 100) 8

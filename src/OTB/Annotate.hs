@@ -198,7 +198,17 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
     -- charge cannot see. The suspended note holds legato into its
     -- resolution; the resolution itself arrives gently.
     suss = suspensionsForLane (cSounding ctx) l
-    resolves = False : map isJust suss
+    -- a resolution is the note the suspension actually resolves INTO:
+    -- temporally adjacent (a rest breaks the gesture) and stepwise (a
+    -- leap is a new idea, not a resolution)
+    resolves =
+      False
+        : [ case mSus of
+              Just _ ->
+                snOnset cur == snOnset prev + snDur prev
+                  && abs (snPitch cur - snPitch prev) <= 2
+              Nothing -> False
+          | ((prev, mSus), cur) <- zip (zip l suss) (drop 1 l) ]
     bounds = map (>= ppThreshold (iPhrasing ip))
                (zipWith (+) (boundaryStrengths (iPhrasing ip) l) cadBonus)
     vels = dynamicsLane' (iDynamics ip) (cMeters ctx) bounds l

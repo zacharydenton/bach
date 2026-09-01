@@ -28,7 +28,7 @@ module OTB.Analysis.Parallelism
   , findSequences
   ) where
 
-import Data.List (sort, sortOn)
+import Data.List (nub, sort, sortOn)
 import qualified Data.Set as Set
 import OTB.Score (Score (..), ScoreNote (..), Voice (..))
 import OTB.Units (WholeNotes (..))
@@ -48,7 +48,10 @@ mergeSpans xs = xs
 findSequences :: Score -> Sequences
 findSequences s = Sequences
   { sqSpans = mergeSpans (sortOn fst (concatMap spansIn lines'))
-  , sqSeams = sort (concatMap seamsIn lines')
+  -- deduplicated: two voices repeating TOGETHER are one seam, not two
+  -- (a doubled seam would make the first repetition count as the
+  -- second in the echo terracing)
+  , sqSeams = nub (sort (concatMap seamsIn lines'))
   , sqNovelty = novelty
   }
   where

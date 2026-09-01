@@ -71,7 +71,7 @@ data TempoOpt = TempoDefault | TempoGiusto | TempoBpm Double
 data Cmd
   = Compile Common FilePath (Maybe FilePath) (Maybe FilePath) String
   | Explain Common (Maybe Int) (Maybe (Int, Int))
-  | Album FilePath FilePath FilePath Double String
+  | Album FilePath FilePath FilePath TempoOpt String
   | Stats FilePath FilePath Double
   | Ground String Int Double String FilePath (Maybe FilePath) (Maybe FilePath)
   | Analyze Common
@@ -127,7 +127,8 @@ albumCmd =
     <$> argument str (metavar "CORPUS_DIR")
     <*> argument str (metavar "OUT_DIR")
     <*> strOption (long "config" <> value "config/default.toml")
-    <*> option auto (long "tempo" <> value 72)
+    <*> option (eitherReader tempoR)
+          (long "tempo" <> metavar "BPM|giusto" <> value TempoDefault)
     <*> strOption (long "temperament" <> value "werckmeister3")
 
 groundCmd :: Parser Cmd
@@ -206,14 +207,26 @@ tempoR s = case reads s of
   [(b, "")] -> maybe (Right (TempoBpm b)) Left (badBpm b)
   _ -> Left ("expected a BPM number or 'giusto', got '" <> s <> "'")
 
+-- | Parse-time fallback for the option (giusto lands post-parse).
+tempoFallback :: TempoOpt -> Bpm
+tempoFallback (TempoBpm b) = Bpm b
+tempoFallback _ = Bpm 72
+
+-- | Resolve the option against what the score declared — shared by
+-- every compile path (single-piece and album alike).
+applyTempoOpt :: TempoOpt -> Score -> Score
+applyTempoOpt opt s = case opt of
+  TempoGiusto -> s {scTempo = tempoGiusto s}
+  TempoBpm _ -> s
+  TempoDefault
+    | scTempoDeclared s -> s
+    | otherwise -> s {scTempo = tempoGiusto s}
+
 load :: Common -> IO (String, Score, Performance, TuningTable, Bool, Interp)
 load com = do
   src <- TIO.readFile (cInput com)
-  let parseFallback = case cTempo com of
-        TempoBpm b -> Bpm b
-        _ -> Bpm 72 -- placeholder; giusto lands below, post-parse
   score0 <- either (die . ("parse: " <>)) pure
-              (parseKern parseFallback src)
+              (parseKern (tempoFallback (cTempo com)) src)
   haveCfg <- doesFileExist (cConfig com)
   cfg <- if haveCfg
            then either (die . (("config " <> cConfig com <> ": ") <>)) pure
@@ -227,12 +240,7 @@ load com = do
       -- nothing better is known, the score's own *MM, an explicit
       -- --tempo BPM as fallback, --tempo giusto forcing the derivation,
       -- and the per-piece config override (the exception log) over all
-      score1 = case cTempo com of
-        TempoGiusto -> score0 {scTempo = tempoGiusto score0}
-        TempoBpm _ -> score0
-        TempoDefault
-          | scTempoDeclared score0 -> score0
-          | otherwise -> score0 {scTempo = tempoGiusto score0}
+      score1 = applyTempoOpt (cTempo com) score0
       score = maybe score1 (\bpm -> score1 {scTempo = Bpm bpm})
                 (pieceTempo cfg piece)
   mapM_ (checkBpm ("config tempo for " <> T.unpack piece))
@@ -377,9 +385,8 @@ mkInterp cfg table adaptive piece0 =
         , iBendRange = tuningBendRange cfg
         }
 
-runAlbum :: FilePath -> FilePath -> FilePath -> Double -> String -> IO ()
+runAlbum :: FilePath -> FilePath -> FilePath -> TempoOpt -> String -> IO ()
 runAlbum corpus outDir cfgPath tempo temp = do
-  checkBpm "--tempo" tempo
   cfg <- loadCfg cfgPath
   let adaptive = temp == "adaptive"
   table <- resolveTemperament (if adaptive then "werckmeister3" else temp)
@@ -390,8 +397,11 @@ runAlbum corpus outDir cfgPath tempo temp = do
   let one (f, src) =
         let piece = takeBaseName f
             r = do
-              s0 <- parseKern (Bpm tempo) src
-              let s = maybe s0 (\b -> s0 {scTempo = Bpm b})
+              s0 <- parseKern (tempoFallback tempo) src
+              -- the same tempo authority as the single-piece path:
+              -- giusto for undeclared scores, --tempo giusto forcing
+              let s1 = applyTempoOpt tempo s0
+                  s = maybe s1 (\b -> s1 {scTempo = Bpm b})
                         (pieceTempo cfg (T.pack piece))
               mapM_ (Left . ("config tempo: " <>))
                 (badBpm . (\(Bpm b) -> b) . scTempo $ s)

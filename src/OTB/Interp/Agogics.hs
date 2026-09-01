@@ -116,14 +116,16 @@ tempoMap ag arches easings subjSpans steps holds (Bpm base) end
   | end <= 0 || agTempoStep ag <= 0 = [(0, Bpm base)]
   | otherwise = thin [(t, Bpm (base * factor t)) | t <- gridPts]
   where
-    -- hold boundaries join the grid so a rest shorter than the step
-    -- still gets its span, exactly. (Trailing silence is not a grid
-    -- concern: the piece's full extent rides 'perfEnd' into the SMF
-    -- End-of-Track.)
+    -- hold and easing boundaries join the grid: a rest shorter than the
+    -- step still gets its span exactly, and an easing's recovery is
+    -- instant AT its arrival, not at the next eighth-note grid point.
+    -- (Trailing silence is not a grid concern: the piece's full extent
+    -- rides 'perfEnd' into the SMF End-of-Track.)
     gridPts =
       sort . nub $
         takeWhile (< end) (iterate (+ agTempoStep ag) 0)
           <> [ t | (a, d) <- holds, t <- [a, a + d], 0 <= t, t < end ]
+          <> [ t | (c, _, sp) <- easings, t <- [c - sp, c], 0 <= t, t < end ]
     -- the total factor is floored: however hostile the (validated-per-
     -- knob but unbounded-in-product) configuration, tempo stays positive
     factor t = max 0.1 (product [arch d a b t | (a, b, d) <- arches]
