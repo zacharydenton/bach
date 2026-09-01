@@ -616,6 +616,14 @@ summary{cursor:pointer;color:var(--dim);font:600 11px/1 var(--mono);
 <script>
 let CATS={}, STATE=null, audioOn=false;
 
+// the board may be mounted under a path prefix (tailscale serve puts
+// it at /bach): resolve every endpoint against the page's DIRECTORY,
+// so /bach without a trailing slash works too — relative URLs there
+// would otherwise resolve to the site root and hit a different proxy
+const BASE = location.pathname.endsWith('/') ? location.pathname
+           : location.pathname + '/';
+const api = p => BASE + p;
+
 const WORKLET = `
 class Player extends AudioWorkletProcessor {
   constructor(opts){
@@ -682,7 +690,7 @@ function listenRemote(){
   if (audioOn) return;
   audioOn = true;
   const tok = Math.random().toString(36).slice(2);
-  const a = new Audio('opus?tok=' + tok);
+  const a = new Audio(api('opus?tok=' + tok));
   a.preload = 'auto';
   // the server records an exact anchor (engine position + true banked
   // history) when it assembles this listener's burst; fetch it so the
@@ -693,7 +701,7 @@ function listenRemote(){
   let anchorTries = 0;
   const pollAnchor = () => {
     if (OPUS.anchor || anchorTries++ > 20) return;
-    fetch('anchor?tok=' + tok).then(r=>r.json())
+    fetch(api('anchor?tok=' + tok)).then(r=>r.json())
       .then(x => { if (!x.err) OPUS.anchor = x; else setTimeout(pollAnchor, 500); })
       .catch(() => setTimeout(pollAnchor, 500));
   };
@@ -736,7 +744,7 @@ async function listen(){
     ASTAT = 'underruns '+e.data.underruns+' · drops '+e.data.dropped;
   };
   node.connect(ctx.destination);
-  const resp = await fetch('pcm');
+  const resp = await fetch(api('pcm'));
   const reader = resp.body.getReader();
   let pend = new Uint8Array(0);
   while (true){
@@ -755,8 +763,8 @@ async function listen(){
 
 let PIECES=[];
 async function init(){
-  CATS = await (await fetch('patches')).json();
-  PIECES = await (await fetch('pieces')).json();
+  CATS = await (await fetch(api('patches'))).json();
+  PIECES = await (await fetch(api('pieces'))).json();
   const ps = document.getElementById('piecesel');
   ps.innerHTML = PIECES.map((n,i)=>`<option>${n}</option>`).join('');
   await refresh(); setInterval(refresh, 1000);
@@ -849,7 +857,7 @@ async function refreshWhys(){
   const at = earPos();
   if (at == null){ box.replaceChildren(); return; }
   let ws;
-  try { ws = await (await fetch('whys?at='+at.toFixed(2))).json(); }
+  try { ws = await (await fetch(api('whys?at='+at.toFixed(2)))).json(); }
   catch(e){ return; }
   const seen = new Map();
   for (const w of ws){
@@ -896,7 +904,7 @@ function opts(){
   return h;
 }
 async function refresh(){
-  STATE = await (await fetch('state')).json();
+  STATE = await (await fetch(api('state'))).json();
   STATE._t = Date.now();
   document.getElementById('play').textContent = STATE.playing?'Pause':'Play';
   const t = pieceTitle(STATE.piece);
@@ -948,7 +956,7 @@ async function refresh(){
 }
 function sel(i){ return document.getElementById('sel'+i).value; }
 async function post(url, body){
-  await fetch(url,{method:'POST',body:JSON.stringify(body)}); refresh();
+  await fetch(api(url),{method:'POST',body:JSON.stringify(body)}); refresh();
 }
 function setPatch(i,path){ post('patch',{part:i,path}); }
 function step(i,d){
