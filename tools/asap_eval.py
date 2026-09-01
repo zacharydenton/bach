@@ -193,6 +193,7 @@ KNOB_SECTIONS = {
     "subject_push": "agogics",
     "novelty_brake": "agogics",
     "mid_drift": "agogics",
+    "sus_lean": "dissonance",
 }
 
 # every grid contains an OFF value: fitting may disable a rule the
@@ -210,6 +211,7 @@ KNOB_GRIDS = {
     "subject_push": [0.0, 0.015, 0.03],
     "novelty_brake": [0.0, 0.02, 0.04, 0.08],
     "mid_drift": [0.0, 0.01, 0.02, 0.04],
+    "sus_lean": [0.0, 0.02, 0.05, 0.1],
 }
 
 
@@ -325,9 +327,16 @@ def fit_defaults(otb, args, pieces, tmp):
     base_tr = mean_r(otb, args, train, args.config, tmp)
     base_te = mean_r(otb, args, test, args.config, tmp)
     print(f"defaults: train r = {base_tr:.3f}, test r = {base_te:.3f}")
+    grids = KNOB_GRIDS
+    if getattr(args, "knobs", None):
+        wanted = args.knobs.split(",")
+        unknown = [k for k in wanted if k not in KNOB_GRIDS]
+        if unknown:
+            sys.exit(f"unknown knobs: {unknown} (know: {list(KNOB_GRIDS)})")
+        grids = {k: KNOB_GRIDS[k] for k in wanted}
     knobs = {}
     for sweep in range(2):
-        for knob, grid in KNOB_GRIDS.items():
+        for knob, grid in grids.items():
             best_v, best_r = None, -2
             for v in grid:
                 trial = dict(knobs)
@@ -430,6 +439,9 @@ def main():
                     help="coordinate-descent the tempo knobs against ALL "
                          "performances: train on Book I, validate on "
                          "Book II, print the fitted [sections]")
+    ap.add_argument("--knobs", metavar="K1,K2",
+                    help="restrict --fit-defaults to these knobs (a "
+                         "targeted refit after a rule's SHAPE changed)")
     ap.add_argument("--performer-fit", metavar="NAME",
                     help="fit the interpretation knobs to one ASAP "
                          "performer; write config/performers/NAME.toml")

@@ -26,10 +26,14 @@ open_push = 0.06    # DISCOVERED + FITTED: settling in — humans open +5%
 open_span = 4.0
 cadence_depth = 0.0 # mined marginal effect was confounded (joint model
                     # -3.4%, mostly shared with breath/bar-final); the fit
-                    # switched it off on held-out evidence
+                    # switched it off on held-out evidence, and the
+                    # structural/passing stratification + kinematic shape
+                    # did not revive it (refit 2026-09-01)
 boundary_ease = 0.0 # the deep boundary holds are real in the residuals,
-                    # but a linear easing is not how humans do them —
-                    # switched off by the fit; a better shape awaits
+                    # but neither a linear easing (2026-08-31) nor the
+                    # Friberg-Sundberg kinematic brake (refit 2026-09-01,
+                    # no train gain at any depth) is how humans do them —
+                    # the shape is still not found
 subject_push = 0.0  # +0.9% joint did not survive fitting
 
 [phrasing]
@@ -77,9 +81,10 @@ ensemble = 1.0    # melody lead, chord roll, seeded micro-jitter
 dis_vel = 10      # CPE Bach 1753: dissonances louder — vel units per charge
 dis_lean = 0.10   # ...and leaned on: gate boost toward legato per charge
 sus_soft = 4      # a suspension's RESOLUTION arrives gently (vel taken)
-sus_lean = 0.02   # tempo lean into the dissonant moment, per unit of
-                  # mid-note charge rise (the prepared dissonance the
-                  # onset-time charge cannot see)
+sus_lean = 0.0    # tempo lean into the dissonant moment — VETOED by the
+                  # fit (2026-09-01: off beats 0.02 on train AND held-out
+                  # r); the suspension's legato hold and gentle resolution
+                  # stand, but humans do not bend the beat for it
 
 [arches]
 arch_piece = 0.024 # FITTED (was 0.03): Todd 1992 piece arch, at the depth

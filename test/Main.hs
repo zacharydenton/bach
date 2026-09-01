@@ -1096,7 +1096,8 @@ review = testGroup "review regressions"
             { iExpress = defaultExpressParams
                 { exEnsemble = 0, exArchPiece = 0, exArchGroup = 0
                 , exDisVel = 0, exMelCharge = 0, exHarmCharge = 0
-                , exSubjectVel = 0 } }
+                , exSubjectVel = 0
+                , exSusLean = 0.02 } } -- fit-vetoed default; on for the test
       case perform interp s of
         Left e -> assertFailure e
         Right p -> do
@@ -1207,10 +1208,15 @@ review = testGroup "review regressions"
           quarters = mkS (4, 4) (replicate 16 (1 / 4))
           sixteenths = mkS (4, 4) (replicate 64 (1 / 16))
           gigue = mkS (6, 8) (replicate 16 (1 / 8))
-      assertBool "fast figuration asks for room"
-        (tempoGiusto quarters > tempoGiusto sixteenths)
+          breve = mkS (2, 2) (replicate 16 (1 / 4))
+      -- FITTED directions (ASAP, 2026-09-01) — the data overturned the
+      -- "fast notes ask for room" prior: dense figuration STRIDES
+      assertBool "sixteenth figuration strides"
+        (tempoGiusto sixteenths > tempoGiusto quarters)
       assertBool "compound eighths dance"
         (tempoGiusto gigue > tempoGiusto quarters)
+      assertBool "alla breve flows fastest (Kirnberger vindicated)"
+        (tempoGiusto breve > tempoGiusto gigue)
       -- and the parser records whether *MM spoke at all
       case parseKern (Bpm 72) (T.unlines ["**kern", "4c", "*-"]) of
         Right s -> scTempoDeclared s @?= False

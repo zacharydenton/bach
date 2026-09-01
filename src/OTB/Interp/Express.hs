@@ -77,7 +77,9 @@ data ExpressParams = ExpressParams
     -- resolves gently — CPE Bach 1753 I.3)
   , exSusLean :: !Double
     -- ^ tempo lean into a suspension's dissonant moment, per unit of
-    -- charge rise (the agogic side of dissonance preparation)
+    -- charge rise. VETOED by the ASAP fit (2026-09-01): humans do not
+    -- bend the beat for a suspension — default 0, kept as a per-piece
+    -- knob
   }
   deriving (Show, Eq)
 
@@ -108,7 +110,7 @@ defaultExpressParams = ExpressParams
   , exDialogueYield = 2
   , exSeqEcho = 2
   , exSusSoft = 4
-  , exSusLean = 0.02
+  , exSusLean = 0.0
   }
 
 -- | Change a note's duration without breaking the Score invariant that
