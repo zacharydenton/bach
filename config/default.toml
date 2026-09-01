@@ -51,13 +51,21 @@ w_dur = 0.7         # long note arriving after shorter ones
 w_leap = 0.5        # leap away from the note
 
 [dynamics]
-vel_base = 84       # centre velocity
-vel_bar = 12        # Sloboda: the barline is marked loudest...
-vel_halfbar = 6     # ...mid-bar next (even meters)...
-vel_beat = 3        # ...beats next; subdivisions get nothing
-vel_arch = 8        # Todd: loudness arches to the phrase middle
-vel_highloud = 0.25 # KTH: per semitone — melodic peaks carry
-vel_accent = 14     # kern ^ marks: the score's own emphasis
+# NOTE-LEVEL FIT (vel_fit --fit-defaults vs 166 ASAP performances,
+# 2026-09-01): held-out Book II velocity r 0.161 -> 0.421. Register is
+# what humans actually voice by — vel_highloud triples and dominates;
+# read the zeros below with that in mind: rules whose contribution is
+# invisible beside register got switched off, not disproven at zero
+# register-contrast. All remain per-piece knobs.
+vel_base = 84       # centre velocity (unfittable: r is affine-invariant)
+vel_bar = 0         # FITTED (was 12): Sloboda's barline accent does not
+vel_halfbar = 0     # survive contact with WTC velocities...
+vel_beat = 3        # ...but the beat level does, exactly at its hand value
+vel_arch = 0        # FITTED (was 8): no Todd loudness arch in the keys
+vel_highloud = 0.8  # FITTED (was 0.25): the dominant driver — melodic
+                    # height IS the human loudness map here
+vel_accent = 14     # kern ^ marks: the score's own emphasis (too rare
+                    # in the WTC to fit)
 # NB: velocity lands on the A4 and BS2; the Model D ignores it (CV + hands)
 
 [ornaments]
@@ -82,9 +90,14 @@ expression = 1.0  # dissonance emphasis, phrase arches, agogic leans
 ensemble = 1.0    # melody lead, chord roll, seeded micro-jitter
 
 [dissonance]
-dis_vel = 10      # CPE Bach 1753: dissonances louder — vel units per charge
+dis_vel = 0       # CPE Bach 1753's dissonances-louder — FITTED to 0
+                  # (note-level 2026-09-01): no velocity trace in the
+                  # human keys beside register (was 10; per-piece knob;
+                  # the agogic lean dis_lean is separate and stands)
 dis_lean = 0.10   # ...and leaned on: gate boost toward legato per charge
-sus_soft = 4      # a suspension's RESOLUTION arrives gently (vel taken)
+sus_soft = 0      # a suspension's RESOLUTION arriving gently — not
+                  # found in the human keys (note-level fit 2026-09-01;
+                  # was 4, remains a per-piece knob)
 sus_lean = 0.0    # tempo lean into the dissonant moment — VETOED by the
                   # fit (2026-09-01: off beats 0.02 on train AND held-out
                   # r); the suspension's legato hold and gentle resolution
@@ -105,9 +118,16 @@ lead_ms = 2       # MEASURED (note-level ASAP, 2026-09-01): in WTC
 roll_ms = 12      # final chord rolled bass-upward, per note
 jitter_ms = 3     # KTH noise rules — seeded by piece name: deterministic
 jitter_vel = 2
-dialogue_yield = 2 # the other half of Klangrede: listeners yield while
-                   # a voice holds the floor
-seq_echo = 2      # terraced echo: vel step down per sequence repetition
+dialogue_vel = 2   # FITTED (was 4): the floor-holder's presence survives
+                   # the note-level fit at half strength
+dialogue_yield = 0 # FITTED (was 2): the listeners' yielding does not —
+                   # not measurable beside register (per-piece knob)
+seq_echo = 0      # FITTED (was 2): no terraced echo in the human keys
+subject_vel = 5   # FITTED: survives exactly at its hand value — fugue
+                  # subjects really are voiced up
+mel_charge = 0    # FITTED (was 0.4): Friberg's melodic charge, no
+harm_charge = 0   # FITTED (was 0.3): ...and harmonic charge — neither
+                  # survives beside register (per-piece knobs)
 
 [piece.wtc1p01]
 base = 0.85       # pure arpeggiated figuration: let it ring toward pedal

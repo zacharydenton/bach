@@ -31,6 +31,13 @@ an OFF value; a knob that only helps train keeps its default and the
 veto is recorded. Regeneration: run the commands above from the repo
 root with corpus/asap and corpus/bach-wtc present and otb built.
 
+Committed run (2026-09-01, 58-piece overlap): baseline train r = 0.164,
+test 0.161; fitted train 0.408, TEST 0.421. Winners: vel_highloud 0.8
+(the dominant driver), vel_beat 3 and subject_vel 5 (at their hand
+values), dialogue_vel 2. Vetoed beside register: vel_bar, vel_halfbar,
+vel_arch, dis_vel, sus_soft, mel_charge, harm_charge, dialogue_yield,
+seq_echo. --measure committed lead_ms 20 -> 2 and repeated 0.60 -> 0.45.
+
 License: GPL-2.0-or-later.
 """
 import argparse
