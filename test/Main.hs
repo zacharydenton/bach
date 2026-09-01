@@ -998,6 +998,26 @@ review = testGroup "review regressions"
           let subs = [ pnPitch n
                      | n <- concat (perfTracks p), pnSrcOn n == 1 ]
           subs @?= [65, 64, 62, 64]
+  , testCase "turn: neighbours are letters, not accidentals (wtc1p04)" $ do
+      -- the C#-minor A# turn (wtc1p04:179): the scale's pc set contains
+      -- A-natural one semitone below A#, but a same-letter accidental is
+      -- not a neighbour — the spelled lower neighbour is G#, two below
+      present <- doesDirectoryExist corpusDir
+      if not present then pure () else do
+        src <- TIO.readFile (corpusDir </> "wtc1p04.krn")
+        p <- either assertFailure pure
+               (parseKern (Bpm 72) src >>= perform calmInterp)
+        s <- either assertFailure pure (parseKern (Bpm 72) src)
+        let turns = [ (snSource n, snPitch n)
+                    | v <- scVoices s, n <- vNotes v
+                    , any (\m -> case m of Turn _ _ -> True; _ -> False)
+                        (snMarks n) ]
+        assertBool "the piece has its turns" (not (null turns))
+        forM_ turns $ \((o, _), tp) -> do
+          let subs = [ pnPitch n | n <- concat (perfTracks p)
+                     , pnSrcOn n == o, abs (pnPitch n - tp) <= 2 ]
+          assertBool ("lower aux is the letter below: " <> show subs)
+            ((tp - 2) `elem` subs && (tp - 1) `notElem` subs)
   , testCase "scl: a bare integer is a ratio (2 = the octave)" $ do
       let scl = T.unlines $
             ["! t", "t", "12", "!"]

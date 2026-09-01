@@ -30,7 +30,9 @@ module OTB.Annotate
   , annEvents
   ) where
 
+import Data.List (sort)
 import Data.Maybe (isJust, mapMaybe)
+import OTB.Pitch (spLetter)
 import EuterpeaLite.Music
 import OTB.Explain (Why (..), why)
 import OTB.Interp
@@ -129,10 +131,33 @@ annotateLane ip ctx preWs l0 = Annotated (go 0 decided)
             if major then [0, 2, 4, 5, 7, 9, 11] else [0, 2, 3, 5, 7, 8, 10, 11]
           scale = [(tonic + s) `mod` 12 | s <- degrees]
           pc = snPitch sn `mod` 12
-          step dir =
+          naturals = [0, 2, 4, 5, 7, 9, 11]
+          -- a neighbour is the ADJACENT STAFF LETTER — a same-letter
+          -- accidental is not one (A-natural is no lower neighbour for
+          -- A#; G# is). Candidates carry one accidental at most, ranked
+          -- in-scale first, then the closer, then the plainer; so the
+          -- C#-minor scale set holding both B and B# picks B# under the
+          -- tonic (leading tone) but never A-natural under A#.
+          spelledStep sp dir =
+            let ln = (spLetter sp + dir) `mod` 7
+                cands =
+                  [ (not inScale, s, abs a)
+                  | a <- [-1, 0, 1]
+                  , let npc = ((naturals !! ln) + a) `mod` 12
+                        s = (dir * (npc - pc)) `mod` 12
+                        inScale = npc `elem` scale
+                  , s == 1 || s == 2 ]
+             in case sort cands of
+                  ((_, s, _) : _) -> s
+                  [] -> 2
+          -- unspelled notes (generated scores): nearest scale member
+          chromaticStep dir =
             case [s | s <- [1, 2], ((pc + dir * s) `mod` 12) `elem` scale] of
               (s : _) -> s
               [] -> 2 -- chromatic surroundings: keep the whole tone
+          step dir = case snSpell sn of
+            Just sp -> spelledStep sp dir
+            Nothing -> chromaticStep dir
        in (step 1, step (-1))
     arts = articulateLane' (iArt ip) l
     -- cadence arrivals from the harmony model bolster the boundary
