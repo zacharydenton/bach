@@ -35,7 +35,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
-from patchboard import scan_patches  # noqa: E402
+from patchboard import patch_dirs, scan_patches  # noqa: E402
 
 WASM_FILES = ["surge-worklet.js", "surge-worklet.wasm", "worklet-shim.js"]
 
@@ -151,7 +151,16 @@ def bake_patches(data_dir):
             n += 1
     with open(os.path.join(data_dir, "patches.json"), "w") as f:
         json.dump(listing, f)
-    print(f"patches: {n} across {len(listing)} categories")
+    # the client's "(init)" is a real Init Saw: with two voices per synth
+    # (scene A/B), every scene needs actual patch bytes to merge from
+    for root in patch_dirs():
+        init = os.path.join(root, "Templates", "Init Saw.fxp")
+        if os.path.isfile(init):
+            shutil.copy2(init, os.path.join(data_dir, "init.fxp"))
+            break
+    else:
+        sys.exit("no Templates/Init Saw.fxp in any patch library")
+    print(f"patches: {n} across {len(listing)} categories (+ init.fxp)")
     return cats
 
 

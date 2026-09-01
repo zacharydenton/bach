@@ -1,8 +1,13 @@
 /*
  * The static patchboard's AudioWorkletProcessor: one Surge wasm module,
- * N SurgeWasm instances (one per MIDI channel, exactly the live board's
- * one-surgepy-instance-per-channel design), driven by a pre-baked event
- * list instead of a server render thread.
+ * TWO SurgeWasm instances carrying the four voices — each instance holds
+ * two voices as scene A / scene B in MIDI channel-split mode (bridge
+ * loadScenePatches), and renderScenes exposes each scene's post-insert-FX
+ * stereo separately, so per-voice gain and mute still happen here at the
+ * mix, exactly as when every voice had its own instance.
+ *
+ * Slot s (0=bass 1=tenor 2=alto 3=soprano) lives on instance s>>1 as
+ * scene s&1; scene routing is by MIDI channel (0 -> A, 1+ -> B).
  *
  * Scheduling matches tools/patchboard.py render(): the walk is in 32-frame
  * engine blocks and every event lands at the boundary of the block that
@@ -15,11 +20,12 @@ import "./engine/worklet-shim.js";
 import createSurgeModule from "./engine/surge-worklet.js";
 
 const BLOCK = 32;
+const N_SLOTS = 4;
 
 class Board extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    const { wasmBinary, nInstances } = options.processorOptions;
+    const { wasmBinary } = options.processorOptions;
 
     this.ready = false;
     this.queued = [];
@@ -29,10 +35,9 @@ class Board extends AudioWorkletProcessor {
     this.ev = null;
     this.evI = 0;
     this.tempoI = 0;
-    this.gain = [];
-    this.mute = [];
-    this.viewsL = [];
-    this.viewsR = [];
+    this.gain = new Array(N_SLOTS).fill(0.25); // summing headroom (live default)
+    this.mute = new Array(N_SLOTS).fill(false);
+    this.views = []; // per slot: {l, r} into its instance's scene lanes
     // riding limiter state (patchboard._limit, rates rescaled from its
     // 4096-frame chunk to the 128-frame quantum: 0.94^(128/4096),
     // 1.02^(128/4096))
@@ -52,20 +57,18 @@ class Board extends AudioWorkletProcessor {
       .then((mod) => {
         this.mod = mod;
         this.synths = [];
-        this.ptrs = [];
-        for (let i = 0; i < nInstances; i++) {
+        this.scenePtrs = [];
+        for (let i = 0; i < N_SLOTS / 2; i++) {
           const s = new mod.SurgeWasm(sampleRate, 128);
           if (!s.ok()) throw new Error(s.initError());
           this.synths.push(s);
-          this.ptrs.push(s.outputPtr());
-          this.gain.push(0.25); // summing headroom (live board ch_gain)
-          this.mute.push(false);
+          this.scenePtrs.push(s.sceneOutputPtr());
         }
         this.maxFrames = this.synths[0].maxFrames();
         this.ready = true;
         for (const m of this.queued) this.handle(m);
         this.queued = [];
-        this.port.postMessage({ type: "ready", sampleRate, n: nInstances });
+        this.port.postMessage({ type: "ready", sampleRate, n: this.synths.length });
       })
       .catch((err) =>
         this.port.postMessage({ type: "error", message: String(err) }),
@@ -86,13 +89,18 @@ class Board extends AudioWorkletProcessor {
         this.tempoI = 0;
         this.ended = false;
         break;
-      case "patch": {
-        const s = this.synths[msg.ch];
+      case "patches": {
+        // both voices of one instance, as a pair — the scene merge is a
+        // whole-patch operation (see the bridge)
+        const s = this.synths[msg.inst];
         if (s) {
-          // allNotesOff before load, like the live board's _apply_pending;
-          // loadPatchBytes applies synchronously (see the bridge)
           s.allNotesOff();
-          s.loadPatchBytes(msg.bytes, msg.name || "");
+          if (!s.loadScenePatches(msg.bytesA, msg.nameA || "",
+                                  msg.bytesB, msg.nameB || ""))
+            this.port.postMessage({
+              type: "error",
+              message: `scene patch load failed on instance ${msg.inst}`,
+            });
         }
         break;
       }
@@ -112,10 +120,10 @@ class Board extends AudioWorkletProcessor {
         this.seek(msg.frame);
         break;
       case "gain":
-        if (msg.ch < this.gain.length) this.gain[msg.ch] = msg.v;
+        if (msg.ch < N_SLOTS) this.gain[msg.ch] = msg.v;
         break;
       case "mute":
-        if (msg.ch < this.mute.length) this.mute[msg.ch] = msg.v;
+        if (msg.ch < N_SLOTS) this.mute[msg.ch] = msg.v;
         break;
     }
   }
@@ -150,14 +158,14 @@ class Board extends AudioWorkletProcessor {
 
   refreshViews() {
     const heap = this.mod.HEAPF32;
-    for (let ch = 0; ch < this.synths.length; ch++) {
-      if (!this.viewsL[ch] || this.viewsL[ch].buffer !== heap.buffer) {
-        this.viewsL[ch] = new Float32Array(heap.buffer, this.ptrs[ch], BLOCK);
-        this.viewsR[ch] = new Float32Array(
-          heap.buffer,
-          this.ptrs[ch] + this.maxFrames * 4,
-          BLOCK,
-        );
+    for (let slot = 0; slot < N_SLOTS; slot++) {
+      if (!this.views[slot] || this.views[slot].l.buffer !== heap.buffer) {
+        const base = this.scenePtrs[slot >> 1];
+        const lane = (slot & 1) * 2; // [A_L][A_R][B_L][B_R]
+        this.views[slot] = {
+          l: new Float32Array(heap.buffer, base + lane * this.maxFrames * 4, BLOCK),
+          r: new Float32Array(heap.buffer, base + (lane + 1) * this.maxFrames * 4, BLOCK),
+        };
       }
     }
   }
@@ -193,11 +201,12 @@ class Board extends AudioWorkletProcessor {
 
         while (this.evI < frames.length && frames[this.evI] < blockEnd) {
           const i = this.evI++;
-          const s = this.synths[chans[i]];
+          const s = this.synths[chans[i] >> 1];
+          const scene = chans[i] & 1; // MIDI channel selects the scene
           if (!s) continue;
-          if (kinds[i] === 1) s.noteOn(0, a[i], b[i]);
-          else if (kinds[i] === 2) s.noteOff(0, a[i], 0);
-          else s.pitchBend(0, a[i] - 8192);
+          if (kinds[i] === 1) s.noteOn(scene, a[i], b[i]);
+          else if (kinds[i] === 2) s.noteOff(scene, a[i], 0);
+          else s.pitchBend(scene, a[i] - 8192);
         }
         while (
           this.tempoI < tempoFrames.length &&
@@ -207,18 +216,15 @@ class Board extends AudioWorkletProcessor {
           for (const s of this.synths) s.setTempo(bpm);
         }
 
-        // muted channels still render (their voices keep evolving, like the
+        // muted voices still render (their scenes keep evolving, like the
         // live board, whose mute is applied at the mix) — they just don't sum
-        for (let ch = 0; ch < this.synths.length; ch++) {
-          this.synths[ch].render(BLOCK);
-        }
+        for (const s of this.synths) s.renderScenes(BLOCK);
         this.refreshViews();
-        for (let ch = 0; ch < this.synths.length; ch++) {
-          if (this.mute[ch]) continue;
-          const g = this.gain[ch];
+        for (let slot = 0; slot < N_SLOTS; slot++) {
+          if (this.mute[slot]) continue;
+          const g = this.gain[slot];
           if (g <= 0) continue;
-          const l = this.viewsL[ch];
-          const r = this.viewsR[ch];
+          const { l, r } = this.views[slot];
           for (let i = 0; i < BLOCK; i++) {
             L[done + i] += l[i] * g;
             R[done + i] += r[i] * g;

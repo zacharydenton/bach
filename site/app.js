@@ -15,6 +15,7 @@ import {
 
 let MANIFEST, CASTINGS, CAL, CATS;
 let ctx, node, SR;
+let INIT_BYTES; // Init Saw — what "(init)" loads as a scene partner
 let PLAYING = false;
 let PIECE = null; // {idx, name, chToSlot, slotChannels, whyIdx, loopFrames}
 let POS = { frame: 0, t: Date.now(), playing: false };
@@ -48,8 +49,8 @@ async function init() {
   $("title").textContent = t.main;
   $("idx").textContent = `${t.bwv ? t.bwv + " · " : ""}1 / ${MANIFEST.pieces.length}`;
   $("stats").textContent =
-    `${MANIFEST.pieces.length} pieces baked · four Surge voices` +
-    ` will render in this tab — press Start`;
+    `${MANIFEST.pieces.length} pieces baked · four voices on two Surge` +
+    ` synths will render in this tab — press Start`;
   renderRig();
 
   $("start").addEventListener("click", start);
@@ -79,13 +80,17 @@ async function start() {
     ctx = new AudioContext();
     await ctx.resume();
     SR = ctx.sampleRate;
-    const wasmBinary = await (await fetch("engine/surge-worklet.wasm")).arrayBuffer();
+    const [wasmBinary, initBytes] = await Promise.all([
+      fetch("engine/surge-worklet.wasm").then((r) => r.arrayBuffer()),
+      fetch("data/init.fxp").then((r) => r.arrayBuffer()),
+    ]);
+    INIT_BYTES = initBytes;
     await ctx.audioWorklet.addModule("board-processor.js");
     node = new AudioWorkletNode(ctx, "board", {
       numberOfInputs: 0,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { wasmBinary, nInstances: SLOTS.length },
+      processorOptions: { wasmBinary },
     });
     const ready = new Promise((res, rej) => {
       node.port.onmessage = (e) => {
@@ -134,9 +139,14 @@ async function loadPiece(idx) {
 
   const eff = resolveSlots(CASTINGS, p.name, slotChannels, slotPatch,
     castState);
+  const dirty = new Set();
   for (let s = 0; s < SLOTS.length; s++) {
-    if (eff[s] !== slotPatch[s]) await applyPatch(s, eff[s]);
+    if (eff[s] !== slotPatch[s]) {
+      slotPatch[s] = eff[s];
+      dirty.add(s >> 1);
+    }
   }
+  for (const inst of dirty) await shipInstance(inst);
 
   // calibration compensation sees the patches that will play
   const score = buildEvents(perf, SR, chToSlot, eff, CAL, true);
@@ -159,20 +169,29 @@ async function loadPiece(idx) {
   if (PLAYING) node.port.postMessage({ type: "play" });
 }
 
-async function applyPatch(slot, url) {
-  slotPatch[slot] = url;
-  // "(init)" is the booted state; once a patch is loaded there is nothing
-  // to reload, so it only means "leave this voice alone" (as live)
-  if (url === "(init)" || !node) return;
-  let bytes = patchCache.get(url);
+async function patchBytes(url) {
+  if (url === "(init)") return INIT_BYTES; // a real Init Saw, so (init)
+  let bytes = patchCache.get(url); //         is loadable, not just "booted"
   if (!bytes) {
     bytes = await (await fetch(encUrl(url))).arrayBuffer();
     patchCache.set(url, bytes);
   }
-  const copy = new Uint8Array(bytes.slice(0)); // transfer must not eat the cache
+  return bytes;
+}
+
+// The scene merge is a whole-patch operation, so an instance's two voices
+// always ship together: slot 2i as scene A, slot 2i+1 as scene B.
+async function shipInstance(inst) {
+  if (!node) return;
+  const urlA = slotPatch[inst * 2];
+  const urlB = slotPatch[inst * 2 + 1];
+  const [bytesA, bytesB] = await Promise.all([patchBytes(urlA), patchBytes(urlB)]);
+  const copyA = new Uint8Array(bytesA.slice(0)); // transfer must not eat the cache
+  const copyB = new Uint8Array(bytesB.slice(0));
   node.port.postMessage(
-    { type: "patch", ch: slot, bytes: copy, name: patchDisplay(url) },
-    [copy.buffer],
+    { type: "patches", inst, bytesA: copyA, nameA: patchDisplay(urlA),
+      bytesB: copyB, nameB: patchDisplay(urlB) },
+    [copyA.buffer, copyB.buffer],
   );
 }
 
@@ -287,7 +306,8 @@ function refreshRig() {
 }
 
 async function setPatch(s, url) {
-  await applyPatch(s, url);
+  slotPatch[s] = url;
+  await shipInstance(s >> 1);
   refreshRig();
 }
 
@@ -312,7 +332,7 @@ function renderStats() {
   const bits = [
     `peak ${STAT.peak.toFixed(3)}`,
     `engine load ${(STAT.load * 100).toFixed(0)}%`,
-    `${SLOTS.length} synths`,
+    `${SLOTS.length} voices · 2 synths`,
   ];
   $("stats").innerHTML = bits.join(" · ") +
     (STAT.riding ? ' · <span class=clip>limiter riding</span>' : "");

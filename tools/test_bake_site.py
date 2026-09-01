@@ -101,6 +101,9 @@ class BakedSite(unittest.TestCase):
         for p in m["pieces"][:3] + m["pieces"][-3:]:
             self.assertTrue(os.path.isfile(os.path.join(site, p["url"])))
         self.assertTrue(os.path.isfile(os.path.join(site, m["scl"])))
+        # "(init)" loads real bytes now (scene merges need both patches)
+        self.assertTrue(os.path.isfile(
+            os.path.join(self.DATA, "init.fxp")))
 
     def test_casting_urls_exist_in_baked_bank(self):
         site = os.path.dirname(self.DATA)

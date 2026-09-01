@@ -17,11 +17,18 @@ What ships here (committed):
   piece's own casting file overrides it. The progress rail **seeks**,
   which the streamed board never could, and the ledger works while
   paused — seek anywhere and study the moment.
-- `board-processor.js` — an AudioWorkletProcessor hosting four
-  `SurgeWasm` instances (several score lanes share a voice's synth;
-  native SCL tuning is what makes that safe — no per-note bends to
-  fight over), walking the pre-built event list in 32-frame engine
-  blocks with the live board's riding limiter on the mix.
+- `board-processor.js` — an AudioWorkletProcessor hosting just TWO
+  `SurgeWasm` instances: each carries two voices as scene A / scene B
+  in MIDI channel-split mode. The fork's `loadScenePatches` merges two
+  factory presets into one patch (the scene clipboard carries params,
+  modulation, MSEGs, wavetables and the scene's insert FX; send/global
+  FX come from the scene-A patch alone), and `renderScenes` taps each
+  scene's post-insert-FX stereo separately, so per-voice gain and mute
+  still happen at the worklet mix. Several score lanes share a voice's
+  synth; native SCL tuning is what makes all of this safe — no
+  per-note bends to fight over. Events walk in 32-frame engine blocks
+  with the live board's riding limiter on the mix. "(init)" is a real
+  `Init Saw.fxp` (baked as `data/init.fxp`), so it genuinely loads.
 - `routing.js` + `routing.test.js` — the pure logic (slot
   distribution, casting-to-slot resolution, calibration, event build);
   run with `node --test site/routing.test.js`.
@@ -53,8 +60,11 @@ correct `application/wasm` MIME type (python's http.server and GitHub
 Pages both comply). AudioWorklets need a secure context: https or
 localhost.
 
-Verified end-to-end with Playwright over the tailnet mount (four wasm
-synths at ~6–8% engine load; the default rig seeds; wtc1f01's casting
+Verified end-to-end with Playwright over the tailnet mount (two wasm
+synths at ~4–6% engine load; the default rig seeds; wtc1f01's casting
 lands one patch per slot; a hand-picked preset survives piece changes;
-the two-voice fugue shows tenor and alto tacet; seek, pause/resume and
-the ledger all behave; console clean).
+the two-voice fugue shows tenor and alto tacet; a soloed scene-B voice
+is audible and a full mute is silent; seek, pause/resume and the
+ledger all behave; console clean). The fork's node regression pins the
+scene separation itself: Bass 1 on A, EP 2 on B — a channel-0 note
+lands only in A's lanes.
