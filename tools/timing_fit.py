@@ -87,11 +87,14 @@ TIMING_KNOB_GRIDS = {
 }
 
 
-def beat_grid(piece, scale=(1, 1)):
+def beat_grid(piece, scale=(1, 1), pdir=None):
     """(wn positions, score-annotation identity) for interpolation.
     Positions are scale-corrected when the kern and xml editions
-    notate at different value scales (the bridge's num/den)."""
-    pdir = os.path.join(na.ASAP, "Bach", *ae.bwv_of(piece))
+    notate at different value scales (the bridge's num/den). The score
+    grid must come from the SAME source dir as the performance (ASAP's
+    notated beats vs maestro-wtc's uniform quarters never mix)."""
+    if pdir is None:
+        pdir = os.path.join(na.ASAP, "Bach", *ae.bwv_of(piece))
     wns = ae.score_beat_positions(
         os.path.join(pdir, "midi_score_annotations.txt"))
     num, den = scale
@@ -101,8 +104,8 @@ def beat_grid(piece, scale=(1, 1)):
 def perf_devs(piece, ir, irn, perf, mpath, tempo_map):
     """Eligible rows with human_dev/otb_dev, plus counters."""
     rows, c = na.bridge(irn, na.parse_match(mpath))
-    wns = beat_grid(piece, c["scale"])
     pdir = os.path.dirname(mpath)
+    wns = beat_grid(piece, c["scale"], pdir)
     ts = ae.perf_beat_times(
         os.path.join(pdir, perf + "_annotations.txt"))
     n = min(len(wns), len(ts))

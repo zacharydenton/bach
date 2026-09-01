@@ -143,7 +143,10 @@ def local_tempo(beat_times):
 def compile_ir(otb, piece, kern_dir, out_dir, config=None):
     krn = os.path.join(kern_dir, piece + ".krn")
     ir = os.path.join(out_dir, piece + ".json")
-    cmd = [otb, "compile", krn, "-o", os.devnull, "--emit-json", ir]
+    cmd = [otb, "compile", krn, "-o", os.devnull, "--emit-json", ir,
+           # temp-dir knob configs must not lose the edition layer
+           # (wtc1p08's m36 appoggiatura lives in config/editions)
+           "--editions", os.path.join(ROOT, "config", "editions")]
     if config:
         cmd += ["--config", config]
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -153,15 +156,30 @@ def compile_ir(otb, piece, kern_dir, out_dir, config=None):
         return json.load(f)
 
 
+MAESTRO_WTC = os.path.join(ROOT, "corpus", "maestro-wtc")
+
+
 def eval_piece(ir, asap_dir, piece):
-    """[(performer, r)] for every human performance of the piece."""
+    """[(performer, r)] for every human performance of the piece,
+    across ASAP and the derived maestro-wtc tree. Each source dir
+    carries its own score beat grid — the two grids differ (notated
+    beats vs the aligner's uniform quarters) and must never mix."""
     kind, bwv = bwv_of(piece)
-    pdir = os.path.join(asap_dir, "Bach", kind, bwv)
-    if not os.path.isdir(pdir):
-        return None
-    score_ann = os.path.join(pdir, "midi_score_annotations.txt")
-    positions = score_beat_positions(score_ann)
     tempo_map = [(t["wn"], t["bpm"]) for t in ir["tempoMap"]]
+    results = []
+    for root in (asap_dir, MAESTRO_WTC):
+        pdir = os.path.join(root, "Bach", kind, bwv)
+        if not os.path.isdir(pdir):
+            continue
+        results.extend(_eval_dir(pdir, tempo_map) or [])
+    return results or None
+
+
+def _eval_dir(pdir, tempo_map):
+    score_ann = os.path.join(pdir, "midi_score_annotations.txt")
+    if not os.path.isfile(score_ann):
+        return None
+    positions = score_beat_positions(score_ann)
     ours = local_tempo([our_time_at(tempo_map, w) for w in positions])
     results = []
     for f in sorted(os.listdir(pdir)):
@@ -458,10 +476,10 @@ def main():
     if not pieces:
         pieces = sorted(
             p[:-4] for p in os.listdir(args.kern) if p.endswith(".krn"))
-    # keep only pieces ASAP has
+    # keep only pieces some human source has (ASAP or derived maestro)
     pieces = [p for p in pieces
-              if os.path.isdir(os.path.join(
-                  args.asap, "Bach", *bwv_of(p)))]
+              if any(os.path.isdir(os.path.join(root, "Bach", *bwv_of(p)))
+                     for root in (args.asap, MAESTRO_WTC))]
     if not pieces:
         sys.exit("no overlapping pieces found (is corpus/asap present?)")
 

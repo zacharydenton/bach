@@ -62,6 +62,47 @@ def piece_names(bwv):
     return (f"wtc{book}p{num:02d}", f"wtc{book}f{num:02d}")
 
 
+# WTC ordering: number = chromatic position of the key, major first
+KEY_NUM = {("C", "maj"): 1, ("C", "min"): 2, ("C-sharp", "maj"): 3,
+           ("C-sharp", "min"): 4, ("D-flat", "maj"): 3,
+           ("D", "maj"): 5, ("D", "min"): 6,
+           ("E-flat", "maj"): 7, ("E-flat", "min"): 8,
+           ("D-sharp", "min"): 8, ("E", "maj"): 9, ("E", "min"): 10,
+           ("F", "maj"): 11, ("F", "min"): 12,
+           ("F-sharp", "maj"): 13, ("F-sharp", "min"): 14,
+           ("G", "maj"): 15, ("G", "min"): 16,
+           ("A-flat", "maj"): 17, ("G-sharp", "min"): 18,
+           ("A", "maj"): 19, ("A", "min"): 20,
+           ("B-flat", "maj"): 21, ("B-flat", "min"): 22,
+           ("B", "maj"): 23, ("B", "min"): 24}
+
+
+def title_key_bwv(title):
+    """BWV inferred from 'in <Key> <Major|Minor>' + 'WTC <I|II>' — the
+    titles' explicit BWV numbers are sometimes WRONG (a 2014 file says
+    'BWV 846' and 'WTC II' in one breath; ASAP proves it is 870), so
+    the key+book reading is computed independently."""
+    m = re.search(r"in ([A-G])(?:[- ](flat|sharp))? (Major|Minor)", title)
+    book = 2 if re.search(r"WTC\s*II|Book\s*II", title) else (
+        1 if re.search(r"WTC\s*I|Book\s*I", title) else None)
+    if not m or book is None:
+        return None
+    key = m.group(1) + (f"-{m.group(2)}" if m.group(2) else "")
+    num = KEY_NUM.get((key, "maj" if m.group(3) == "Major" else "min"))
+    if num is None:
+        return None
+    return (845 if book == 1 else 869) + num
+
+
+def folder_pieces(folder):
+    """'Bach/Fugue/bwv_870' -> ['wtc2f01']."""
+    m = re.match(r"Bach/(Prelude|Fugue)/bwv_(\d+)", folder)
+    if not m:
+        return []
+    pre, fug = piece_names(int(m.group(2)))
+    return [pre if m.group(1) == "Prelude" else fug]
+
+
 def asap_used():
     """maestro paths ASAP already aligned -> {path: [asap folders]}."""
     used = {}
@@ -120,21 +161,36 @@ def main():
             with zf.open(prefix + rel) as src, open(dest, "wb") as out:
                 out.write(src.read())
             extracted += 1
-        pre, fug = piece_names(bwv)
         title = r["canonical_title"]
+        folders = used.get(rel, [])
+        # candidates from every signal we have; the aligner's match-rate
+        # gate is the arbiter when they disagree
+        bwvs = {bwv}
+        kb = title_key_bwv(title)
+        if kb:
+            bwvs.add(kb)
         candidates = []
-        if not re.search(r"\bFugue\b", title) or "Prelude" in title:
-            candidates.append(pre)
-        if not re.search(r"\bPrelude\b", title) or "Fugue" in title:
-            candidates.append(fug)
+        for b in sorted(bwvs):
+            pre, fug = piece_names(b)
+            has_p = "Prelude" in title or "Fugue" not in title
+            has_f = "Fugue" in title or "Prelude" not in title
+            if has_p:
+                candidates.append(pre)
+            if has_f:
+                candidates.append(fug)
+        for f_ in folders:  # ASAP's mapping is definitive where present
+            for p in folder_pieces(f_):
+                if p not in candidates:
+                    candidates.append(p)
         catalog.append({
             "midi": rel,
             "bwv": bwv,
             "title": title,
+            "title_bwv_conflict": bool(kb and kb != bwv),
             "year": r["year"],
             "duration": float(r["duration"]),
-            "candidates": candidates or [pre, fug],
-            "asap_folders": used.get(rel, []),
+            "candidates": candidates,
+            "asap_folders": folders,
         })
 
     out = os.path.join(MAESTRO, "wtc-catalog.json")

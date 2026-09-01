@@ -423,12 +423,25 @@ def zscore(vals):
     return [(v - mu) / sd for v in vals]
 
 
-def piece_performances(piece, asap_dir=ASAP):
-    pdir = os.path.join(asap_dir, "Bach", *ae.bwv_of(piece))
-    if not os.path.isdir(pdir):
-        return []
-    return [(f[:-len(".match")], os.path.join(pdir, f))
-            for f in sorted(os.listdir(pdir)) if f.endswith(".match")]
+MAESTRO_WTC = os.path.join(ROOT, "corpus", "maestro-wtc")
+
+
+def piece_performances(piece, asap_dir=None, roots=None):
+    """Every human performance of a piece, across sources: ASAP plus
+    the maestro-wtc mirror tree our own aligner derives. A .match's
+    sibling files (beat annotations, score grid) always come from ITS
+    root, so consumers should derive paths from the match path."""
+    if roots is None:
+        roots = [asap_dir or ASAP, MAESTRO_WTC]
+    out = []
+    for root in roots:
+        pdir = os.path.join(root, "Bach", *ae.bwv_of(piece))
+        if not os.path.isdir(pdir):
+            continue
+        out.extend((f[:-len(".match")], os.path.join(pdir, f))
+                   for f in sorted(os.listdir(pdir))
+                   if f.endswith(".match"))
+    return out
 
 
 def main():
