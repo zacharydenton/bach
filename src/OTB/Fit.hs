@@ -59,20 +59,22 @@ data KnobFamily = KnobFamily
 timingFamily :: KnobFamily
 timingFamily = KnobFamily "timing" grids sections
   where
+    -- asap_eval.KNOB_GRIDS, verbatim: every grid contains an OFF
+    -- value — fitting may disable a rule the residuals proposed
     grids =
-      [ ("expression", [0.0, 0.6, 1.0, 1.4])
-      , ("arch_piece", [0.0, 0.015, 0.024, 0.05])
-      , ("arch_group", [0.0, 0.004, 0.01, 0.02])
-      , ("rit_floor", [0.2, 0.3, 0.45, 0.6])
-      , ("rit_span", [0.5, 1.0, 2.0, 4.0])
-      , ("cadence_depth", [0.0, 0.03, 0.06, 0.1])
-      , ("boundary_ease", [0.0, 0.02, 0.04, 0.08])
-      , ("open_push", [0.0, 0.03, 0.06, 0.12])
-      , ("open_span", [1.0, 2.0, 4.0, 8.0])
-      , ("subject_push", [0.0, 0.005, 0.009, 0.02])
-      , ("novelty_brake", [0.0, 0.05, 0.1, 0.2])
+      [ ("expression", [0.4, 0.6, 0.8, 1.0, 1.3])
+      , ("arch_piece", [0.0, 0.015, 0.03, 0.06])
+      , ("arch_group", [0.0, 0.01, 0.02, 0.04])
+      , ("rit_floor", [0.3, 0.4, 0.5, 0.6, 0.75])
+      , ("rit_span", [0.5, 1.0, 2.0, 3.0])
+      , ("cadence_depth", [0.0, 0.04, 0.08, 0.15])
+      , ("boundary_ease", [0.0, 0.03, 0.06, 0.12])
+      , ("open_push", [0.0, 0.03, 0.06, 0.1])
+      , ("open_span", [1.0, 2.0, 4.0])
+      , ("subject_push", [0.0, 0.015, 0.03])
+      , ("novelty_brake", [0.0, 0.02, 0.04, 0.08])
       , ("mid_drift", [0.0, 0.01, 0.02, 0.04])
-      , ("sus_lean", [0.0, 0.01, 0.02, 0.04])
+      , ("sus_lean", [0.0, 0.02, 0.05, 0.1])
       ]
     sections = Map.fromList
       [ ("expression", "interpretation")
@@ -88,25 +90,32 @@ timingFamily = KnobFamily "timing" grids sections
 velocityFamily :: KnobFamily
 velocityFamily = KnobFamily "velocity" grids sections
   where
+    -- vel_fit.VEL_KNOB_GRIDS, verbatim
     grids =
-      [ ("vel_highloud", [0.0, 0.4, 0.8, 1.2])
-      , ("vel_bar", [0.0, 3.0, 6.0, 12.0])
-      , ("vel_halfbar", [0.0, 1.5, 3.0, 6.0])
+      [ ("vel_bar", [0.0, 4.0, 8.0, 12.0, 18.0])
+      , ("vel_halfbar", [0.0, 3.0, 6.0, 9.0])
       , ("vel_beat", [0.0, 1.5, 3.0, 6.0])
-      , ("vel_arch", [0.0, 4.0, 8.0])
-      , ("dis_vel", [0.0, 5.0, 10.0])
-      , ("dialogue_vel", [0.0, 2.0, 4.0])
-      , ("subject_vel", [0.0, 5.0, 10.0])
-      , ("mel_charge", [0.0, 0.2, 0.4])
-      , ("harm_charge", [0.0, 0.15, 0.3])
+      , ("vel_arch", [0.0, 4.0, 8.0, 16.0])
+      , ("vel_highloud", [0.0, 0.12, 0.25, 0.5, 0.8])
+      , ("dis_vel", [0.0, 5.0, 10.0, 20.0])
+      , ("sus_soft", [0.0, 2.0, 4.0, 8.0])
+      , ("mel_charge", [0.0, 0.2, 0.4, 0.8])
+      , ("harm_charge", [0.0, 0.15, 0.3, 0.6])
+      , ("subject_vel", [0.0, 2.5, 5.0, 10.0])
+      , ("dialogue_vel", [0.0, 2.0, 4.0, 8.0])
+      , ("dialogue_yield", [0.0, 1.0, 2.0, 4.0])
+      , ("seq_echo", [0.0, 1.0, 2.0, 4.0])
       ]
     sections = Map.fromList
-      [ ("vel_highloud", "dynamics"), ("vel_bar", "dynamics")
-      , ("vel_halfbar", "dynamics"), ("vel_beat", "dynamics")
-      , ("vel_arch", "dynamics")
-      , ("dis_vel", "dissonance")
-      , ("dialogue_vel", "performance"), ("subject_vel", "performance")
+      [ ("vel_bar", "dynamics"), ("vel_halfbar", "dynamics")
+      , ("vel_beat", "dynamics"), ("vel_arch", "dynamics")
+      , ("vel_highloud", "dynamics")
+      , ("dis_vel", "dissonance"), ("sus_soft", "dissonance")
       , ("mel_charge", "performance"), ("harm_charge", "performance")
+      , ("subject_vel", "performance")
+      , ("dialogue_vel", "performance")
+      , ("dialogue_yield", "performance")
+      , ("seq_echo", "performance")
       ]
 
 -- ---------------------------------------------------------------------

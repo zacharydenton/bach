@@ -115,13 +115,17 @@ buildSections date recs =
       | Just fl <- [prTiming rec, prVelocity rec]
       , flKept fl ]
 
--- | Rewrite the config text with the generated sections: existing
--- [piece.X] sections are updated in place bottom-up by POSITION (their
--- PIECE-FIT lines replaced, hand lines untouched and blocking), and
--- pieces without a section land under the banner.
+-- | Rewrite the config text with the generated sections. Idempotent
+-- by construction: generated (PIECE-FIT) lines are stripped from each
+-- [piece.X] body, fresh ones are inserted after the body's last
+-- non-blank line, and everything else — hand lines, blank separators,
+-- old banner comments — passes through byte-for-byte. Pieces without
+-- a section land under a new banner at the end of the file; on the
+-- next application they are sections like any other and the banner
+-- stays behind as an inert comment.
 applyFits :: String -> [PieceRec] -> Text -> Text
 applyFits date recs cfgText =
-  T.unlines (finish (foldl' patch (srcLines, sects0) byPos))
+  T.unlines (foldl' patch srcLines byPos <> appended)
   where
     srcLines = T.lines (T.dropWhileEnd (== '\n') cfgText)
     sects0 = Map.fromList (buildSections date recs)
@@ -148,33 +152,42 @@ applyFits date recs cfgText =
     byPos = sortOn (Down . (spanMap Map.!))
       [p | p <- Map.keys sects0, Map.member p spanMap]
 
-    patch (lns, sects) piece =
-      case (Map.lookup piece spanMap, Map.lookup piece sects) of
+    -- update one existing section: strip its generated lines, insert
+    -- the fresh ones after the last remaining non-blank line so the
+    -- section's blank separators stay exactly where they were
+    patch lns piece =
+      case (Map.lookup piece spanMap, Map.lookup piece sects0) of
         (Just (a, b), Just gen) ->
           let body = take (b - a - 1) (drop (a + 1) lns)
+              stripped = [l | l <- body, not (mark `T.isInfixOf` l)]
               handKeys =
                 [ T.strip (fst (T.breakOn "=" l))
-                | l <- body
-                , "=" `T.isInfixOf` l, not (mark `T.isInfixOf` l) ]
-              kept = dropTrailingBlank
-                       [l | l <- body, not (mark `T.isInfixOf` l)]
+                | l <- stripped, "=" `T.isInfixOf` l ]
+              -- the trailing run of blanks and banner comments stays
+              -- put: an old banner inside this span must not attract
+              -- the insertion point below itself on the next apply
+              isTail l = T.null (T.strip l)
+                || "# ---- fitted per piece" `T.isPrefixOf` l
+              nTrail = length (takeWhile isTail (reverse stripped))
+              (content, blanks) =
+                splitAt (length stripped - nTrail) stripped
               add = [ T.pack (T.unpack k <> " = " <> v <> " " <> c)
                     | (k, v, c) <- gen, k `notElem` handKeys ]
-           in ( take (a + 1) lns <> kept <> add <> [""] <> drop b lns
-              , Map.delete piece sects )
-        _ -> (lns, sects)
+           in take (a + 1) lns <> content <> add <> blanks
+                <> drop b lns
+        _ -> lns
 
-    dropTrailingBlank = reverse . dropWhile (T.null . T.strip) . reverse
-
-    finish (lns, sects)
-      | Map.null sects = lns
+    newPieces =
+      [ (p, gen) | (p, gen) <- Map.toAscList sects0
+                 , not (Map.member p spanMap) ]
+    appended
+      | null newPieces = []
       | otherwise =
-          lns
-            <> [""]
+          [""]
             <> [T.pack ("# ---- fitted per piece (otb fit, " <> date
                           <> ") ----")]
             <> concat
               [ [""] <> [T.pack ("[piece." <> piece <> "]")]
                   <> [ T.pack (T.unpack k <> " = " <> v <> " " <> c)
                      | (k, v, c) <- gen ]
-              | (piece, gen) <- Map.toAscList sects ]
+              | (piece, gen) <- newPieces ]

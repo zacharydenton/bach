@@ -674,13 +674,26 @@ units = testGroup "otb"
           assertBool "no banner" ("fitted per piece" `isInfixOf` out)
           assertBool "no shrunk value"
             ("cadence_depth = 0.04 # PIECE-FIT" `isInfixOf` out)
-      , testCase "idempotent regeneration" $ do
-          let once = PF.applyFits "2026-01-01" [fitRec]
-                "[agogics]\nrit_span = 2.0\n"
-              twice = PF.applyFits "2026-01-01" [fitRec] once
-          countOf "tempo = 84.0" (T.unpack once) @?= 1
+      , testCase "idempotent regeneration (byte-level, mixed)" $ do
+          -- one piece with an existing section, one new piece: the
+          -- second application must not relocate anything around the
+          -- banner (once /= twice was a real writer bug)
+          let newRec = PF.PieceRec "wtc1p10" 2
+                (Just (60.0, 70.0, 63.3)) Nothing Nothing
+              recs = [fitRec, newRec]
+              toml = T.unlines
+                [ "[agogics]", "rit_span = 2.0", ""
+                , "[piece.wtc1p03]"
+                , "cadence_depth = 0.09 # by ear, veto" ]
+              once = PF.applyFits "2026-01-01" recs toml
+              twice = PF.applyFits "2026-01-01" recs once
+              thrice = PF.applyFits "2026-01-01" recs twice
+          twice @?= once
+          thrice @?= once
           countOf "tempo = 84.0" (T.unpack twice) @?= 1
+          countOf "tempo = 63.3" (T.unpack twice) @?= 1
           countOf "[piece.wtc1p03]" (T.unpack twice) @?= 1
+          countOf "[piece.wtc1p10]" (T.unpack twice) @?= 1
       , testCase "edits are positional, not lexical" $ do
           let recFor p f = PF.PieceRec p 3
                 (Just (fromIntegral (10 * f), 100.0

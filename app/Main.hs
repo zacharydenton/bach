@@ -37,6 +37,7 @@ import OTB.Fit qualified as F
 import OTB.PieceFit qualified as PF
 import OTB.Maestro qualified as M
 import OTB.BakeSite qualified as BS
+import OTB.Json qualified as J
 import OTB.MaestroAlign qualified as MA
 import OTB.Smf (readSmf)
 import Data.Vector qualified as BV
@@ -79,7 +80,7 @@ import System.Directory
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.IO (hPutStrLn, stderr)
-import System.Process (readProcess)
+import System.Process (readProcess, readProcessWithExitCode)
 import System.FilePath (takeBaseName, takeFileName, (</>))
 
 data Common = Common
@@ -203,12 +204,18 @@ maestroAlignCmd =
     <*> optional (strOption (long "piece" <> metavar "NAME"))
     <*> optional (option auto (long "limit" <> metavar "N"))
 
+famR :: String -> Either String String
+famR f
+  | f `elem` ["timing", "velocity"] = Right f
+  | otherwise = Left ("unknown family '" <> f
+                        <> "' (timing | velocity)")
+
 landscapeCmd :: Parser Cmd
 landscapeCmd =
   Landscape
     <$> argument str (metavar "CORPUS_DIR")
     <*> strOption (long "config" <> value "config/default.toml")
-    <*> strOption (long "family" <> value "timing"
+    <*> option (eitherReader famR) (long "family" <> value "timing"
           <> help "timing | velocity")
     <*> option auto (long "starts" <> value 20)
     <*> option auto (long "seed" <> value 1)
@@ -909,7 +916,11 @@ runFit corpus cfgPath shrinkK wanted apply dryRun = do
   let recs = [rec | Just rec <- recs0]
   let newText = PF.applyFits date recs cfgText
   if dryRun
-    then TIO.putStr newText
+    then do
+      -- the documented contract: a diff, not the whole rewritten file
+      (_, out, _) <- readProcessWithExitCode "diff"
+        ["-u", cfgPath, "-"] (T.unpack newText)
+      putStr out
     else when apply $ do
       TIO.writeFile cfgPath newText
       putStrLn ("applied "
@@ -976,10 +987,11 @@ fitOnePiece sem prefit table shrinkK pd = do
     -- cached per-candidate performer scores
     cacheRef <- newIORef (Map.empty
       :: Map.Map (String, [(T.Text, Double)])
-           (MVar [(String, Double)]))
+           (MVar (Either SomeException [(String, Double)])))
     -- in-flight dedup: the first caller claims the key and computes
     -- (gated by the global sem), racers block on the MVar instead of
-    -- recomputing
+    -- recomputing. The cell holds an Either so a failed evaluation
+    -- fills it anyway — waiters rethrow instead of blocking forever
     let scored fam rsFn knobs = do
           let key = (F.kfName fam, sortOn fst knobs)
           fresh <- newEmptyMVar
@@ -988,13 +1000,13 @@ fitOnePiece sem prefit table shrinkK pd = do
               Just mv -> (c, Left mv)
               Nothing -> (Map.insert key fresh c, Right fresh)
           case claim of
-            Left mv -> readMVar mv
+            Left mv -> either throwIO pure =<< readMVar mv
             Right mv -> do
-              v <- bracket_ (waitQSem sem) (signalQSem sem) $
+              r <- try $ bracket_ (waitQSem sem) (signalQSem sem) $
                 evaluate (force
                   (maybe [] (\p -> rsFn p pd) (performWith knobs)))
-              putMVar mv v
-              pure v
+              putMVar mv r
+              either throwIO pure r
         objective fam rsFn only knobs = do
           rs <- scored fam rsFn knobs
           let ok = [ r | (perf, r) <- rs, not (isNaN r)
@@ -1103,6 +1115,7 @@ bodyTempo scoreT perfT =
 runLandscape :: FilePath -> FilePath -> String -> Int -> Int -> Double
              -> IO ()
 runLandscape corpus cfgPath famName starts seed slack = do
+  when (starts < 1) $ die "--starts must be at least 1"
   cfgText <- TIO.readFile cfgPath
   prefit <- either (die . ("config: " <>)) pure
               (OTB.Config.loadConfig (F.prefitStrip cfgText))
@@ -1157,19 +1170,22 @@ runLandscape corpus cfgPath famName starts seed slack = do
                      (Map.findWithDefault "agogics" k
                         (F.kfSections fam)) prefit))
         | (k, _) <- grids ]
+      -- randomized-order coordinate descent to a FIXPOINT: sweeps
+      -- until a full pass improves nothing (capped), so observed
+      -- spread across starts is landscape structure, not incomplete
+      -- convergence
       descendIO rng0 init0 = do
         r0 <- objective init0
         case r0 of
-          Nothing -> pure (Nothing, rng0)
-          Just b0 -> loop rng0 (Map.fromList init0) b0 1
+          Nothing -> pure Nothing
+          Just b0 -> Just <$> loop rng0 (Map.fromList init0) b0 1
         where
-          loop rng cur best sweep
-            | sweep > 8 = pure (Just (cur, best, sweep - 1), rng)
-            | otherwise = do
-                let (order, rng') = F.shuffle rng (map fst grids)
-                (cur', best', imp) <- foldM stepK (cur, best, False) order
-                if imp then loop rng' cur' best' (sweep + 1)
-                       else pure (Just (cur', best', sweep), rng')
+          loop rng cur best sweep = do
+            let (order, rng') = F.shuffle rng (map fst grids)
+            (cur', best', imp) <- foldM stepK (cur, best, False) order
+            if imp && sweep < 8
+              then loop rng' cur' best' (sweep + 1)
+              else pure (cur', best', sweep)
           stepK (cur, best, imp) k = do
             let grid = maybe [] id (lookup k grids)
                 tryV (c, b, i) v
@@ -1181,31 +1197,87 @@ runLandscape corpus cfgPath famName starts seed slack = do
                           (Map.insert k v c, x, True)
                         _ -> (c, b, i)
             foldM tryV (cur, best, imp) grid
-  finalsRef <- newIORef []
-  let runStart i rng = do
-        let (initK, rng') =
-              if i == 0 then (baseKnobs, rng)
+
+  -- checkpoint state, the reference's scheme: resumable by count,
+  -- guarded by a fingerprint over grids + baseline + family + seed
+  let statePath = "corpus" </> ("knob-landscape-" <> famName <> ".json")
+      fpInput = show grids <> show (sortOn fst baseKnobs)
+                  <> famName <> show seed
+  fp <- takeWhile (/= ' ') <$> readProcess "sha256sum" [] fpInput
+  haveState <- doesFileExist statePath
+  stored0 <- if not haveState then pure [] else do
+    raw <- TIO.readFile statePath
+    case J.parseJson raw of
+      Right st
+        | (J.jStr =<< J.jLookup "fingerprint"
+             =<< J.jLookup "_meta" st) == Just (T.pack fp) ->
+            pure (J.jArrOf (fromMaybe (J.JArr [])
+                              (J.jLookup "finals" st)))
+      _ -> do
+        putStrLn "landscape inputs changed — starting fresh"
+        pure []
+  when (not (null stored0)) $
+    putStrLn ("resuming: " <> show (length stored0)
+                <> " starts checkpointed in " <> statePath)
+  finalsRef <- newIORef stored0
+  let knobsJson ks = J.JObj
+        [ (k, J.JNum (T.pack (MA.pyRepr v))) | (k, v) <- ks ]
+      saveState = do
+        entries <- readIORef finalsRef
+        TIO.writeFile statePath $ J.dumpJson (Just 1) (J.JObj
+          [ ("_meta", J.JObj [("fingerprint", J.JStr (T.pack fp))])
+          , ("finals", J.JArr entries) ])
+      runStart i = do
+        let rng = F.mkRng (seed * 1000 + i)
+            (initK, rngAfter) =
+              if i == 0 then (baseKnobs, rng) -- start 0 = committed
               else foldl'
                 (\(acc, r) (k, g) ->
                    let (v, r') = F.choice r g in (acc <> [(k, v)], r'))
                 ([], rng) grids
-        (res, rng'') <- descendIO rng' initK
+        res <- descendIO rngAfter initK
         case res of
-          Nothing -> pure rng''
+          Nothing -> die ("start " <> show i
+                            <> ": objective undefined — empty corpus?")
           Just (cur, best, sweeps) -> do
-            testR <- pure (evalSet test (Map.toList cur))
-            putStrLn ("start " <> show i <> ": train "
-                        <> show best <> " test " <> show testR
+            let testR = evalSet test (Map.toList cur)
+                r4 x = fromIntegral (round (x * 1e4) :: Integer) / 1e4
+            putStrLn ("start " <> show i <> ": train " <> show best
+                        <> " test " <> show testR
                         <> " sweeps " <> show sweeps)
-            modifyIORef' finalsRef ((Map.toList cur, best, testR) :)
-            pure rng''
-  _ <- foldM (\rng i -> runStart i rng) (F.mkRng seed) [0 .. starts - 1]
-  finals <- reverse <$> readIORef finalsRef
+            modifyIORef' finalsRef (<> [J.JObj
+              [ ("start", J.JNum (T.pack (show i)))
+              , ("init", knobsJson initK)
+              , ("final", knobsJson (Map.toList cur))
+              , ("sweeps", J.JNum (T.pack (show sweeps)))
+              , ("train_r", J.JNum (T.pack (MA.pyRepr (r4 best))))
+              , ("test_r", maybe J.JNull
+                   (J.JNum . T.pack . MA.pyRepr . r4) testR)
+              ]])
+            saveState
+  forM_ [length stored0 .. starts - 1] runStart
+
+  -- ---- report, from the state (fresh and resumed runs agree) ----
+  entries <- readIORef finalsRef
+  let finals =
+        [ (ks, tr, te)
+        | e <- entries
+        , Just tr <- [J.jNum =<< J.jLookup "train_r" e]
+        , let te = J.jNum =<< J.jLookup "test_r" e
+              ks = [ (k, v)
+                   | J.JObj kvs <- [fromMaybe (J.JObj [])
+                                      (J.jLookup "final" e)]
+                   , (k, jv) <- kvs, Just v <- [J.jNum jv] ] ]
+  when (null finals) $ die "no completed starts"
   let bestTrain = maximum [b | (_, b, _) <- finals]
       elite = [f | f@(_, b, _) <- finals, b >= bestTrain - slack]
+      eliteTests = [t | (_, _, Just t) <- elite]
+      spread = if null eliteTests then "" else
+        " (test spread " <> show (minimum eliteTests) <> ".."
+          <> show (maximum eliteTests) <> ")"
   putStrLn ("\n" <> show (length finals) <> " starts; best train "
               <> show bestTrain <> "; " <> show (length elite)
-              <> " within slack " <> show slack)
+              <> " within slack " <> show slack <> spread)
   forM_ (map fst grids) $ \k -> do
     let vals fs = [maybe 0 id (lookup k f) | (f, _, _) <- fs]
         za = length [() | v <- vals finals, v == 0]
