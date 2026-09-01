@@ -207,13 +207,33 @@ def bake_casting(data_dir, casting_dir, calibration_file):
     print(f"casting: {len(castings)} castings, {len(cal)} calibrations")
 
 
+def piece_instances(perf):
+    """Synth instances a piece needs: mirrors site/routing.js slotMap +
+    lanePlacement — channels ranked bass-first by mean pitch, spread
+    over four register slots, lanes paired only WITHIN a slot (an
+    instance's two scenes wear the same preset)."""
+    sums, cnts = {}, {}
+    for tr in perf["tracks"]:
+        for n in tr:
+            sums[n["ch"]] = sums.get(n["ch"], 0) + n["pitch"]
+            cnts[n["ch"]] = cnts.get(n["ch"], 0) + 1
+    chans = sorted(sums, key=lambda c: (sums[c] / cnts[c], c))
+    n = len(chans)
+    per_slot = [0, 0, 0, 0]
+    for r in range(n):
+        # int(x + 0.5), not round(): JS Math.round is half-UP, python
+        # round() is banker's — they disagree exactly at the .5 ranks
+        per_slot[3 if n == 1 else int(r * 3 / (n - 1) + 0.5)] += 1
+    return sum(-(-c // 2) for c in per_slot)
+
+
 def bake_manifest(data_dir):
     perf_dir = os.path.join(data_dir, "perf")
     paths = sorted(
         (os.path.join(perf_dir, f) for f in os.listdir(perf_dir)
          if f.endswith(".json")), key=album_key)
     pieces = []
-    max_ch = 0
+    n_inst = 0
     for p in paths:
         with open(p) as f:
             perf = json.load(f)
@@ -222,18 +242,17 @@ def bake_manifest(data_dir):
                    for tr in perf["tracks"] for n in tr), default=0.0)
         end = max(end, perf.get("endS", 0.0))
         chs = [n["ch"] for tr in perf["tracks"] for n in tr]
-        piece_max = max(chs, default=-1) + 1
-        max_ch = max(max_ch, piece_max)
+        n_inst = max(n_inst, piece_instances(perf))
         pieces.append({
             "name": name,
             "url": "data/perf/" + os.path.basename(p),
             "endS": round(end, 3),
-            "maxCh": piece_max,
+            "maxCh": max(chs, default=-1) + 1,
         })
-    manifest = {"pieces": pieces, "nInstances": max_ch, "scl": "data/w3.scl"}
+    manifest = {"pieces": pieces, "nInstances": n_inst, "scl": "data/w3.scl"}
     with open(os.path.join(data_dir, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=1)
-    print(f"manifest: {len(pieces)} pieces, {max_ch} synth instances")
+    print(f"manifest: {len(pieces)} pieces, {n_inst} synth instances")
     return manifest
 
 

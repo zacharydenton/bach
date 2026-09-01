@@ -10,8 +10,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SLOTS, slotMap, resolveSlots, calFor, buildEvents, heldAt,
-  whyIndex, whysAt, pieceTitle, BLOCK,
+  SLOTS, slotMap, lanePlacement, resolveSlots, calFor, buildEvents,
+  heldAt, whyIndex, whysAt, pieceTitle, BLOCK,
 } from "./routing.js";
 
 const note = (ch, onS, durS, extra = {}) => ({
@@ -50,6 +50,23 @@ test("fewer channels than slots leave slots tacet; a solo takes the top", () => 
   assert.deepEqual(slotMap(duo).slotChannels, [[0], [], [], [1]]);
   const solo = { tracks: [[note(7, 0, 1)]] };
   assert.deepEqual(slotMap(solo).slotChannels, [[], [], [], [7]]);
+});
+
+test("lanes pair only within their slot; an instance wears one preset", () => {
+  // the wtc1f01 shape: [0],[1,2],[3,4],[5] — one instance per slot,
+  // middle slots use both scenes
+  const p = lanePlacement([0, 1, 1, 2, 2, 3]);
+  assert.deepEqual(p.instSlot, [0, 1, 2, 3]);
+  assert.deepEqual(p.laneInst, [0, 1, 1, 2, 2, 3]);
+  assert.deepEqual(p.laneScene, [0, 0, 1, 0, 1, 0]);
+
+  // an odd slot population overflows onto a second instance of the SAME
+  // slot — never onto a neighbour (that would put two presets on one
+  // patch, and cost the second one its send/global FX)
+  const q = lanePlacement([0, 0, 0, 3]);
+  assert.deepEqual(q.instSlot, [0, 0, 3]);
+  assert.deepEqual(q.laneInst, [0, 0, 1, 2]);
+  assert.deepEqual(q.laneScene, [0, 1, 0, 0]);
 });
 
 test("casting: default seeds once, piece casting lands on register slots", () => {

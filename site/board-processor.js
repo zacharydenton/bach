@@ -1,13 +1,15 @@
 /*
  * The static patchboard's AudioWorkletProcessor: one Surge wasm module,
- * one scene per LANE — each SurgeWasm instance carries two lanes as
- * scene A / scene B in MIDI channel-split mode (bridge loadScenePatches),
- * lane r living on instance r>>1 as scene r&1. Every lane keeps its own
- * voice pool: lanes that share a UI slot share only patch/gain/mute,
- * never polyphony, so mono presets stay mono per lane and overlapping
- * same-pitch notes in different lanes cannot release each other.
- * renderScenes exposes each scene's post-insert-FX stereo separately, so
- * per-lane gain and mute happen here at the mix.
+ * one scene per LANE — each SurgeWasm instance carries up to two lanes
+ * OF THE SAME SLOT as scene A / scene B in MIDI channel-split mode
+ * (bridge loadScenePatches, same preset on both scenes). Every lane
+ * keeps its own voice pool, so mono presets stay mono per lane and
+ * overlapping same-pitch notes in different lanes cannot release each
+ * other — while the instance's ordinary output is its preset's FULL
+ * native signal path (scenes, inserts, sends, globals; most factory
+ * presets keep their space in send/global slots). Slot gain and mute
+ * apply per instance at the mix. Lane -> (instance, scene) comes with
+ * the score (routing.js lanePlacement).
  *
  * Scheduling matches tools/patchboard.py render(): the walk is in 32-frame
  * engine blocks and every event lands at the boundary of the block that
@@ -40,8 +42,10 @@ class Board extends AudioWorkletProcessor {
     this.tempoI = 0;
     this.gain = new Array(N_SLOTS).fill(0.25); // per SLOT (live default)
     this.mute = new Array(N_SLOTS).fill(false);
-    this.laneSlots = []; // per lane: which slot's gain/mute/patch it wears
-    this.views = []; // per lane: {l, r} into its instance's scene lanes
+    this.laneInst = []; // per lane: its instance
+    this.laneScene = []; // per lane: scene A or B on that instance
+    this.instSlot = []; // per instance: the slot whose gain/mute it wears
+    this.views = []; // per instance: {l, r} into its output scratch
     // riding limiter state (patchboard._limit, rates rescaled from its
     // 4096-frame chunk to the 128-frame quantum: 0.94^(128/4096),
     // 1.02^(128/4096))
@@ -61,12 +65,12 @@ class Board extends AudioWorkletProcessor {
       .then((mod) => {
         this.mod = mod;
         this.synths = [];
-        this.scenePtrs = [];
+        this.ptrs = [];
         for (let i = 0; i < nInstances; i++) {
           const s = new mod.SurgeWasm(sampleRate, 128);
           if (!s.ok()) throw new Error(s.initError());
           this.synths.push(s);
-          this.scenePtrs.push(s.sceneOutputPtr());
+          this.ptrs.push(s.outputPtr());
         }
         this.maxFrames = this.synths[0].maxFrames();
         this.ready = true;
@@ -88,7 +92,9 @@ class Board extends AudioWorkletProcessor {
       case "score":
         this.allOff();
         this.ev = msg;
-        this.laneSlots = msg.laneSlots;
+        this.laneInst = msg.laneInst;
+        this.laneScene = msg.laneScene;
+        this.instSlot = msg.instSlot;
         this.cursor = 0;
         this.evI = 0;
         this.tempoI = 0;
@@ -160,8 +166,8 @@ class Board extends AudioWorkletProcessor {
     // chase: re-strike what should already be sounding at the target
     // (their note-offs all lie at or beyond evI, so they end naturally)
     for (const h of heldAt(this.ev, frame)) {
-      const s = this.synths[h.lane >> 1];
-      if (s) s.noteOn(h.lane & 1, h.key, h.vel);
+      const s = this.synths[this.laneInst[h.lane]];
+      if (s) s.noteOn(this.laneScene[h.lane], h.key, h.vel);
     }
     this.ended = false;
     this.postPos();
@@ -169,14 +175,12 @@ class Board extends AudioWorkletProcessor {
 
   refreshViews() {
     const heap = this.mod.HEAPF32;
-    const n = this.synths.length * 2;
-    for (let lane = 0; lane < n; lane++) {
-      if (!this.views[lane] || this.views[lane].l.buffer !== heap.buffer) {
-        const base = this.scenePtrs[lane >> 1];
-        const off = (lane & 1) * 2; // [A_L][A_R][B_L][B_R]
-        this.views[lane] = {
-          l: new Float32Array(heap.buffer, base + off * this.maxFrames * 4, BLOCK),
-          r: new Float32Array(heap.buffer, base + (off + 1) * this.maxFrames * 4, BLOCK),
+    for (let i = 0; i < this.synths.length; i++) {
+      if (!this.views[i] || this.views[i].l.buffer !== heap.buffer) {
+        const base = this.ptrs[i]; // planar [L * maxFrames][R * maxFrames]
+        this.views[i] = {
+          l: new Float32Array(heap.buffer, base, BLOCK),
+          r: new Float32Array(heap.buffer, base + this.maxFrames * 4, BLOCK),
         };
       }
     }
@@ -213,8 +217,9 @@ class Board extends AudioWorkletProcessor {
 
         while (this.evI < frames.length && frames[this.evI] < blockEnd) {
           const i = this.evI++;
-          const s = this.synths[chans[i] >> 1]; // lane -> instance
-          const scene = chans[i] & 1; // MIDI channel selects the scene
+          const lane = chans[i];
+          const s = this.synths[this.laneInst[lane]];
+          const scene = this.laneScene[lane]; // MIDI channel selects the scene
           if (!s) continue;
           if (kinds[i] === 1) s.noteOn(scene, a[i], b[i]);
           else if (kinds[i] === 2) s.noteOff(scene, a[i], 0);
@@ -228,16 +233,18 @@ class Board extends AudioWorkletProcessor {
           for (const s of this.synths) s.setTempo(bpm);
         }
 
-        // muted lanes still render (their scenes keep evolving, like the
-        // live board, whose mute is applied at the mix) — they just don't sum
-        for (const s of this.synths) s.renderScenes(BLOCK);
+        // muted instances still render (their voices keep evolving, like
+        // the live board, whose mute is applied at the mix) — just not sum.
+        // Only the instances this piece placed lanes on render at all.
+        const active = this.instSlot.length;
+        for (let i = 0; i < active; i++) this.synths[i].render(BLOCK);
         this.refreshViews();
-        for (let lane = 0; lane < this.laneSlots.length; lane++) {
-          const slot = this.laneSlots[lane];
-          if (this.mute[slot] || !this.views[lane]) continue;
+        for (let inst = 0; inst < active; inst++) {
+          const slot = this.instSlot[inst];
+          if (this.mute[slot]) continue;
           const g = this.gain[slot];
           if (g <= 0) continue;
-          const { l, r } = this.views[lane];
+          const { l, r } = this.views[inst];
           for (let i = 0; i < BLOCK; i++) {
             L[done + i] += l[i] * g;
             R[done + i] += r[i] * g;

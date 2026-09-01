@@ -18,22 +18,26 @@ What ships here (committed):
   which the streamed board never could, and the ledger works while
   paused — seek anywhere and study the moment.
 - `board-processor.js` — an AudioWorkletProcessor hosting one scene
-  per LANE: each `SurgeWasm` instance carries two score lanes as
-  scene A / scene B in MIDI channel-split mode, so every lane keeps
-  its own voice pool — lanes that share a UI slot share patch, gain
-  and mute, never polyphony (a mono preset stays mono per lane, and
-  overlapping same-pitch notes in different lanes cannot release each
-  other). The fork's `loadScenePatches` merges two factory presets
-  into one patch (the scene clipboard carries params, modulation,
-  MSEGs, wavetables and the scene's insert FX; send/global FX come
-  from the scene-A patch alone), and `renderScenes` taps each scene's
-  post-insert-FX stereo separately, so per-lane gain and mute happen
-  at the worklet mix. Native SCL tuning is what frees the MIDI
-  channels for scene routing — no per-note bends. Events walk in
-  32-frame engine blocks with the live board's riding limiter on the
-  mix; seeks re-strike the notes that should already be sounding.
-  "(init)" is a real `Init Saw.fxp` (baked as `data/init.fxp`), so it
-  genuinely loads.
+  per LANE: each `SurgeWasm` instance carries up to two score lanes
+  OF THE SAME SLOT as scene A / scene B in MIDI channel-split mode
+  (the fork's `loadScenePatches`, same preset on both scenes), so
+  every lane keeps its own voice pool — a mono preset stays mono per
+  lane, and overlapping same-pitch notes in different lanes cannot
+  release each other — while the instance's ordinary output is its
+  preset's FULL native signal path: scenes, insert FX, send FX,
+  global FX, master volume. That last part is why presets sound like
+  Surge: 477 of 627 factory patches keep reverb/delay in send or
+  global slots, and an earlier per-scene tap dropped all of it
+  (measured: the paired path renders EP 2 at 102% of a native
+  instance's RMS). Slot gain and mute apply per instance at the
+  worklet mix; native SCL tuning frees the MIDI channels for scene
+  routing. Events walk in 32-frame engine blocks with the live
+  board's riding limiter; seeks re-strike the notes that should
+  already be sounding. "(init)" is a real `Init Saw.fxp` (baked as
+  `data/init.fxp`), so it genuinely loads. Wavetables need no asset
+  shipping: Surge embeds them in the `.fxp` itself. Known gap: the
+  wasm build has no Lua, so formula-modulator motion (≈2 factory
+  patches) is absent.
 - `routing.js` + `routing.test.js` — the pure logic (slot
   distribution, casting-to-slot resolution, calibration, event build);
   run with `node --test site/routing.test.js`.

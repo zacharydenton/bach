@@ -141,6 +141,35 @@ export function buildEvents(perf, sr, chToSlot, chToLane, slotUrls,
   };
 }
 
+// Place lanes onto synth instances, pairing ONLY within a slot: an
+// instance's two scenes always wear the same preset, so its full native
+// output — scenes, insert FX, send FX, global FX — is that preset's
+// true signal path (477 of 627 factory patches keep reverb/delay in
+// send or global slots, which a per-scene tap would silently drop).
+// Slot gain/mute therefore apply per instance at the mix.
+export function lanePlacement(laneSlots) {
+  const laneInst = new Array(laneSlots.length);
+  const laneScene = new Array(laneSlots.length);
+  const instSlot = [];
+  for (let s = 0; s < SLOTS.length; s++) {
+    const lanes = [];
+    laneSlots.forEach((sl, l) => {
+      if (sl === s) lanes.push(l);
+    });
+    for (let i = 0; i < lanes.length; i += 2) {
+      const inst = instSlot.length;
+      instSlot.push(s);
+      laneInst[lanes[i]] = inst;
+      laneScene[lanes[i]] = 0;
+      if (i + 1 < lanes.length) {
+        laneInst[lanes[i + 1]] = inst;
+        laneScene[lanes[i + 1]] = 1;
+      }
+    }
+  }
+  return { laneInst, laneScene, instSlot };
+}
+
 // Notes sounding across `frame`: walk the event stream up to the seek
 // point tracking held (lane, key) pairs, so a seek can re-strike what
 // should already be ringing instead of landing in silence until the

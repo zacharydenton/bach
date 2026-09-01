@@ -80,8 +80,17 @@ class Manifest(unittest.TestCase):
             self.assertEqual(m["pieces"][0]["endS"], 9.0)
             self.assertEqual(m["pieces"][0]["maxCh"], 3)
             self.assertEqual(m["pieces"][1]["endS"], 4.0)
-            self.assertEqual(m["nInstances"], 3)
+            # piece a: chans 0,2 -> slots bass+soprano -> 2 instances;
+            # piece b: one chan -> the top slot -> 1
+            self.assertEqual(m["nInstances"], 2)
             self.assertEqual(m["scl"], "data/w3.scl")
+
+    def test_piece_instances_mirrors_js_rounding(self):
+        # seven ranked channels: ranks 1 and 5 sit exactly on .5 — JS
+        # Math.round goes UP; per-slot counts must be [1,2,2,2] -> 4
+        perf = {"tracks": [[{"ch": c, "pitch": 40 + c, "onS": 0.0,
+                             "durS": 1.0} for c in range(7)]]}
+        self.assertEqual(bs.piece_instances(perf), 4)
 
 
 @unittest.skipUnless(
