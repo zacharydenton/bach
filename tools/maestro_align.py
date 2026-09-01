@@ -73,15 +73,18 @@ SPELL = ["C n", "C #", "D n", "E b", "E n", "F n", "F #",
 # chordification
 
 def score_chords(ir):
-    """[(ticks, [(pitch, ch)])] from the IR's notated coordinates."""
-    seen = {}
+    """[(ticks, [(pitch, ch)])] from the IR's notated coordinates.
+    (pitch, ch) multiplicity is PRESERVED: two voices striking the
+    same pitch at the same moment are two notes (wtc1p12 has 45 such
+    unisons), collapsed only across a single note's ornament subnotes
+    (which share all three coordinates)."""
+    seen = set()
     for tr in ir["tracks"]:
         for n in tr:
-            key = (round(n["srcWn"] * na.WN_TICKS), n["srcPitch"])
-            if key not in seen or n["ch"] < seen[key]:
-                seen[key] = n["ch"]
+            seen.add((round(n["srcWn"] * na.WN_TICKS),
+                      n["srcPitch"], n["ch"]))
     chords = collections.defaultdict(list)
-    for (ticks, pitch), ch in seen.items():
+    for ticks, pitch, ch in seen:
         chords[ticks].append((pitch, ch))
     return sorted((t, sorted(ps)) for t, ps in chords.items())
 
@@ -203,11 +206,11 @@ def pair_notes(sc, pc, path):
                     continue
                 pairs.append((ticks, pitch, ch, x))
                 matched_perf.add(id(x))
-                matched_score.add((ticks, pitch))
+                matched_score.add((ticks, pitch, ch))
                 break
         prev_j = j
     deleted = [(t, p, ch) for t, ps in sc for p, ch in ps
-               if (t, p) not in matched_score]
+               if (t, p, ch) not in matched_score]
     inserted = [x for _, xs in pc for x in xs
                 if id(x) not in matched_perf]
     pairs.sort()
@@ -455,17 +458,19 @@ def validate_one(res, folder, perf, notes):
 
     # correspondences: their matched perf notes we also aligned (same
     # pitch, onset within 5 ms after the offset shift)
-    ours_by_perf = {}
+    # correspondences CONSUME: one of our aligned notes may satisfy at
+    # most one reference row, or a unison loss hides behind its twin
+    ours_by_perf = collections.defaultdict(list)
     for t, p, _c, x in res["pairs"]:
-        ours_by_perf[(p, round(x.on_s * 200))] = t
+        ours_by_perf[(p, round(x.on_s * 200))].append(t)
     corr = []
     hits = set()
     for ri, (k, _, pitch, on_s, _off, _v, *_r) in enumerate(mp.rows):
         t = on_s + offset
         for d in (-1, 0, 1):
             key = (pitch, round(t * 200) + d)
-            if key in ours_by_perf:
-                corr.append((k, ours_by_perf[key]))
+            if ours_by_perf.get(key):
+                corr.append((k, ours_by_perf[key].pop()))
                 hits.add(ri)
                 break
     if len(corr) < 20:

@@ -34,6 +34,7 @@ marker are hand-authored vetoes and are never touched.
 """
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import statistics
@@ -73,11 +74,27 @@ VEL_KNOBS = {
 GATE_KNOBS = set()  # velocities/timing only; gates stay global
 
 
-def base_values():
-    """Global values for every fit knob, from config/default.toml."""
+def prefit_config(tmp):
+    """default.toml with every FITTED line and the generated banner
+    stripped: the IMMUTABLE pre-fit baseline. Fitting against the live
+    config would use the previous run's output as authority and
+    baseline — a rerun would double-fit every piece (p08's authority
+    drifted 98.6 -> 72.3 that way). Returns (path, sha256 of the
+    stripped text) — the sha fingerprints resumable state."""
+    lines = [l for l in open(CONFIG)
+             if MARK not in l
+             and not l.startswith("# ---- fitted per piece")]
+    text = "".join(lines)
+    path = os.path.join(tmp, "prefit.toml")
+    open(path, "w").write(text)
+    return path, hashlib.sha256(text.encode()).hexdigest()
+
+
+def base_values(cfg):
+    """Global values for every fit knob, from the pre-fit config."""
     vals = {}
     section = None
-    for line in open(CONFIG):
+    for line in open(cfg):
         s = line.split("#")[0].strip()
         if s.startswith("[") and s.endswith("]"):
             section = s[1:-1]
@@ -121,19 +138,20 @@ def authority_tempo(ir):
 
 class Evaluator:
     """Compile-once-per-candidate objectives: the IR for a knob tuple
-    is cached, so LOPO folds re-use every compile the full fit made."""
+    is cached, so LOPO folds re-use every compile the full fit made.
+    Everything scores against the PRE-FIT config, never the live one."""
 
-    def __init__(self, otb, piece, tmp):
-        self.otb, self.piece, self.tmp = otb, piece, tmp
+    def __init__(self, otb, piece, tmp, cfg):
+        self.otb, self.piece, self.tmp, self.cfg = otb, piece, tmp, cfg
         self.irs = {}
         self.vel_rows = {}
 
     def ir_for(self, trial, sections):
         key = tuple(sorted(trial.items()))
         if key not in self.irs:
-            cfg = (ae.with_knobs(CONFIG, trial, self.tmp,
+            cfg = (ae.with_knobs(self.cfg, trial, self.tmp,
                                  sections=sections)
-                   if trial else CONFIG)
+                   if trial else self.cfg)
             self.irs[key] = ae.compile_ir(
                 self.otb, self.piece, KERN, self.tmp, cfg)
         return key, self.irs[key]
@@ -195,7 +213,7 @@ def shrink(current, base, n, k):
             for key, v in current.items()}
 
 
-def fit_piece(otb, piece, base, shrink_k, tmp):
+def fit_piece(otb, piece, base, shrink_k, tmp, cfg):
     perfs = perf_dirs(piece)
     n = len(perfs)
     if n == 0:
@@ -203,7 +221,7 @@ def fit_piece(otb, piece, base, shrink_k, tmp):
     out = {"piece": piece, "n": n, "performers": [p for _, p in perfs]}
 
     # --- tempo ---
-    ir = ae.compile_ir(otb, piece, KERN, tmp, CONFIG)
+    ir = ae.compile_ir(otb, piece, KERN, tmp, cfg)
     tempos = [t for t in (body_tempo(d, p) for d, p in perfs) if t]
     if tempos:
         human = statistics.median(tempos)
@@ -214,7 +232,7 @@ def fit_piece(otb, piece, base, shrink_k, tmp):
         }
 
     # --- shape fits (timing, velocity), each with LOPO where possible ---
-    ev = Evaluator(otb, piece, tmp)
+    ev = Evaluator(otb, piece, tmp, cfg)
     for name, knobs, objective in (
             ("timing", TIMING_KNOBS, ev.timing),
             ("velocity", VEL_KNOBS, ev.velocity)):
@@ -225,6 +243,14 @@ def fit_piece(otb, piece, base, shrink_k, tmp):
                "fitted_r": round(scores[1], 4)}
         shrunk = shrink(fitted, base, n, shrink_k)
         rec["shrunk"] = shrunk
+        # the candidate that DEPLOYS is the shrunk one — score it, and
+        # never ship a config that loses to its own baseline
+        sections = {k: f"piece.{piece}" for k in knobs}
+        deployed = objective(shrunk, sections) if shrunk else scores[0]
+        rec["deployed_r"] = (round(deployed, 4)
+                             if deployed is not None else None)
+        beats_base = (deployed is not None
+                      and deployed >= scores[0] - 1e-4)
         if n >= 3 and fitted:
             # LOPO: refit on n-1 (compiles shared via the cache), score
             # the held-out performer on the shrunk fold fit
@@ -244,13 +270,13 @@ def fit_piece(otb, piece, base, shrink_k, tmp):
                     deltas.append(r_fit - r_base)
             if deltas:
                 rec["lopo_delta"] = round(statistics.mean(deltas), 4)
-                rec["kept"] = rec["lopo_delta"] >= -1e-3
+                rec["kept"] = beats_base and rec["lopo_delta"] >= -1e-3
             else:
                 rec["kept"] = False
         else:
-            # too little data to hold anything out: keep only the
-            # strongly-shrunk deltas, flagged as unvalidated
-            rec["kept"] = bool(fitted)
+            # too little data to hold anything out: the shrunk deltas
+            # deploy only if the deployed score itself holds up
+            rec["kept"] = bool(fitted) and beats_base
             rec["lopo_delta"] = None
         out[name] = rec
     return out
@@ -264,6 +290,8 @@ def build_sections(state):
     date = datetime.date.today().isoformat()
     out = {}
     for piece, rec in sorted(state.items()):
+        if piece == "_meta":
+            continue
         lines = []
         t = rec.get("tempo")
         if t:
@@ -277,10 +305,11 @@ def build_sections(state):
                 continue
             lopo = (f" LOPO {r['lopo_delta']:+}" if r.get("lopo_delta")
                     is not None else " unvalidated(n<3)")
+            shown = r.get("deployed_r", r["fitted_r"])
             for k, v in sorted(r["shrunk"].items()):
                 lines.append((k, v,
                               f"{MARK} {date} n={rec['n']} "
-                              f"r {r['baseline_r']}->{r['fitted_r']}"
+                              f"r {r['baseline_r']}->{shown}"
                               f"{lopo}"))
         if lines:
             out[piece] = lines
@@ -364,12 +393,20 @@ def main():
         pieces = args.pieces or sorted(
             p[:-4] for p in os.listdir(KERN) if p.endswith(".krn"))
         pieces = [p for p in pieces if na.piece_performances(p)]
-        base = base_values()
         with tempfile.TemporaryDirectory() as tmp:
+            cfg, sha = prefit_config(tmp)
+            meta = state.get("_meta", {})
+            if meta.get("prefit_sha256") not in (None, sha):
+                print("pre-fit config changed since the saved state — "
+                      "starting fresh")
+                state = {}
+            state["_meta"] = {"prefit_sha256": sha}
+            base = base_values(cfg)
             for piece in pieces:
                 if piece in state and not args.pieces:
                     continue  # resumable
-                rec = fit_piece(otb, piece, base, args.shrink_k, tmp)
+                rec = fit_piece(otb, piece, base, args.shrink_k, tmp,
+                                cfg)
                 if rec:
                     state[piece] = rec
                     json.dump(state, open(STATE, "w"), indent=1)

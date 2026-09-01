@@ -93,10 +93,26 @@ class Apply(unittest.TestCase):
 
 class BaseValues(unittest.TestCase):
     def test_reads_globals_not_piece_sections(self):
-        vals = pf.base_values()
+        vals = pf.base_values(pf.CONFIG)
         self.assertIn("cadence_depth", vals)
         self.assertEqual(vals["cadence_depth"], 0.0)  # the global veto
         self.assertIn("vel_highloud", vals)
+
+
+class Prefit(unittest.TestCase):
+    def test_strips_fitted_lines_and_fingerprints(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path, sha = pf.prefit_config(tmp)
+            text = open(path).read()
+            self.assertNotIn(pf.MARK, text)
+            self.assertNotIn("fitted per piece", text)
+            # hand entries survive the strip
+            self.assertIn("[piece.wtc1p01]", text)
+            self.assertIn("overhold", text)
+            # deterministic fingerprint
+            path2, sha2 = pf.prefit_config(tmp)
+            self.assertEqual(sha, sha2)
 
 
 if __name__ == "__main__":
