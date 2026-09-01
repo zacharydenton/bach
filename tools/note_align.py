@@ -112,7 +112,8 @@ def parse_match(path):
         midi_pitch = int(midi_pitch)
         if spelled_pitch(letter, acc, int(octave)) != midi_pitch:
             mp.pitch_mismatch += 1  # trust the note's own midi field
-        if float(on_beats) == float(off_beats):
+        is_grace = float(on_beats) == float(off_beats)
+        if is_grace:
             mp.grace_snotes += 1
         # voice identity must include the staff: 147/169 WTC matches
         # reuse a voice number across staves, and a gate measured
@@ -125,15 +126,17 @@ def parse_match(path):
             int(on_t), int(off_t), int(vel),
             voice_id,
             tags,
-            float(on_beats)))
+            float(on_beats), is_grace))
     mp.extra_timesigs = max(0, len(tsigs) - 1)
     if tsigs:
         mp.den = tsigs[0][1]
     mp.sec_per_tick = rate / 1e6 / units
     mp.rows = [
         (int(round(ob / mp.den * WN_TICKS)), xml_id, p,
-         on_t * mp.sec_per_tick, off_t * mp.sec_per_tick, vel, voice, tags)
-        for (_, xml_id, p, on_t, off_t, vel, voice, tags, ob) in mp.rows]
+         on_t * mp.sec_per_tick, off_t * mp.sec_per_tick, vel, voice, tags,
+         gr)
+        for (_, xml_id, p, on_t, off_t, vel, voice, tags, ob, gr)
+        in mp.rows]
     return mp
 
 
@@ -145,10 +148,12 @@ def load_ir_notes(ir):
     Returns dict key -> list of representatives (unisons keep several).
     """
     groups = {}
+    max_src = 0
     for track in ir["tracks"]:
         for n in track:
             key = (int(round(n["srcWn"] * WN_TICKS)), n["srcPitch"])
             groups.setdefault(key, []).append(n)
+            max_src = max(max_src, key[0])
     out = {}
     for key, ns in groups.items():
         # split by track/channel: a unison between voices is two notes
@@ -168,6 +173,16 @@ def load_ir_notes(ir):
                       if GATE_RE.search(w)), None)
             rep["gate_pct"] = int(g.group(1)) if g else None
             rep["gate_label"] = g.group(2) if g else None
+            # rule name -> delta text (cite stripped): the delta wording
+            # distinguishes e.g. a double-duration SHORT half ("onset"
+            # present) from the long half, and a realised grace
+            # ("realised at") from the grace-delayed main ("onset +")
+            rep["rules"] = {
+                w.split(":", 1)[0]: w.split(":", 1)[1].split("  [")[0].strip()
+                for w in sub[0].get("whys", []) if ":" in w}
+            # the final chord (finalTag's own definition: notated onset
+            # equals the piece's last) — the roll emits no why
+            rep["is_final"] = key[0] == max_src
             reps.append(rep)
         out[key] = reps
     return out
@@ -216,13 +231,18 @@ def _take(pool, key):
 
 
 def _row(key, snote, rep, how):
-    (t, xml_id, p, on_s, off_s, vel, voice, tags) = snote
+    (t, xml_id, p, on_s, off_s, vel, voice, tags, snote_grace) = snote
     return {
         "wn": key[0] / WN_TICKS, "pitch": p, "xml_id": xml_id,
         "voice": voice, "tags": tags, "pass": how,
         "human_vel": vel, "human_on_s": on_s, "human_off_s": off_s,
         "otb_vel": rep["vel"], "otb_on_s": rep["onS"],
         "otb_dur_s": rep["durS"],
+        "otb_on_wn": rep.get("onWn"), "otb_dur_wn": rep.get("durWn"),
+        "ch": rep.get("ch"),
+        "rules": rep.get("rules", {}),
+        "is_final": rep.get("is_final", False),
+        "snote_grace": snote_grace,
         "gate_pct": rep["gate_pct"], "gate_label": rep["gate_label"],
         "is_orn": rep["is_orn"],
     }
@@ -380,6 +400,18 @@ def bridge(ir_notes, mp):
     assert counters["matched"] + counters["snote_unmatched"] \
         + counters["snote_deleted"] == counters["total_snotes"]
     return rows, counters
+
+
+def interp_time(xs, ys, x):
+    """Piecewise-linear ys(x) with edge-SLOPE extrapolation: clamping
+    the time outside the annotated span would fabricate huge
+    deviations. xs strictly increasing, len >= 2."""
+    import bisect
+    i = bisect.bisect_right(xs, x)
+    i = max(1, min(i, len(xs) - 1))
+    x0, x1 = xs[i - 1], xs[i]
+    y0, y1 = ys[i - 1], ys[i]
+    return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
 
 
 def zscore(vals):

@@ -118,13 +118,28 @@ lead_ms = 2       # MEASURED (note-level ASAP, 2026-09-01): in WTC
                   # (median -2.1, IQR -10..+7, n=47230). Palmer 1996's
                   # 20-30 ms is melody-over-accompaniment texture, not
                   # polyphony — the voices are near-synchronous here
-roll_ms = 12      # final chord rolled bass-upward, per note
+roll_ms = 0       # MEASURED (timing_fit 2026-09-01): ASAP pianists
+                  # do not roll final chords (-2.1 ms/rank — if
+                  # anything slightly top-first, n=357). The bass-up
+                  # roll is harpsichord idiom: keep it per-piece
 jitter_ms = 3     # KTH noise rules — seeded by piece name: deterministic
 jitter_vel = 2
 dialogue_vel = 2   # FITTED (was 4): the floor-holder's presence survives
                    # the note-level fit at half strength
 dialogue_yield = 0 # FITTED (was 2): the listeners' yielding does not —
                    # not measurable beside register (per-piece knob)
+uphill = 0.0       # MEASURED to null (timing_fit 2026-09-01: +0.2 ms,
+                   # t=0.5 over 163 performances) — no run-rushing in
+                   # the human onsets; KTH faster-uphill switched off
+double_dur = 0.0   # DIRECTION DISPROVEN (timing_fit 2026-09-01): the
+                   # KTH rule SOFTENS 2:1 toward 1.75, but humans play
+                   # 2.041 — they slightly OVERDOT (short half +2.6 ms
+                   # late, t=6.6, n=7862). Softening off; a future
+                   # overdot rule is the discovered shape. (Also
+                   # discovered, unmodelled: post-leap arrivals land
+                   # +1.1 ms late, t=4.8. And inegales measured 0.93 —
+                   # no French swing in the WTC; inegal stays a
+                   # per-piece style decision at 0.)
 seq_echo = 0      # FITTED (was 2): no terraced echo in the human keys
 subject_vel = 5   # FITTED: survives exactly at its hand value — fugue
                   # subjects really are voiced up
