@@ -163,6 +163,7 @@ async function loadPiece(idx) {
   // no trace in the standing rig or the once-only default-cast latch —
   // an uncasted successor would otherwise inherit the loser's casting
   const staged = { defaultDone: castState.defaultDone };
+  const rigSnapshot = [...slotPatch]; // what the rig was when we staged
   const eff = resolveSlots(CASTINGS, p.name, slotChannels, slotPatch,
     staged);
 
@@ -172,9 +173,21 @@ async function loadPiece(idx) {
     shipInstance(inst, eff[slot])));
   if (gen !== pieceGen) return;
 
-  // this request won: commit the staged rig
+  // this request won: commit the staged rig — except where the user
+  // retargeted a slot while we were loading; their choice stands, and
+  // its instances re-ship against THIS piece's placement (their edit
+  // may have shipped against the outgoing piece's instances)
   castState.defaultDone = staged.defaultDone;
-  for (let s = 0; s < SLOTS.length; s++) slotPatch[s] = eff[s];
+  const reship = [];
+  for (let s = 0; s < SLOTS.length; s++) {
+    if (slotPatch[s] === rigSnapshot[s]) slotPatch[s] = eff[s];
+    else reship.push(s);
+  }
+  for (const s of reship) {
+    placement.instSlot.forEach((slot, inst) => {
+      if (slot === s) shipInstance(inst, slotPatch[s]);
+    });
+  }
 
   // calibration compensation sees the patches that will play
   const score = buildEvents(perf, SR, chToSlot, chToLane, eff, CAL, true);

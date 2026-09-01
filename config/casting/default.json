@@ -1,13 +1,12 @@
 {
-  "_": "Standing rig casting, updated by ear 2026-09-01: Classical / Poly Lala / Dreamy Flute / Lera. Slot-name keys (bass/tenor/alto/soprano) are what the static board's four-voice rig reads; the digit keys carry the same rig channel-wise (bass-first) for the live patchboard, which ignores non-digit keys. Applied once at startup; per-piece casting files override; live tweaks survive piece changes.",
+  "_": "Standing rig casting, updated by ear 2026-09-01: Classical / Poly Lala / Dreamy Flute / Lera. Slot-name keys (bass/tenor/alto/soprano) are what the static board's four-voice rig reads. The digit keys carry the same rig for the live patchboard, which ignores names and seeds once at startup by literal channel \u2014 so they are keyed by wtc1p01's register ranking (bass=ch1, tenor=ch2, alto=ch4+ch0, soprano=ch3), the piece the album opens on. Applied once; per-piece casting files override; live tweaks survive piece changes.",
   "bass": "/usr/share/surge-xt/patches_factory/Leads/Classical.fxp",
   "tenor": "/usr/share/surge-xt/patches_factory/Polysynths/Poly Lala.fxp",
   "alto": "/usr/share/surge-xt/patches_factory/Winds/Dreamy Flute.fxp",
   "soprano": "/usr/share/surge-xt/patches_factory/Leads/Lera.fxp",
-  "0": "/usr/share/surge-xt/patches_factory/Leads/Classical.fxp",
-  "1": "/usr/share/surge-xt/patches_factory/Polysynths/Poly Lala.fxp",
-  "2": "/usr/share/surge-xt/patches_factory/Winds/Dreamy Flute.fxp",
-  "3": "/usr/share/surge-xt/patches_factory/Winds/Dreamy Flute.fxp",
-  "4": "/usr/share/surge-xt/patches_factory/Leads/Lera.fxp",
-  "5": "/usr/share/surge-xt/patches_factory/Leads/Lera.fxp"
+  "1": "/usr/share/surge-xt/patches_factory/Leads/Classical.fxp",
+  "2": "/usr/share/surge-xt/patches_factory/Polysynths/Poly Lala.fxp",
+  "4": "/usr/share/surge-xt/patches_factory/Winds/Dreamy Flute.fxp",
+  "0": "/usr/share/surge-xt/patches_factory/Winds/Dreamy Flute.fxp",
+  "3": "/usr/share/surge-xt/patches_factory/Leads/Lera.fxp"
 }

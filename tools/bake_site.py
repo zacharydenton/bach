@@ -77,9 +77,12 @@ def bake_wasm(surge_dir, engine_dir, emscripten_bin):
         sys.exit(f"no wasm bridge at {bridge} — is {surge_dir} the fork "
                  "on branch wasm-headless-audioworklet?")
     with open(bridge) as f:
-        if "loadSCLString" not in f.read():
-            sys.exit("surge-worklet.cpp lacks loadSCLString — the static "
-                     "board needs SCL tuning; update the fork branch")
+        src = f.read()
+    for method in ("loadSCLString", "loadScenePatches"):
+        if method not in src:
+            sys.exit(f"surge-worklet.cpp lacks {method} — the static "
+                     "board needs SCL tuning and the scene-pair patch "
+                     "loader; update the fork branch")
     # the submodule needs its emscripten guards (see the fork README)
     sub = os.path.join(surge_dir, "libs", "sst", "sst-plugininfra")
     clean = subprocess.run(

@@ -1,6 +1,6 @@
 {
-  "_": "Casting for tools/render_showcase.sh's fugue render, updated 2026-09-01 to the standing rig (DNA Sequencer / Poly Lala / Dreamy Flute / Lera). No longer in config/casting/: a per-piece casting there would stomp the standing rig on every visit to the fugue, and the boards now retain the rig across the whole book. Channel -> patch; kern orders voices bass-first (ch0=bass, ch1/3=tenor, ch2/6=alto, ch4/5=soprano).",
-  "0": "/usr/share/surge-xt/patches_factory/Leads/DNA Sequencer.fxp",
+  "_": "Casting for tools/render_showcase.sh's fugue render, updated 2026-09-01 to the standing rig (Classical / Poly Lala / Dreamy Flute / Lera). No longer in config/casting/: a per-piece casting there would stomp the standing rig on every visit to the fugue, and the boards now retain the rig across the whole book. Channel -> patch; kern orders voices bass-first (ch0=bass, ch1/3=tenor, ch2/6=alto, ch4/5=soprano).",
+  "0": "/usr/share/surge-xt/patches_factory/Leads/Classical.fxp",
   "1": "/usr/share/surge-xt/patches_factory/Polysynths/Poly Lala.fxp",
   "3": "/usr/share/surge-xt/patches_factory/Polysynths/Poly Lala.fxp",
   "2": "/usr/share/surge-xt/patches_factory/Winds/Dreamy Flute.fxp",

@@ -45,6 +45,7 @@ class Board extends AudioWorkletProcessor {
     this.laneInst = []; // per lane: its instance
     this.laneScene = []; // per lane: scene A or B on that instance
     this.instSlot = []; // per instance: the slot whose gain/mute it wears
+    this.patchStash = []; // per instance: last patches msg, for warmup reset
     this.views = []; // per instance: {l, r} into its output scratch
     // riding limiter state (patchboard._limit, rates rescaled from its
     // 4096-frame chunk to the 128-frame quantum: 0.94^(128/4096),
@@ -112,6 +113,7 @@ class Board extends AudioWorkletProcessor {
               type: "error",
               message: `scene patch load failed on instance ${msg.inst}`,
             });
+          this.patchStash[msg.inst] = msg;
         }
         break;
       }
@@ -128,8 +130,16 @@ class Board extends AudioWorkletProcessor {
           s.noteOn(0, 72, 10);
           for (let q = 0; q < (msg.quanta || 300); q++) s.render(128);
           s.allNotesOff();
-          for (let q = 0; q < 100; q++) s.render(128);
         }
+        // hard reset: no fixed flush outlives a send delay's feedback or
+        // a global reverb's tail, so reload each instance's patches — a
+        // fresh patch load starts silent by construction
+        this.patchStash.forEach((m, inst) => {
+          if (!m) return;
+          const s = this.synths[inst];
+          s.allNotesOff();
+          s.loadScenePatches(m.bytesA, m.nameA || "", m.bytesB, m.nameB || "");
+        });
         this.port.postMessage({ type: "warmed", ms: Date.now() - t0 });
         break;
       }
