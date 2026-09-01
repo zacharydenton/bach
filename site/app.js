@@ -20,6 +20,7 @@ import {
 let pieceGen = 0;
 let reqIdx = null;
 let warmedUp = false;
+const slotRev = [0, 0, 0, 0]; // bumped on every user retarget of a slot
 let startIdx = 0; // where the board opens: the E-flat minor prelude
 const START_PIECE = "wtc1p08";
 const instGen = {};
@@ -169,7 +170,7 @@ async function loadPiece(idx) {
   // no trace in the standing rig or the once-only default-cast latch —
   // an uncasted successor would otherwise inherit the loser's casting
   const staged = { defaultDone: castState.defaultDone };
-  const rigSnapshot = [...slotPatch]; // what the rig was when we staged
+  const stageRevs = [...slotRev]; // which slots the user touches after this
   const eff = resolveSlots(CASTINGS, p.name, slotChannels, slotPatch,
     staged);
 
@@ -180,25 +181,29 @@ async function loadPiece(idx) {
   if (gen !== pieceGen) return;
 
   // this request won: settle the FINAL rig — the staged casting, except
-  // where the user retargeted a slot while we were loading (their edit
-  // may have shipped against the outgoing piece's instances). Every
-  // instance is shipped its final patch and AWAITED before the score
-  // posts: playback must not begin on a patch whose replacement is
-  // still in flight, or the arriving load would cut sounding notes.
-  // (shipInstance dedups, so already-correct instances are no-ops.)
-  const finalEff = [];
-  for (let s = 0; s < SLOTS.length; s++) {
-    finalEff[s] = slotPatch[s] === rigSnapshot[s] ? eff[s] : slotPatch[s];
+  // where the user retargeted a slot after staging (their edit may have
+  // shipped against the outgoing piece's instances). Every instance is
+  // shipped its final patch and AWAITED before the score posts, and the
+  // settle RETRIES until no slot revision moved during the wait —
+  // playback must not begin on a patch whose replacement is still in
+  // flight, and the score's calibration must match what actually plays.
+  // (shipInstance dedups, so a stable pass is all no-ops.)
+  let finalEff;
+  for (;;) {
+    const revs = [...slotRev];
+    finalEff = SLOTS.map((_, s) =>
+      slotRev[s] === stageRevs[s] ? eff[s] : slotPatch[s]);
+    await Promise.all(placement.instSlot.map((slot, inst) =>
+      shipInstance(inst, finalEff[slot])));
+    if (gen !== pieceGen) return;
+    if (SLOTS.every((_, s) => slotRev[s] === revs[s])) break;
   }
-  await Promise.all(placement.instSlot.map((slot, inst) =>
-    shipInstance(inst, finalEff[slot])));
-  if (gen !== pieceGen) return;
 
-  // ...and only now commit, so a load that loses at either check has
-  // left the standing rig untouched
+  // ...and only now commit, so a load that loses at any check has left
+  // the standing rig untouched
   castState.defaultDone = staged.defaultDone;
   for (let s = 0; s < SLOTS.length; s++) {
-    if (slotPatch[s] === rigSnapshot[s]) slotPatch[s] = finalEff[s];
+    if (slotRev[s] === stageRevs[s]) slotPatch[s] = finalEff[s];
   }
 
   // calibration compensation sees the patches that will actually play
@@ -381,6 +386,7 @@ function refreshRig() {
 
 async function setPatch(s, url) {
   slotPatch[s] = url;
+  slotRev[s]++;
   if (PIECE) {
     // every instance wearing this slot
     const insts = [];

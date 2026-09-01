@@ -22,6 +22,7 @@ import OTB.Config
   ( agogicsFor, artParamsFor, dynamicsFor, expressFor, emptyConfig, loadConfig
   , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
 import OTB.Config qualified
+import OTB.Edition (readKernSource)
 import OTB.Emit.Midi (renderSmf, writeSmf)
 import OTB.Generate (generateScore)
 import Data.List (intercalate)
@@ -53,7 +54,7 @@ import OTB.Units (Bpm (..), WholeNotes (..))
 import Options.Applicative
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory)
 import System.Exit (die)
-import System.FilePath (takeBaseName, takeFileName, (</>))
+import System.FilePath (takeBaseName, (</>))
 
 data Common = Common
   { cInput :: FilePath
@@ -222,20 +223,9 @@ applyTempoOpt opt s = case opt of
     | scTempoDeclared s -> s
     | otherwise -> s {scTempo = tempoGiusto s}
 
--- | The edition layer. The corpus is external and unversioned, and some
--- of its files carry encoder notes requesting manual edits (wtc1p08's
--- RWG record: "Appoggiaturas ... need manual editing in measures: 36").
--- A file in config/editions/ with the same basename IS that edit,
--- versioned in this repo and preferred wherever kern is read.
-readKernSource :: FilePath -> IO T.Text
-readKernSource path = do
-  let edition = "config" </> "editions" </> takeFileName path
-  hasEdition <- doesFileExist edition
-  TIO.readFile (if hasEdition then edition else path)
-
 load :: Common -> IO (String, Score, Performance, TuningTable, Bool, Interp)
 load com = do
-  src <- readKernSource (cInput com)
+  src <- readKernSource (cConfig com) (cInput com)
   score0 <- either (die . ("parse: " <>)) pure
               (parseKern (tempoFallback (cTempo com)) src)
   haveCfg <- doesFileExist (cConfig com)
@@ -402,7 +392,7 @@ runAlbum corpus outDir cfgPath tempo temp = do
   let adaptive = temp == "adaptive"
   table <- resolveTemperament (if adaptive then "werckmeister3" else temp)
   files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
-  srcs <- mapM (\f -> (,) f <$> readKernSource (corpus </> f)) (sort files)
+  srcs <- mapM (\f -> (,) f <$> readKernSource cfgPath (corpus </> f)) (sort files)
   createDirectoryIfMissing True outDir
   -- the pure pipeline fans out across cores; IO stays sequential
   let one (f, src) =
@@ -443,7 +433,7 @@ runStats corpus cfgPath tempo = do
   files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
   parsed <- mapM
     (\f -> do
-        src <- readKernSource (corpus </> f)
+        src <- readKernSource cfgPath (corpus </> f)
         pure (takeBaseName f, parseKern (Bpm tempo) src))
     (sort files)
   let scores = [(n, s) | (n, Right s) <- parsed]

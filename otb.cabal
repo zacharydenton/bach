@@ -13,6 +13,7 @@ extra-doc-files:    README.md
 extra-source-files:
     config/*.toml
     config/casting/*.json
+    config/editions/*.krn
     examples/*.json
     examples/*.scl
     tools/*.py
@@ -36,6 +37,7 @@ library
         OTB.Kern.Spine
         OTB.Kern.Parser
         OTB.Score
+        OTB.Edition
         OTB.Config
         OTB.Explain
         OTB.Interp
@@ -65,7 +67,9 @@ library
         EuterpeaLite,
         text >=2.0,
         bytestring,
-        containers
+        containers,
+        directory,
+        filepath
 
 executable otb
     import:           warnings

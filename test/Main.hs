@@ -19,6 +19,7 @@ import OTB.Kern.Parser (parseKern)
 import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
 import OTB.Emit.Json (renderJson)
 import OTB.Emit.Midi (renderSmf)
+import OTB.Edition (readKernSource)
 import OTB.Interp.Agogics
 import OTB.Interp.Dynamics
 import OTB.Interp.Express
@@ -37,7 +38,8 @@ import OTB.Player (Interp (..), PerfNote (..), Performance (..), defaultInterp, 
 import OTB.Score (Score (..), ScoreNote (..), Voice (..), scoreNote)
 import OTB.Tuning
 import OTB.Units (Bpm (..), Cents (..), Seconds (..), WholeNotes (..), secondsAt, toTicks)
-import System.Directory (doesDirectoryExist, listDirectory)
+import System.Directory
+  (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
 import System.Process (readProcessWithExitCode)
@@ -501,6 +503,27 @@ units = testGroup "otb"
                     [pnOnset n | n <- ns, pnPitch n == p, pnOnset n > 1 / 8]
               assertBool "top lane does not lead its chord partner"
                 (later 64 < later 60)
+      ]
+  , testGroup "editions"
+      [ testCase "edition substitutes only its named corpus source" $ do
+          let corpusF = "corpus/bach-wtc/kern/wtc1p08.krn"
+          have <- doesFileExist corpusF
+          if not have then pure () else do
+            raw <- TIO.readFile corpusF
+            ed <- readKernSource "config/default.toml" corpusF
+            assertBool "edition not applied to its corpus source" (ed /= raw)
+            assertBool "m36 appoggiatura absent from the edition"
+              ("4.g-p" `T.isInfixOf` ed)
+            -- a stranger's file that merely shares the basename (no
+            -- matching !!!KEY) must pass through untouched
+            let dir = "/tmp/otb-edition-test"
+                stranger = dir <> "/wtc1p08.krn"
+            createDirectoryIfMissing True dir
+            TIO.writeFile stranger
+              (T.unlines ["**kern", "4c", "*-", "!!!KEY: 12345"])
+            kept <- readKernSource "config/default.toml" stranger
+            assertBool "stranger file was replaced by the edition"
+              ("!!!KEY: 12345" `T.isInfixOf` kept)
       ]
   , testGroup "tools"
       [ testCase "site bake contracts (python3 -m unittest)" $ do
