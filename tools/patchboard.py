@@ -512,41 +512,107 @@ PAGE = """<!doctype html><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>otb patchboard</title>
 <style>
-body{font:15px/1.5 system-ui;background:#111;color:#ddd;max-width:46rem;
-     margin:1.5rem auto;padding:0 1rem}
-.part{border:1px solid #333;border-radius:8px;padding:.7rem;margin:.6rem 0}
+:root{
+  --bg:#14120f; --panel:#1c1915; --line:#2b2620; --ink:#e8e2d4;
+  --dim:#8a8274; --faint:#5c564a; --brass:#c8a24b; --brass-dim:#8a7134;
+  --v0:#d9a866; --v1:#8fb573; --v2:#c98ba5; --v3:#7fb2c9; --v4:#a68fc9;
+  --v5:#c9c07f;
+  --serif:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink);
+     max-width:44rem;margin:0 auto;padding:2.2rem 1.2rem 3rem}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.22em;color:var(--dim);
+     text-transform:uppercase}
+h1{font:400 34px/1.15 var(--serif);margin:.35rem 0 .2rem;letter-spacing:.01em}
+h1 .idx{font:400 15px var(--mono);color:var(--faint);margin-left:.6rem}
+.rail{position:relative;height:2px;background:var(--line);margin:.9rem 0 .3rem;
+     border-radius:1px}
+.rail .fill{position:absolute;inset:0 auto 0 0;width:0%;background:var(--brass);
+     border-radius:1px}
+.times{display:flex;justify-content:space-between;font:11px var(--mono);
+     color:var(--faint);font-variant-numeric:tabular-nums}
 .row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
-select{flex:1;min-width:12rem;background:#222;color:#ddd;border:1px solid #444;
-       padding:.3rem;border-radius:4px}
-button{background:#2a2a2a;color:#ddd;border:1px solid #444;border-radius:4px;
-       padding:.3rem .7rem;cursor:pointer}
-button.on{background:#264;border-color:#4a8}
-button.big{font-size:1.1rem;padding:.5rem 1.2rem}
-input[type=range]{width:8rem}
-h1{font-size:1.2rem} .patch{color:#9c9} .pos{color:#777;font-size:.85rem}
-#cast{width:100%;background:#181818;color:#cc9;border:1px solid #333;
-      font:12px monospace;padding:.5rem;white-space:pre-wrap}
+.transport{margin:.9rem 0 1.4rem}
+button{background:transparent;color:var(--ink);border:1px solid var(--line);
+     border-radius:6px;padding:.35rem .8rem;cursor:pointer;font:inherit;
+     transition:border-color .15s,background .15s}
+button:hover{border-color:var(--brass-dim)}
+button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+button.primary{border-color:var(--brass-dim);color:var(--brass);
+     font-weight:600;padding:.45rem 1.1rem}
+button.on{background:#241f14;border-color:var(--brass);color:var(--brass)}
+select{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+     padding:.35rem .5rem;border-radius:6px;font:inherit;min-width:0}
+select:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+#piecesel{flex:1}
+.part{background:var(--panel);border:1px solid var(--line);border-left:3px solid
+     var(--vc,var(--dim));border-radius:8px;padding:.6rem .8rem;margin:.5rem 0}
+.part .head{display:flex;align-items:baseline;gap:.6rem;margin-bottom:.4rem}
+.part b{font:600 14px system-ui;letter-spacing:.01em}
+.part .patch{font:12px var(--mono);color:var(--vc,var(--dim))}
+.part.muted{opacity:.45}
+input[type=range]{width:7.5rem;accent-color:var(--brass)}
+.ledger{margin:1.6rem 0 0}
+.ledger .eyebrow{margin-bottom:.5rem;display:block}
+#whys{min-height:9.2em;max-height:9.2em;overflow:hidden;position:relative;
+     border-left:2px solid var(--brass-dim);padding:.15rem 0 .15rem .8rem;
+     font:12px/1.62 var(--mono)}
+#whys:after{content:'';position:absolute;left:0;right:0;bottom:0;height:1.6em;
+     background:linear-gradient(transparent,var(--bg));pointer-events:none}
+.why{display:flex;gap:.55em;align-items:baseline;opacity:1;
+     transition:opacity .24s ease}
+.why.in{animation:rise .24s ease}
+.why.out{opacity:0}
+@keyframes rise{from{opacity:0;transform:translateY(3px)}to{opacity:1}}
+.why .chip{flex:none;font-size:10px;letter-spacing:.06em;color:var(--bg);
+     background:var(--vc,var(--dim));border-radius:3px;padding:0 .45em;
+     font-weight:700;transform:translateY(-1px)}
+.why b{color:var(--ink);font-weight:600}
+.why .delta{color:var(--dim)}
+.why .cite{color:var(--faint);font-style:italic}
+details{margin:1.6rem 0 0}
+summary{cursor:pointer;color:var(--dim);font:600 11px/1 var(--mono);
+     letter-spacing:.22em;text-transform:uppercase}
+#cast{background:var(--panel);color:#b7ab8a;border:1px solid var(--line);
+     border-radius:8px;font:12px/1.6 var(--mono);padding:.7rem .8rem;
+     white-space:pre-wrap;margin-top:.6rem}
+.stats{margin-top:1.4rem;font:11px var(--mono);color:var(--faint);
+     font-variant-numeric:tabular-nums}
+.stats .clip{color:#d98c66;font-weight:700}
+@media (prefers-reduced-motion:reduce){
+  .why,.why.in{animation:none;transition:none}
+  .rail .fill{transition:none}
+}
+@media (max-width:520px){ h1{font-size:26px} input[type=range]{width:100%} }
 </style>
-<h1>otb patchboard</h1>
-<div class=row>
- <button id=listenr class=big onclick=listenRemote()>▶ listen</button>
- <button id=listen onclick=listen()>live (LAN)</button>
- <button id=play onclick=toggle()>pause</button>
- <span class=pos id=pos></span>
- <span class=pos id=astat></span>
-</div>
-<div class=row style="margin-top:.4rem">
- <button onclick=pieceStep(-1)>⏮</button>
- <select id=piecesel onchange=setPiece(this.selectedIndex)
-   style="flex:1;min-width:10rem"></select>
- <button onclick=pieceStep(1)>⏭</button>
-</div>
+<header>
+ <span class=eyebrow>One-Take Bach &middot; Werckmeister III</span>
+ <h1><span id=title>&hellip;</span><span class=idx id=idx></span></h1>
+ <div class=rail><div class=fill id=fill></div></div>
+ <div class=times><span id=tnow>0:00</span><span id=tlen>0:00</span></div>
+ <div class="row transport">
+  <button id=listenr class=primary onclick=listenRemote()>&#9654; Listen</button>
+  <button id=listen onclick=listen()>Live (LAN)</button>
+  <button id=play onclick=toggle()>Pause</button>
+ </div>
+ <div class=row>
+  <button onclick=pieceStep(-1) aria-label="previous piece">&#9198;</button>
+  <select id=piecesel onchange=setPiece(this.selectedIndex)></select>
+  <button onclick=pieceStep(1) aria-label="next piece">&#9197;</button>
+ </div>
+</header>
 <div id=parts></div>
-<div id=whys style="min-height:5.5em;margin:8px 0;padding:6px 8px;
-  font-size:12px;line-height:1.45;opacity:.85;border-left:3px solid #888;
-  font-family:monospace;white-space:pre-wrap"></div>
-<h3>casting (paste into render_showcase / audition.py)</h3>
-<div id=cast></div>
+<section class=ledger>
+ <span class=eyebrow>The interpretation, explaining itself</span>
+ <div id=whys aria-live=polite></div>
+</section>
+<details>
+ <summary>Casting &middot; paste into render_showcase / audition.py</summary>
+ <div id=cast></div>
+</details>
+<div class=stats id=stats></div>
 <script>
 let CATS={}, STATE=null, audioOn=false;
 
@@ -608,6 +674,7 @@ const START_S = 1.5; // browsers cap paused-media readahead (~2.3 s
 // observed), so gating playback on a big pre-buffer DEADLOCKS. Start
 // early instead: while PLAYING the browser buffers aggressively, and the
 // server's 5 s history burst builds the real cushion during playback.
+let ASTAT = '';
 function listenRemote(){
   // Opus 256k over ffmpeg (~32 kB/s instead of 384): transparent for
   // music, and the <audio> element buffers. Start once START_S seconds
@@ -666,8 +733,7 @@ async function listen(){
   const node = new AudioWorkletNode(ctx, 'player',
     {outputChannelCount:[2], processorOptions:{ratio}});
   node.port.onmessage = e => {
-    document.getElementById('astat').textContent =
-      'underruns '+e.data.underruns+' · drops '+e.data.dropped;
+    ASTAT = 'underruns '+e.data.underruns+' · drops '+e.data.dropped;
   };
   node.connect(ctx.destination);
   const resp = await fetch('pcm');
@@ -695,18 +761,19 @@ async function init(){
   ps.innerHTML = PIECES.map((n,i)=>`<option>${n}</option>`).join('');
   await refresh(); setInterval(refresh, 1000);
   setInterval(refreshWhys, 400); // the interpretation, explaining itself
+  requestAnimationFrame(tick);
 }
 function setPiece(i){ post('piece',{index:i}); }
-let lastWhys = '';
 let OPUS = null;
-async function refreshWhys(){
-  if (!STATE || !STATE.playing) return;
-  // estimate the current position between 1 Hz state polls
+
+// where OUR ears are in the current piece: the opus anchor's segment
+// timeline when streaming, the interpolated engine position otherwise.
+// Returns null when the ears are in a DIFFERENT piece than the engine
+// (gapless boundary): the ledger goes quiet rather than lying.
+function earPos(){
+  if (!STATE) return 0;
   let at = STATE.position + (Date.now() - (STATE._t||Date.now()))/1000;
   if (OPUS && OPUS.anchor && !OPUS.el.paused && OPUS.el.currentTime > 0){
-    // exact mapping: the anchor's segment timeline says which piece and
-    // position each stream second carries; roll across gapless piece
-    // boundaries with the precomputed lengths
     const an = OPUS.anchor;
     const ct = OPUS.el.currentTime;
     let seg = an.segments[0];
@@ -717,26 +784,101 @@ async function refreshWhys(){
       at -= an.lengths[piece];
       piece = (piece + 1) % an.count;
     }
-    if (piece !== (STATE.pieceIndex|0)){
-      const d = document.getElementById('whys');
-      if (d.textContent) { d.textContent = ''; lastWhys = ''; }
-      return;
+    if (piece !== (STATE.pieceIndex|0)) return null;
+  }
+  return Math.min(at, STATE.length||at);
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g,
+  c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// wtc1p01 -> "Prelude I in C major", BWV 846: the engraved title the
+// slug stands for. WTC order pairs each major with its parallel minor;
+// No. 8 is the famous enharmonic split (E-flat minor prelude against
+// D-sharp minor fugue in Book I; both D-sharp minor in Book II).
+const KEYS = ['C major','C minor','C\u266f major','C\u266f minor',
+ 'D major','D minor','E\u266d major','D\u266f minor','E major','E minor',
+ 'F major','F minor','F\u266f major','F\u266f minor','G major','G minor',
+ 'A\u266d major','G\u266f minor','A major','A minor','B\u266d major',
+ 'B\u266d minor','B major','B minor'];
+const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII',
+ 'XIII','XIV','XV','XVI','XVII','XVIII','XIX','XX','XXI','XXII','XXIII','XXIV'];
+function pieceTitle(slug){
+  const m = /^wtc([12])([pf])(\\d\\d)$/.exec(slug);
+  if (!m) return {main: slug, bwv: ''};
+  const book = +m[1], kind = m[2]=='p'?'Prelude':'Fugue', n = +m[3];
+  let key = KEYS[n-1];
+  if (n == 8 && book == 1 && kind == 'Prelude') key = 'E\u266d minor';
+  return {main: kind+' '+ROMAN[n-1]+' in '+key,
+          bwv: 'BWV '+((book==1?845:869)+n)};
+}
+function fmt(s){ s=Math.max(0,s|0); return (s/60|0)+':'+String(s%60).padStart(2,'0'); }
+
+// smooth progress: rAF between 1 Hz polls, tabular time labels
+function tick(){
+  if (STATE){
+    const at = earPos();
+    const p = at==null?0:Math.min(1, at/(STATE.length||1));
+    document.getElementById('fill').style.width = (p*100).toFixed(2)+'%';
+    document.getElementById('tnow').textContent = fmt(at==null?0:at);
+    document.getElementById('tlen').textContent = fmt(STATE.length||0);
+  }
+  requestAnimationFrame(tick);
+}
+
+// The ledger: keyed per-line DOM. A rule that keeps applying HOLDS STILL;
+// only entering lines rise in and departing lines fade out — the old
+// wholesale textContent swap re-set every line each poll and flickered.
+const WHY_RE = /^([^:]+): (.*?)(?:\\s*\\[(.*)\\])?$/;
+function chipName(ch){
+  if (!STATE) return 'ch'+ch;
+  for (let i=0;i<STATE.parts.length;i++)
+    if (STATE.parts[i].channels.includes(ch))
+      return STATE.parts[i].name.split(' ')[0];
+  return 'ch'+ch;
+}
+function partIndexOf(ch){
+  if (!STATE) return 0;
+  for (let i=0;i<STATE.parts.length;i++)
+    if (STATE.parts[i].channels.includes(ch)) return i;
+  return 0;
+}
+async function refreshWhys(){
+  if (!STATE || !STATE.playing) return;
+  const box = document.getElementById('whys');
+  const at = earPos();
+  if (at == null){ box.replaceChildren(); return; }
+  let ws;
+  try { ws = await (await fetch('whys?at='+at.toFixed(2))).json(); }
+  catch(e){ return; }
+  const seen = new Map();
+  for (const w of ws){
+    const m = WHY_RE.exec(w.why) || [null, w.why, '', ''];
+    const key = w.ch + '|' + m[1];
+    if (!seen.has(key))
+      seen.set(key, {ch:w.ch, rule:m[1], delta:m[2]||'', cite:m[3]||''});
+  }
+  const want = [...seen.entries()].sort(
+    (a,b)=> a[1].ch-b[1].ch || a[1].rule.localeCompare(b[1].rule)).slice(0,6);
+  const wantKeys = new Set(want.map(([k])=>k));
+  for (const el of [...box.children]){
+    if (!wantKeys.has(el.dataset.key) && !el.classList.contains('out')){
+      el.classList.add('out');
+      setTimeout(()=>el.remove(), 260);
     }
   }
-  const ws = await (await fetch('whys?at='+at.toFixed(2))).json();
-  const seen = new Set();
-  const lines = [];
-  for (const w of ws){
-    const key = w.why.split(':')[0] + w.ch;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    lines.push('ch'+w.ch+'  '+w.why);
-    if (lines.length >= 7) break;
-  }
-  const txt = lines.join('\\n');
-  if (txt !== lastWhys){
-    lastWhys = txt;
-    document.getElementById('whys').textContent = txt;
+  const have = new Set([...box.children]
+    .filter(el=>!el.classList.contains('out')).map(el=>el.dataset.key));
+  for (const [key, w] of want){
+    if (have.has(key)) continue;
+    const el = document.createElement('div');
+    el.className = 'why in'; el.dataset.key = key;
+    el.style.setProperty('--vc', 'var(--v'+(partIndexOf(w.ch)%6)+')');
+    el.innerHTML = '<span class=chip>'+esc(chipName(w.ch))+'</span>'
+      + '<span><b>'+esc(w.rule)+'</b> <span class=delta>'+esc(w.delta)
+      + '</span>'+(w.cite?' <span class=cite>'+esc(w.cite)+'</span>':'')
+      + '</span>';
+    box.appendChild(el);
   }
 }
 function pieceStep(d){
@@ -746,9 +888,9 @@ function pieceStep(d){
 function opts(){
   let h = '<option value="(init)">(init patch)</option>';
   for (const [cat, ps] of Object.entries(CATS)){
-    h += `<optgroup label="${cat}">`;
+    h += `<optgroup label="${esc(cat)}">`;
     for (const [name, path] of ps)
-      h += `<option value="${path.replace(/"/g,'&quot;')}">${name}</option>`;
+      h += `<option value="${esc(path)}">${esc(name)}</option>`;
     h += '</optgroup>';
   }
   return h;
@@ -756,33 +898,44 @@ function opts(){
 async function refresh(){
   STATE = await (await fetch('state')).json();
   STATE._t = Date.now();
-  document.getElementById('play').textContent = STATE.playing?'pause':'play';
-  document.getElementById('pos').textContent =
-    STATE.piece+' ('+(STATE.pieceIndex+1)+'/'+STATE.pieceCount+') · '+
-    STATE.position.toFixed(1)+' / '+STATE.length.toFixed(1)+'s · '+
-    STATE.listeners+' listening · peak '+STATE.peak+
-    (STATE.peak>0.89?' ⚠CLIP-LIMITED':'');
+  document.getElementById('play').textContent = STATE.playing?'Pause':'Play';
+  const t = pieceTitle(STATE.piece);
+  document.getElementById('title').textContent = t.main;
+  document.getElementById('idx').textContent =
+    (t.bwv?t.bwv+' \u00b7 ':'')+(STATE.pieceIndex+1)+' / '+STATE.pieceCount;
+  document.getElementById('stats').textContent =
+    STATE.listeners+' listening · peak '+STATE.peak.toFixed(3)
+    + (ASTAT?' · '+ASTAT:'');
+  if (STATE.peak > 0.89)
+    document.getElementById('stats').innerHTML +=
+      ' · <span class=clip>limiter riding</span>';
   const ps = document.getElementById('piecesel');
   if (ps.selectedIndex != STATE.pieceIndex) ps.selectedIndex = STATE.pieceIndex;
   const div = document.getElementById('parts');
   if (div.childElementCount != STATE.parts.length){
     div.innerHTML = STATE.parts.map((p,i)=>`
-      <div class=part><div class=row>
-        <b id=nm${i}>${p.name}</b> <span class=patch id=pn${i}>${p.patch}</span>
-      </div><div class=row>
-        <button onclick=step(${i},-1)>◀</button>
-        <select id=sel${i} onchange=setPatch(${i},this.value)>${opts()}</select>
-        <button onclick=step(${i},1)>▶</button>
-        <button id=mute${i} onclick=mute(${i})>mute</button>
+      <div class=part id=part${i} style="--vc:var(--v${i%6})">
+       <div class=head>
+        <b id=nm${i}>${esc(p.name)}</b>
+        <span class=patch id=pn${i}>${esc(p.patch)}</span>
+       </div>
+       <div class=row>
+        <button onclick=step(${i},-1) aria-label="previous patch">◀</button>
+        <select id=sel${i} onchange=setPatch(${i},this.value)
+          style="flex:1">${opts()}</select>
+        <button onclick=step(${i},1) aria-label="next patch">▶</button>
+        <button id=mute${i} onclick=mute(${i})>Mute</button>
         <input type=range min=0 max=1.5 step=0.05 value=${p.gain}
-          onchange=gain(${i},this.value)>
-      </div></div>`).join('');
+          aria-label="gain" onchange=gain(${i},this.value)>
+       </div>
+      </div>`).join('');
   }
   STATE.parts.forEach((p,i)=>{
     // names too: two pieces with the same voice count skip the rebuild
     document.getElementById('nm'+i).textContent = p.name;
     document.getElementById('pn'+i).textContent = p.patch;
     document.getElementById('mute'+i).className = p.mute?'on':'';
+    document.getElementById('part'+i).classList.toggle('muted', !!p.mute);
     // keep the select showing what's actually loaded (piece changes and
     // casting preloads happen server-side), but not while it has focus
     const s = document.getElementById('sel'+i);
