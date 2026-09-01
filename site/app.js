@@ -20,6 +20,8 @@ import {
 let pieceGen = 0;
 let reqIdx = null;
 let warmedUp = false;
+let startIdx = 0; // where the board opens: the E-flat minor prelude
+const START_PIECE = "wtc1p08";
 const instGen = {};
 const lastShipped = {};
 
@@ -55,9 +57,13 @@ async function init() {
   ].map((u) => fetch(u).then((r) => r.json())));
   $("piecesel").innerHTML = MANIFEST.pieces
     .map((p) => `<option>${esc(p.name)}</option>`).join("");
-  const t = pieceTitle(MANIFEST.pieces[0].name);
+  startIdx = Math.max(0,
+    MANIFEST.pieces.findIndex((p) => p.name === START_PIECE));
+  $("piecesel").selectedIndex = startIdx;
+  const t = pieceTitle(MANIFEST.pieces[startIdx].name);
   $("title").textContent = t.main;
-  $("idx").textContent = `${t.bwv ? t.bwv + " · " : ""}1 / ${MANIFEST.pieces.length}`;
+  $("idx").textContent =
+    `${t.bwv ? t.bwv + " · " : ""}${startIdx + 1} / ${MANIFEST.pieces.length}`;
   $("stats").textContent =
     `${MANIFEST.pieces.length} pieces baked · four voices on ` +
     `${MANIFEST.nInstances} Surge synths` +
@@ -125,7 +131,7 @@ async function start() {
     $("start").hidden = true;
     $("play").hidden = false;
     PLAYING = true;
-    await loadPiece(0);
+    await loadPiece(startIdx);
   } catch (err) {
     $("stats").textContent = "engine failed: " + err.message;
     $("start").disabled = false;
