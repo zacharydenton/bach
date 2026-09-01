@@ -66,10 +66,10 @@ class Manifest(unittest.TestCase):
             os.makedirs(perf)
             # endS extends past the last note-off; maxCh from the notes
             a = {"piece": "wtc1p01", "endS": 9.0, "tracks": [[
-                {"onS": 0.0, "durS": 1.0, "ch": 0},
-                {"onS": 1.0, "durS": 1.0, "ch": 2}]]}
+                {"onS": 0.0, "durS": 1.0, "ch": 0, "pitch": 40},
+                {"onS": 1.0, "durS": 1.0, "ch": 2, "pitch": 70}]]}
             b = {"piece": "wtc1f01", "tracks": [[
-                {"onS": 0.0, "durS": 4.0, "ch": 0}]]}
+                {"onS": 0.0, "durS": 4.0, "ch": 0, "pitch": 60}]]}
             with open(os.path.join(perf, "wtc1p01.json"), "w") as f:
                 json.dump(a, f)
             with open(os.path.join(perf, "wtc1f01.json"), "w") as f:

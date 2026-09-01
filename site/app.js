@@ -14,8 +14,11 @@ import {
 } from "./routing.js";
 
 // async guards: fetches resolve in any order, so every load carries a
-// generation and only the latest generation is allowed to take effect
+// generation and only the latest generation is allowed to take effect.
+// reqIdx tracks the piece most recently REQUESTED (synchronously), so
+// rapid stepping advances from the request, not the committed piece.
 let pieceGen = 0;
+let reqIdx = null;
 const instGen = {};
 const lastShipped = {};
 
@@ -142,6 +145,7 @@ function onMsg(d) {
 
 async function loadPiece(idx) {
   const gen = ++pieceGen;
+  reqIdx = idx;
   const p = MANIFEST.pieces[idx];
   node.port.postMessage({ type: "pause" });
   const perf = await (await fetch(encUrl(p.url))).json();
@@ -149,15 +153,22 @@ async function loadPiece(idx) {
   const { chToSlot, chToLane, laneSlots, slotChannels } = slotMap(perf);
   const placement = lanePlacement(laneSlots);
 
+  // STAGE the effective rig: a load that ends up superseded must leave
+  // no trace in the standing rig or the once-only default-cast latch —
+  // an uncasted successor would otherwise inherit the loser's casting
+  const staged = { defaultDone: castState.defaultDone };
   const eff = resolveSlots(CASTINGS, p.name, slotChannels, slotPatch,
-    castState);
-  for (let s = 0; s < SLOTS.length; s++) slotPatch[s] = eff[s];
+    staged);
 
   // every instance this piece places lanes on — piece changes reassign
   // lanes to instances, so this is not just "whose patch changed"
-  await Promise.all(placement.instSlot.map((_, inst) =>
-    shipInstance(inst, placement.instSlot)));
+  await Promise.all(placement.instSlot.map((slot, inst) =>
+    shipInstance(inst, eff[slot])));
   if (gen !== pieceGen) return;
+
+  // this request won: commit the staged rig
+  castState.defaultDone = staged.defaultDone;
+  for (let s = 0; s < SLOTS.length; s++) slotPatch[s] = eff[s];
 
   // calibration compensation sees the patches that will play
   const score = buildEvents(perf, SR, chToSlot, chToLane, eff, CAL, true);
@@ -201,11 +212,13 @@ async function patchBytes(url) {
 // preset's true signal path. Guarded by a per-instance generation so a
 // slow fetch can never overwrite a newer selection; unchanged patches
 // are skipped so piece changes only reload what actually changed.
-async function shipInstance(inst, instSlot) {
+async function shipInstance(inst, url) {
   if (!node) return;
-  const url = inst < instSlot.length ? slotPatch[instSlot[inst]] : "(init)";
-  if (lastShipped[inst] === url) return;
+  // bump the generation BEFORE the cache-hit check: reverting to the
+  // already-loaded patch must also cancel a slower load still in flight,
+  // or the stale load would land after the revert and contradict the UI
   const gen = (instGen[inst] = (instGen[inst] || 0) + 1);
+  if (lastShipped[inst] === url) return;
   const bytes = await patchBytes(url);
   if (gen !== instGen[inst]) return; // a newer patch is on its way
   const copyA = new Uint8Array(bytes.slice(0)); // transfer must not eat the cache
@@ -229,12 +242,13 @@ function playToggle() {
 }
 
 function setPiece(i) {
-  if (node && PIECE && i !== PIECE.idx) loadPiece(i);
+  if (node && PIECE && i !== (reqIdx ?? PIECE.idx)) loadPiece(i);
 }
 
 function pieceStep(d) {
   if (!PIECE) return;
-  loadPiece((PIECE.idx + d + MANIFEST.pieces.length) % MANIFEST.pieces.length);
+  const base = reqIdx ?? PIECE.idx;
+  loadPiece((base + d + MANIFEST.pieces.length) % MANIFEST.pieces.length);
 }
 
 function seekFrac(f) {
@@ -336,7 +350,7 @@ async function setPatch(s, url) {
     PIECE.instSlot.forEach((slot, inst) => {
       if (slot === s) insts.push(inst);
     });
-    await Promise.all(insts.map((i) => shipInstance(i, PIECE.instSlot)));
+    await Promise.all(insts.map((i) => shipInstance(i, url)));
   }
   refreshRig();
 }
