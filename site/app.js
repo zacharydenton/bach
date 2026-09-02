@@ -57,7 +57,12 @@ async function init() {
     "data/calibration.json", "data/patches.json",
   ].map((u) => fetch(u).then((r) => r.json())));
   $("piecesel").innerHTML = MANIFEST.pieces
-    .map((p) => `<option>${esc(p.name)}</option>`).join("");
+    .map((p) => {
+      const t = pieceTitle(p.name);
+      const label = t.bwv
+        ? `${t.main} · ${t.bwv}` : t.main;
+      return `<option>${esc(label)}</option>`;
+    }).join("");
   startIdx = Math.max(0,
     MANIFEST.pieces.findIndex((p) => p.name === START_PIECE));
   $("piecesel").selectedIndex = startIdx;
