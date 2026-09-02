@@ -1175,12 +1175,38 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
   -- carry an unlabeled objective into the record
   when (zeroFloor > 0 && divBonus > 0) $
     die "pick one condition: --zero-floor or --diversity-bonus"
-  let registrable = not buildDirty && buildCommit /= "unknown"
-  unless registrable $
-    putStrLn ("note: this binary was built from a dirty or unknown "
-                <> "source state — the run will checkpoint but will "
-                <> "NOT register a manifest (commit, rebuild, rerun "
-                <> "to register)")
+  -- registration demands an identifiable build TWICE over: the
+  -- compile-time stamp must be clean, and the tree at run time must
+  -- be clean and on the SAME commit — a stale binary after a
+  -- checkout, or a commit stack never recompiled for (it skips
+  -- unchanged sources, so -fforce-recomp never fires), shows up as a
+  -- mismatch here
+  (rtCommit, rtDirty) <- do
+    let tryP c as = either
+          (\e -> let _ = (e :: SomeException) in "unknown")
+          (takeWhile (/= '\n')) <$> try (readProcess c as "")
+    rc <- tryP "git" ["rev-parse", "HEAD"]
+    porc <- either
+      (\e -> let _ = (e :: SomeException) in "unknown") id
+      <$> try (readProcess "git"
+            [ "status", "--porcelain", "--"
+            , "src", "app", "test", "config", "otb.cabal"
+            , "stack.yaml", "stack.yaml.lock", "cabal.project" ] "")
+    pure (rc, not (null porc))
+  let whyNot
+        | buildDirty || buildCommit == "unknown" =
+            Just "the binary was built from a dirty or unknown tree"
+        | rtDirty = Just "the tree is dirty at run time"
+        | rtCommit /= buildCommit = Just
+            ("the binary was built from " <> take 12 buildCommit
+               <> " but HEAD is " <> take 12 rtCommit
+               <> " — stack skips unchanged sources; rebuild with "
+               <> "stack build --force-dirty")
+        | otherwise = Nothing
+      registrable = whyNot == Nothing
+  forM_ whyNot $ \why ->
+    putStrLn ("note: " <> why <> " — the run will checkpoint but "
+                <> "will NOT register a manifest")
   cfgText <- TIO.readFile cfgPath
   prefit <- either (die . ("config: " <>)) pure
               (OTB.Config.loadConfig (F.prefitStrip cfgText))
@@ -1468,11 +1494,9 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
   -- what actually ran, not what this invocation asked for.
   when (length finals >= starts) $
     if not registrable
-      then putStrLn ("\nrun complete but NOT registered: the binary "
-             <> "was built from a dirty or unknown source state "
-             <> "(commit " <> buildCommit
-             <> (if buildDirty then ", dirty tree" else "")
-             <> ") — an unidentifiable build must not enter the "
+      then putStrLn ("\nrun complete but NOT registered: "
+             <> maybe "unidentifiable build" id whyNot
+             <> " — an unidentifiable build must not enter the "
              <> "experiment record")
       else do
     createDirectoryIfMissing True "experiments"
