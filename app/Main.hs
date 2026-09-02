@@ -382,19 +382,30 @@ main = do
 -- (-fforce-recomp keeps it honest): a stale executable after a
 -- checkout, or edits reverted after compilation, cannot misattribute
 -- a manifest. Dirty looks at tracked changes and untracked files
--- within the source scope.
+-- across every build input stack reads (sources, config, the cabal
+-- file, stack.yaml + its lock) plus the tracked cabal.project.
+-- cabal.project.local is gitignored local config that stack never
+-- reads — it cannot affect this binary, but a cabal-built one it
+-- could, so its digest (or absence) is recorded rather than policed.
 buildCommit :: String
 buildDirty :: Bool
-(buildCommit, buildDirty) = $(do
+buildCabalLocal :: String
+(buildCommit, buildDirty, buildCabalLocal) = $(do
   let run c as = TH.runIO
         (either (\e -> let _ = (e :: SomeException) in "unknown") id
            <$> try (readProcess c as ""))
   commit <- run "git" ["rev-parse", "HEAD"]
   porc <- run "git"
     [ "status", "--porcelain", "--"
-    , "src", "app", "test", "config", "otb.cabal", "stack.yaml" ]
+    , "src", "app", "test", "config", "otb.cabal"
+    , "stack.yaml", "stack.yaml.lock", "cabal.project" ]
+  haveLocal <- TH.runIO (doesFileExist "cabal.project.local")
+  localSha <- if not haveLocal then pure "absent"
+    else takeWhile (/= ' ')
+           <$> run "sha256sum" ["cabal.project.local"]
   TH.lift ( takeWhile (/= '\n') commit
-          , not (null (porc :: String)) ))
+          , not (null (porc :: String))
+          , localSha ))
 
 -- | Every tempo that enters the pipeline — CLI or per-piece config
 -- override — passes through here; a non-finite or non-positive BPM
@@ -1164,6 +1175,12 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
   -- carry an unlabeled objective into the record
   when (zeroFloor > 0 && divBonus > 0) $
     die "pick one condition: --zero-floor or --diversity-bonus"
+  let registrable = not buildDirty && buildCommit /= "unknown"
+  unless registrable $
+    putStrLn ("note: this binary was built from a dirty or unknown "
+                <> "source state — the run will checkpoint but will "
+                <> "NOT register a manifest (commit, rebuild, rerun "
+                <> "to register)")
   cfgText <- TIO.readFile cfgPath
   prefit <- either (die . ("config: " <>)) pure
               (OTB.Config.loadConfig (F.prefitStrip cfgText))
@@ -1449,13 +1466,22 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
   -- producer + results), so different runs can never share a name and
   -- an existing manifest is never overwritten; args.starts records
   -- what actually ran, not what this invocation asked for.
-  when (length finals >= starts) $ do
+  when (length finals >= starts) $
+    if not registrable
+      then putStrLn ("\nrun complete but NOT registered: the binary "
+             <> "was built from a dirty or unknown source state "
+             <> "(commit " <> buildCommit
+             <> (if buildDirty then ", dirty tree" else "")
+             <> ") — an unidentifiable build must not enter the "
+             <> "experiment record")
+      else do
     createDirectoryIfMissing True "experiments"
     date <- takeWhile (/= '\n') <$> readProcess "date" ["+%F"] ""
     let producer = J.JObj
           [ ("commit", J.JStr (T.pack buildCommit))
           , ("dirty", J.JBool buildDirty)
           , ("provenance", J.JStr "stamped at build time")
+          , ("cabal_project_local", J.JStr (T.pack buildCabalLocal))
           , ("compiler", J.JStr (T.pack
               (compilerName <> "-" <> showVersion fullCompilerVersion)))
           , ("os", J.JStr (T.pack os))
