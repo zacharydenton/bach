@@ -38,9 +38,9 @@ P(diff <= 0) = 0.41-0.42. The held-out data does NOT distinguish the
 basins; the uniqueness claim is train-set-only, and the basin pair is
 a real equivalence class whose resolution is legitimately perceptual.
 Both basins share six of the seven zeros — they disagree only on
-whether open_push participates. Notably, this pair is itself a candidate equivalence class — the
-first concrete target for the perceptual condition (--emit-elite,
-widened slack to include 0.6243, A/B at the board).
+whether open_push participates. The pair is the first concrete
+target for the perceptual condition (A/B at the board; the deployed
+config carries basin A).
 
 ## Provenance for this manifest
 
