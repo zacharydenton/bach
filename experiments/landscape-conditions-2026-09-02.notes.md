@@ -98,11 +98,13 @@ subcommand WILL replace the scratch analysis once the running
 floor-only series finishes — a source change now would unregister
 those runs mid-flight.)
 
-The near-flat directions are statistically flat on this (development
-— see below) held-out set: intervals an order of magnitude tighter
-than the timing basins' and symmetric about zero. As operational
-language: the human velocity data, as this program can measure it,
-carries no preference along either dimension.
+The directions appear near-flat in the one-way sensitivity analyses
+on this (development — see below) held-out set: intervals an order
+of magnitude tighter than the timing basins' and symmetric about
+zero. Whether they are flat under the crossed design awaits the
+two-way analysis or a fixed-population declaration; until then, no
+stronger claim than "no preference detected by the one-way analyses"
+is licensed.
 
 ## Book II's status (as of these runs)
 
