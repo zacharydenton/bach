@@ -455,19 +455,28 @@ const ledger = { piece: null, pos: 0, lastT: -1, activeUntil: new Map(),
   holdUntil: 0, wired: false };
 const REENTER_GAP = 1.5; // s of silence before a rule logs again
 
-// Fast attack, slow release, perceptual (pow .4) width. The worklet
-// reports post-gain peaks; dividing by the slot's own gain makes the
-// meter PRE-FADER — the voice's signal, at any fader position.
+// Meters: worklet messages deposit peaks (pre-fader — post-gain peaks
+// divided by the slot's own gain), a rAF loop animates them every
+// frame: instant attack, exponential release, perceptual (pow .4)
+// width. rAF parks itself in background tabs for free.
+const METER_PEAK = [0, 0, 0, 0];
 const METER = [0, 0, 0, 0];
 function updateMeters(levels) {
+  for (let s = 0; s < 4; s++)
+    METER_PEAK[s] = Math.max(
+      METER_PEAK[s], (levels[s] || 0) / Math.max(slotGain[s], 0.05));
+}
+function meterFrame() {
   for (let s = 0; s < 4; s++) {
-    const lv = (levels[s] || 0) / Math.max(slotGain[s], 0.05);
-    METER[s] = Math.max(lv, METER[s] * 0.72);
+    METER[s] = Math.max(METER_PEAK[s], METER[s] * 0.94);
+    METER_PEAK[s] = 0;
     const el = $(`meter${s}`);
     if (el) el.style.width =
       (Math.min(1, METER[s]) ** 0.4 * 100).toFixed(1) + "%";
   }
+  requestAnimationFrame(meterFrame);
 }
+requestAnimationFrame(meterFrame);
 
 function ledgerReset() {
   ledger.piece = PIECE && PIECE.name;
