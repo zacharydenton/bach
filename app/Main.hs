@@ -109,7 +109,7 @@ data Cmd
   | Eval FilePath FilePath TempoOpt String (Maybe FilePath) [FilePath] [String] Bool
   | BridgeDump FilePath FilePath FilePath
   | Landscape FilePath FilePath String Int Int Double Double Double
-      (Maybe FilePath)
+      (Maybe String) (Maybe FilePath)
   | Fit FilePath FilePath Double [String] Bool Bool
   | MaestroFetch Bool
   | MaestroAlign Bool (Maybe String) (Maybe Int)
@@ -234,6 +234,9 @@ landscapeCmd =
           <> metavar "LAMBDA"
           <> help ("regularized condition: descend on r + LAMBDA x "
                      <> "nonzero-fraction; the reported r stays raw"))
+    <*> optional (strOption (long "floor-only" <> metavar "KNOB"
+          <> help ("single-rule ablation: apply --zero-floor to this "
+                     <> "knob alone, the rest keep their OFF values")))
     <*> optional (strOption (long "emit-elite" <> metavar "DIR"
           <> help ("write each elite final as a runnable config for "
                      <> "perceptual A/B (prefit + knob overrides)")))
@@ -356,8 +359,8 @@ main = do
     Eval corpus cfgPath tempo temp eds roots ps vel ->
       runEval corpus cfgPath tempo temp eds roots ps vel
     BridgeDump krn match cfgPath -> runBridgeDump krn match cfgPath
-    Landscape corpus cfgPath fam st sd sl zf db ee ->
-      runLandscape corpus cfgPath fam st sd sl zf db ee
+    Landscape corpus cfgPath fam st sd sl zf db fo ee ->
+      runLandscape corpus cfgPath fam st sd sl zf db fo ee
     Fit corpus cfgPath sk ps ap dr -> runFit corpus cfgPath sk ps ap dr
     MaestroFetch catOnly -> M.runMaestroFetch catOnly
     BakeSite opts0 -> do
@@ -1171,9 +1174,10 @@ bodyTempo scoreT perfT =
 -- whole run is in-process: a candidate evaluation is a parMap over
 -- the train pieces, cached by knob tuple.
 runLandscape :: FilePath -> FilePath -> String -> Int -> Int -> Double
-             -> Double -> Double -> Maybe FilePath -> IO ()
+             -> Double -> Double -> Maybe String -> Maybe FilePath
+             -> IO ()
 runLandscape corpus cfgPath famName starts seed slack zeroFloor
-             divBonus emitElite = do
+             divBonus floorOnly emitElite = do
   when (starts < 1) $ die "--starts must be at least 1"
   let badD nm v = isNaN v || isInfinite v
   when (badD "slack" slack || slack < 0) $
@@ -1187,6 +1191,8 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
   -- carry an unlabeled objective into the record
   when (zeroFloor > 0 && divBonus > 0) $
     die "pick one condition: --zero-floor or --diversity-bonus"
+  forM_ floorOnly $ \k -> when (zeroFloor <= 0) $
+    die ("--floor-only " <> k <> " needs --zero-floor > 0")
   -- registration demands an identifiable build TWICE over: the
   -- compile-time stamp must be clean, and the tree at run time must
   -- be clean and on the SAME commit — a stale binary after a
@@ -1224,6 +1230,14 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
               then F.velocityFamily else F.timingFamily
       roots = ["corpus" </> "asap", "corpus" </> "maestro-wtc"]
       eds = editionsFor cfgPath
+  -- a typo'd knob must not silently run the unconstrained experiment
+  -- under a positive-contribution label
+  forM_ floorOnly $ \k ->
+    unless (T.pack k `elem` map fst (F.kfGrids fam)) $
+      die ("--floor-only: unknown " <> famName <> " knob '" <> k
+             <> "' (know: "
+             <> intercalate ", "
+                  (map (T.unpack . fst) (F.kfGrids fam)) <> ")")
   files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
   pds0 <- forM (sort (map takeBaseName files)) $ \piece -> do
     src <- readKernSource eds (corpus </> piece <> ".krn")
@@ -1262,9 +1276,12 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
         pos -> zeroFloor * minimum pos
       floorGrid g =
         [if v == 0 then floorVal g else v | v <- g]
+      floorsK k = zeroFloor > 0
+        && maybe True (== T.unpack k) floorOnly
       grids = if zeroFloor <= 0
                 then F.kfGrids fam
-                else [(k, floorGrid g) | (k, g) <- F.kfGrids fam]
+                else [ (k, if floorsK k then floorGrid g else g)
+                     | (k, g) <- F.kfGrids fam ]
       nKnobs = fromIntegral (length grids) :: Double
       nonzeroFrac ks =
         fromIntegral (length [() | (_, v) <- ks, v /= 0]) / nKnobs
@@ -1285,7 +1302,7 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
             fmap (+ divBonus * nonzeroFrac knobs) <$>
               objectiveRaw knobs
       baseKnobs =
-        [ (k, if zeroFloor > 0 && v == 0
+        [ (k, if floorsK k && v == 0
                 then floorVal (maybe [] id (lookup k (F.kfGrids fam)))
                 else v)
         | (k, _) <- grids
@@ -1366,6 +1383,8 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
               , ("starts", J.JNum (T.pack (show nStarts)))
               , ("slack", J.JNum (T.pack (MA.pyRepr slack)))
               , ("zero_floor", J.JNum (T.pack (MA.pyRepr zeroFloor)))
+            , ("floor_only", maybe J.JNull (J.JStr . T.pack)
+                floorOnly)
               , ("diversity_bonus",
                   J.JNum (T.pack (MA.pyRepr divBonus))) ])
           , ("digests", digestsJson)
@@ -1483,7 +1502,8 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
           <> show (maximum eliteTests) <> ")"
       condition
         | zeroFloor > 0 = "positive-contribution (zero-floor "
-            <> show zeroFloor <> ")"
+            <> show zeroFloor
+            <> maybe "" (", floor-only " <>) floorOnly <> ")"
         | divBonus /= 0 = "regularized (diversity-bonus "
             <> show divBonus <> ")"
         | otherwise = "unconstrained (zeros allowed)"

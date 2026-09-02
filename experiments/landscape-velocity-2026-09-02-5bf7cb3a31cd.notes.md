@@ -23,14 +23,18 @@ build/runtime cross-check regime.
 
 ## The result it records (unconstrained condition, velocity family)
 
-20/20 starts within slack (train 0.3995–0.3997, test 0.4111–0.4113):
-**the elite is a class, not a point** — the first observed
-equivalence class in this program. Shared backbone: vel_highloud 0.8,
+20/20 starts within slack (train 0.3996–0.3997, test 0.4111–0.4113):
+**the elite spreads across near-flat discrete directions on this
+lattice** — flat within the prespecified 0.005 slack, endpoints
+within 0.0002 held-out of each other. Whether the human data truly
+cannot distinguish them is a statistical question (see the paired
+bootstrap recorded in the conditions notes' follow-up), and Book II's
+development status caps what any such test can claim. Shared backbone: vel_highloud 0.8,
 dis_vel 5, subject_vel 10, dialogue_vel 2; all metrical accents
 (vel_bar/halfbar/beat/arch) and mel_charge, dialogue_yield, seq_echo
 at zero. Free dimensions inside the elite: **sus_soft ∈ {2, 4}** and
-**harm_charge ∈ {0, 0.15}**, with held-out spread 0.0002 — the human
-velocity data does not distinguish these allocations.
+**harm_charge ∈ {0, 0.15}**, with held-out spread 0.0002 — held-out differences
+smaller than anything this program has resolved.
 
 Note the tension with the committed config: dis_vel = 0 and
 sus_soft = 0 were fitted at note level under expression 1.0
