@@ -137,7 +137,9 @@ async function start() {
     $("start").hidden = true;
     $("play").hidden = false;
     PLAYING = true;
-    await loadPiece(startIdx);
+    // whatever the reader picked in the dropdown before starting wins
+    await loadPiece($("piecesel").selectedIndex >= 0
+      ? $("piecesel").selectedIndex : startIdx);
   } catch (err) {
     $("stats").textContent = "engine failed: " + err.message;
     $("start").disabled = false;
