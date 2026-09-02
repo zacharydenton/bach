@@ -44,12 +44,12 @@ series.)
 
 - Timing zero-floor 0.25: forcing every rule to participate costs
   train 0.6304 → 0.5767 and held-out 0.5801 → ~0.533 — a collapse,
-  and the constrained elite fragments across wide value ranges (an
-  equivalence class of compromises, not of solutions). The timing
-  zeros are structure.
+  and the constrained elite fragments across wide value ranges. The
+  all-on timing model is harmful; which zeros carry that cost is the
+  floor-only series' question.
 - Velocity zero-floor 0.25: the same constraint costs almost nothing
   — train 0.3997 → 0.3927, held-out 0.4111–0.4113 → 0.4091–0.4117
-  (overlapping). The velocity zeros are preferences.
+  (overlapping). The all-on velocity model is essentially free.
 - Timing diversity 0.05: near-optimal solutions exist with MORE
   active rules — cadence_depth 0.04 and sus_lean 0.02 turn on in
   every elite final at ~0.004 raw train cost, and parts of the elite
