@@ -413,8 +413,8 @@ main = do
           <> " — clone it (see README's Build section)")
       BS.runBakeSite
         (\stage -> forM_ corpora $ \c ->
-           runAlbum c stage "config/default.toml" TempoDefault
-             "werckmeister3" Nothing)
+           runAlbumWith False c stage "config/default.toml"
+             TempoDefault "werckmeister3" Nothing)
         opts
     MaestroAlign validate mp ml -> runMaestroAlign validate mp ml
     Stats corpus cfgPath tempo -> runStats corpus cfgPath tempo
@@ -665,7 +665,15 @@ mkInterp cfg table adaptive piece0 =
 
 runAlbum :: FilePath -> FilePath -> FilePath -> TempoOpt -> String
          -> Maybe FilePath -> IO ()
-runAlbum corpus outDir cfgPath tempo temp meds = do
+runAlbum = runAlbumWith True
+
+-- | As 'runAlbum'; @strict@ decides whether piece failures kill the
+-- process (the CLI album's contract) or are reported and tolerated
+-- (the bake, whose corpora may carry documented known-outs like the
+-- Musical Offering's mid-piece-tempo movement).
+runAlbumWith :: Bool -> FilePath -> FilePath -> FilePath -> TempoOpt
+             -> String -> Maybe FilePath -> IO ()
+runAlbumWith strict corpus outDir cfgPath tempo temp meds = do
   let eds = maybe (editionsFor cfgPath) id meds
   cfg <- loadCfg cfgPath
   let adaptive = temp == "adaptive"
@@ -702,7 +710,7 @@ runAlbum corpus outDir cfgPath tempo temp meds = do
   putStrLn (show ok <> " pieces -> " <> outDir
               <> (if failed > 0 then " | " <> show failed <> " FAILED"
                     else ""))
-  when (failed > 0)
+  when (strict && failed > 0)
     (die (show failed <> " of " <> show (length results)
             <> " pieces failed; artifacts above are incomplete"))
 

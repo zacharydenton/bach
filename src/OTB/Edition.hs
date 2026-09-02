@@ -36,7 +36,7 @@ recordOf name t = listToMaybe
 -- @OTL\@EN@ count, the untagged or @\@\@@-primary one wins) and
 -- @!!!SCT@ (e.g. "BWV 269").
 kernTitle :: Text -> (Maybe Text, Maybe Text)
-kernTitle t = (title, recordOf "!!!SCT:" t)
+kernTitle t = (full, recordOf "!!!SCT:" t)
   where
     otls =
       [ (rank tag, T.strip val)
@@ -52,6 +52,11 @@ kernTitle t = (title, recordOf "!!!SCT:" t)
       | "@@" `T.isPrefixOf` tag = 1
       | otherwise = 2
     title = listToMaybe [v | (_, v) <- sortOn fst otls]
+    -- a movement designation (!!!OMD) disambiguates generic titles:
+    -- the Musical Offering's trio sonata is three files named "Trio"
+    full = case (title, recordOf "!!!OMD:" t) of
+      (Just ti, Just md) -> Just (ti <> " — " <> md)
+      _ -> title
 
 -- | The default editions root for a given config path.
 editionsFor :: FilePath -> FilePath
