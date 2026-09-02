@@ -29,9 +29,16 @@ data picks a unique allocation" is overstated as a generalization
 claim: the honest version is that the TRAIN objective has one active
 optimum, while the held-out data is consistent with (at least) two
 allocations that trade expression intensity against settling-in push.
-An uncertainty analysis (e.g. bootstrap over test pieces or
-performers) is required before any uniqueness claim leaves the train
-set. Notably, this pair is itself a candidate equivalence class — the
+An uncertainty analysis (10,000-sample paired bootstrap over the 94
+held-out performances, and clustered by piece; 2026-09-02, from
+otb eval runs of both basin configs at the prefit level) settles it:
+mean held-out difference +0.0006, 95% CI [-0.0054, +0.0061]
+per-performance and [-0.0091, +0.0089] clustered by piece,
+P(diff <= 0) = 0.41-0.42. The held-out data does NOT distinguish the
+basins; the uniqueness claim is train-set-only, and the basin pair is
+a real equivalence class whose resolution is legitimately perceptual.
+Both basins share six of the seven zeros — they disagree only on
+whether open_push participates. Notably, this pair is itself a candidate equivalence class — the
 first concrete target for the perceptual condition (--emit-elite,
 widened slack to include 0.6243, A/B at the board).
 
