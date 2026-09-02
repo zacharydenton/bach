@@ -46,6 +46,11 @@ Requirements:
 All URLs are relative, so the site works from a subdirectory (e.g.
 `tailscale serve --bg --set-path /bach .../otb/site`).
 
+GitHub Pages: `site/deploy-gh-pages.sh` pushes the baked contents as a
+single-commit orphan `gh-pages` branch —
+https://zacharydenton.github.io/bach/ picks it up in a minute or two.
+Bake first; deploy as often as you like, history stays one commit.
+
 ## Architecture notes
 
 Each SurgeWasm instance hosts up to two score lanes of the same slot as
