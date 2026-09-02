@@ -101,6 +101,7 @@ executable otb
         optparse-applicative,
         parallel,
         process,
+        template-haskell,
         vector
 
 test-suite otb-test

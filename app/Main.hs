@@ -8,6 +8,8 @@
 -- (wtc1p01.krn -> [piece.wtc1p01]).
 --
 -- License: GPL-2.0-or-later.
+{-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -fforce-recomp #-}
 module Main (main) where
 
 import Control.DeepSeq (force)
@@ -81,6 +83,7 @@ import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (die)
 import System.Info (arch, compilerName, fullCompilerVersion, os)
 import Data.Version (showVersion)
+import Language.Haskell.TH.Syntax qualified as TH
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcess, readProcessWithExitCode)
 import System.FilePath (takeBaseName, takeFileName, (</>))
@@ -374,6 +377,24 @@ main = do
     Ground bass nvar tempo temp out mscl mjson ->
       runGround bass nvar tempo temp out mscl mjson
     Analyze com -> runAnalyze com
+
+-- | The source state that BUILT this binary, stamped at compile time
+-- (-fforce-recomp keeps it honest): a stale executable after a
+-- checkout, or edits reverted after compilation, cannot misattribute
+-- a manifest. Dirty looks at tracked changes and untracked files
+-- within the source scope.
+buildCommit :: String
+buildDirty :: Bool
+(buildCommit, buildDirty) = $(do
+  let run c as = TH.runIO
+        (either (\e -> let _ = (e :: SomeException) in "unknown") id
+           <$> try (readProcess c as ""))
+  commit <- run "git" ["rev-parse", "HEAD"]
+  porc <- run "git"
+    [ "status", "--porcelain", "--"
+    , "src", "app", "test", "config", "otb.cabal", "stack.yaml" ]
+  TH.lift ( takeWhile (/= '\n') commit
+          , not (null (porc :: String)) ))
 
 -- | Every tempo that enters the pipeline — CLI or per-piece config
 -- override — passes through here; a non-finite or non-positive BPM
@@ -1431,35 +1452,41 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
   when (length finals >= starts) $ do
     createDirectoryIfMissing True "experiments"
     date <- takeWhile (/= '\n') <$> readProcess "date" ["+%F"] ""
-    producer <- do
-      let tryP c as = either
-            (\e -> let _ = (e :: SomeException) in "unknown")
-            (takeWhile (/= '\n'))
-            <$> try (readProcess c as "")
-      commit <- tryP "git" ["rev-parse", "HEAD"]
-      porc <- either
-        (\e -> let _ = (e :: SomeException) in "unknown")
-        id <$> try (readProcess "git"
-                      ["status", "--porcelain", "-uno"] "")
-      pure (J.JObj
-        [ ("commit", J.JStr (T.pack commit))
-        , ("dirty", J.JBool (not (null porc)))
-        , ("compiler", J.JStr (T.pack
-            (compilerName <> "-" <> showVersion fullCompilerVersion)))
-        , ("os", J.JStr (T.pack os))
-        , ("arch", J.JStr (T.pack arch)) ])
+    let producer = J.JObj
+          [ ("commit", J.JStr (T.pack buildCommit))
+          , ("dirty", J.JBool buildDirty)
+          , ("provenance", J.JStr "stamped at build time")
+          , ("compiler", J.JStr (T.pack
+              (compilerName <> "-" <> showVersion fullCompilerVersion)))
+          , ("os", J.JStr (T.pack os))
+          , ("arch", J.JStr (T.pack arch)) ]
     let manifestJson = J.dumpJson (Just 1) (J.JObj
           [ ("_meta", metaFor (length entries) (Just producer))
           , ("finals", J.JArr entries) ])
     mid <- sha (T.unpack manifestJson)
     let manifestPath = "experiments"
           </> ("landscape-" <> famName <> "-" <> date <> "-"
-                 <> take 12 mid <> ".json")
+                 <> mid <> ".json")
+        writeIt = do
+          -- atomic: a partial file must never squat on a digest name
+          let tmp = manifestPath <> ".tmp"
+          TIO.writeFile tmp manifestJson
+          renameFile tmp manifestPath
     exists <- doesFileExist manifestPath
     if exists
-      then putStrLn ("\nmanifest already registered: " <> manifestPath)
+      then do
+        -- the name claims a content digest — verify it
+        prior <- TIO.readFile manifestPath
+        if prior == manifestJson
+          then putStrLn ("\nmanifest already registered: "
+                           <> manifestPath)
+          else do
+            writeIt
+            putStrLn ("\nmanifest at " <> manifestPath
+                        <> " did not match its digest (interrupted "
+                        <> "write?) — replaced with the true content")
       else do
-        TIO.writeFile manifestPath manifestJson
+        writeIt
         putStrLn ("\nmanifest: " <> manifestPath
                     <> " — hashes, arguments, membership, results; "
                     <> "commit it with the conclusions it backs")
