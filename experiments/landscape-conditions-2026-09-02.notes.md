@@ -10,7 +10,7 @@ baseline). Registration bookkeeping first, then what the data says.
 | 1 | velocity unconstrained | …velocity-…-5bf7cb3a31cd.json | legacy (95d5fba binary), enveloped |
 | 2 | timing zero-floor 0.25 | …timing-…-c8caf6c9….json | **registered** (292a83e, producer block) |
 | 3 | timing diversity 0.05 | …timing-…-aec576ff436b.json | legacy: preserved from checkpoints |
-| 4 | velocity zero-floor 0.25 | none — see below | report-only (log survives) |
+| 4 | velocity zero-floor 0.25 | …velocity-…-02fc49ba….json | **registered** (rerun under the fixed binary; aggregates match the archived log exactly) |
 | 5 | velocity diversity 0.05 | …velocity-…-ce203c2a0199.json | legacy: preserved from checkpoints |
 
 Runs 3–5 were refused registration by the build/runtime cross-check:
