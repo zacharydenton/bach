@@ -14,10 +14,13 @@ body{font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink);
      text-transform:uppercase}
 h1{font:400 34px/1.15 var(--serif);margin:.35rem 0 .2rem;letter-spacing:.01em}
 h1 .idx{font:400 15px var(--mono);color:var(--faint);margin-left:.6rem}
-.rail{position:relative;height:2px;background:var(--line);margin:.9rem 0 .3rem;
-     border-radius:1px;cursor:pointer;padding:6px 0;background-clip:content-box}
+.rail{position:relative;height:3px;background:var(--faint);margin:.9rem 0 .3rem;
+     border-radius:2px;cursor:pointer;padding:6px 0;background-clip:content-box}
 .rail .fill{position:absolute;top:6px;bottom:6px;left:0;width:0%;
-     background:var(--brass);border-radius:1px}
+     background:var(--brass);border-radius:2px}
+.rail .fill::after{content:"";position:absolute;right:-5px;top:50%;
+     transform:translateY(-50%);width:11px;height:11px;border-radius:50%;
+     background:var(--brass)}
 .rail:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
 .times{display:flex;justify-content:space-between;font:11px var(--mono);
      color:var(--faint);font-variant-numeric:tabular-nums}
