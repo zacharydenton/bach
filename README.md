@@ -1,83 +1,57 @@
-# otb — One-Take Bach
+# otb
 
 **An interpretation compiler: public-domain scores in, performances out.**
 
-Compiles `**kern` (Humdrum) encodings of Bach's keyboard works into performed
-MIDI — articulation, ornament realization, agogics, dynamics and temperament
-applied as versioned, diffable rules — for a six-voice analog ensemble
-(Elektron Analog Four ×4, Behringer Model D, Bass Station II) or Surge XT.
-The performance is recorded in **one simultaneous multitrack take**: the
-machine never misses a note; the human conducts.
-
-Wendy Carlos spent ~1,100 hours multitracking Switched-On Bach one monophonic
-line at a time. This project's thesis is that the modern equivalent of her
-method is a compiler, and the take is the only layer allowed to be
-unreproducible.
-
-```
- .krn ──[scratch lexer + spine machine]──► Score ──[Player over Euterpea's
-        stems/beams stripped, ties merged,          Music algebra: the taste]──►
-        every accidental explicit (kern law)
-      ──► Performance ──► format-1 SMF ──► Surge XT / the hardware rig
-```
-
-## Why Haskell
-
-Nothing here is computationally intensive — a fugue is a few thousand notes —
-so the type system is the entire language criterion:
-
-- **Units as newtypes** (`WholeNotes`, `Seconds`, `Ticks`): mixing notated and
-  performed time fails to compile.
-- **Instrument capabilities as classes** (planned M6): the Model D takes no
-  velocity and no CC — a velocity lane aimed at it is a compile error.
-- **Counterpoint as a parser oracle** (planned M1): Bach doesn't write
-  parallel fifths; if the parse contains them, the parser is wrong. The mezzo
-  idea, inverted.
-- **EuterpeaLite** supplies the `Music` algebra (`:+:`/`:=:`) — Euterpea with
-  the PortMidi/realtime half removed; this compiler emits files and never
-  opens a MIDI port. The SMF writer is ours: temperament (M3) needs per-note
-  pitch bend interleaved per channel, which Euterpea's export cannot do.
+`otb` compiles `**kern` (Humdrum) encodings of Bach's keyboard works into
+performed MIDI — articulation, ornament realization, agogics, dynamics and
+temperament applied as versioned, diffable rules. All interpretive decisions
+live in `config/default.toml`; every number in it regenerates from HEAD.
 
 ## Build
 
-Arch's system GHC ships dynamic-only artifacts and cannot build this; use
-stack (it brings its own GHC — see the comments in `stack.yaml`):
+Use stack (it brings its own GHC; some distro GHCs — e.g. Arch's
+dynamic-only build — cannot compile this):
 
 ```sh
 stack build
 git clone --depth 1 https://github.com/humdrum-tools/bach-wtc corpus/bach-wtc
-stack test   # the corpus sweep is part of the suite; OTB_NO_CORPUS=1 runs units only
+stack test        # the corpus sweep needs the clone; OTB_NO_CORPUS=1 runs units only
 stack run -- corpus/bach-wtc/kern/wtc1p01.krn -o bwv846.mid
 ```
 
-Reference for A/B: `../bcrsim/switched_on_bach_bwv846.wav` — the same prelude,
-programmed into an emulated BCR2000 by OSC gestures and sequenced by real
-firmware. The compiler exists to replace that 107-second gesture session with
-a build step.
+Useful commands (`stack exec otb -- --help` lists everything):
+
+```sh
+otb compile SCORE.krn -o out.mid [--emit-json ir.json] [--emit-scl w3.scl]
+otb explain SCORE.krn --bar 12       # why each note sounds the way it does
+otb album corpus/bach-wtc/kern OUT/  # the whole corpus, in parallel
+```
 
 ## The patchboard (a static site)
 
-The board lives in `site/` and renders the whole album with the Surge
-engine compiled to WebAssembly — all audio synthesized client-side, any
-dumb static host is the whole deployment. `otb bake-site`
-fills it; `site/README.md` has the details. (An earlier server-rendered
-patchboard streamed Opus from surgepy; it was retired 2026-09-01 once
-the static board reached parity and beyond — seeking, per-lane
-polyphony, the full native FX path.)
-
-## Offline rendering (audition.py)
-
-`tools/audition.py` renders a PerformanceIR to WAV through surgepy, and
-`tools/render_showcase.sh` / `tools/calibrate_patch.py` build on it. They
-need a surgepy build (no platform branches — works on macOS too):
+`site/` is a self-contained player: the Surge XT engine compiled to
+WebAssembly renders the whole album in the browser. Bake and serve:
 
 ```sh
-# once: xcode-select --install ; brew install cmake ninja ; uv python install 3.11
+stack exec otb -- bake-site           # builds wasm + regenerates the album
+python3 -m http.server -d site 8877   # or any static host
+```
+
+The wasm build needs the surge fork (`~/code/surge`, branch
+`wasm-headless-audioworklet`; override with `--surge-dir`). Details and
+requirements: `site/README.md`.
+
+## Offline rendering (WAV)
+
+`tools/audition.py` renders a PerformanceIR to WAV through surgepy;
+`tools/render_showcase.sh` and `tools/calibrate_patch.py` build on it.
+They need a surgepy build:
+
+```sh
 git clone https://github.com/surge-synthesizer/surge && cd surge
 git submodule update --init --recursive
 # REQUIRED: stock surgepy has no setTempo — without this patch every
-# tempo-synced LFO and delay drifts against the piece (audition warns,
-# but warns is all it can do)
+# tempo-synced LFO and delay drifts against the piece
 git apply /path/to/otb/tools/surgepy-patches/0001-expose-tempo.patch
 uv venv --python 3.11 ~/.venv-audition && uv pip install --python ~/.venv-audition/bin/python numpy
 cmake -S . -B build -DSURGE_BUILD_PYTHON_BINDINGS=ON -DCMAKE_BUILD_TYPE=Release \
@@ -88,52 +62,36 @@ cmake --build build --target surgepy -j
 
 Patch library discovery: installed Surge XT locations are searched
 automatically; a bare checkout works too, or set
-`SURGE_PATCHES=/path/to/patches_factory`. Vendored pybind11 caps the
-venv at Python 3.11.
+`SURGE_PATCHES=/path/to/patches_factory`.
 
-## The research loop (all in-process)
+## The research loop
 
-The fitting rigs live in the compiler itself — one process, pieces in
-parallel, no JSON round trips (the Python research stack they replaced
-was retired 2026-09-01 after golden parity gates):
+The fitting rigs are built into the compiler:
 
 ```sh
-stack exec otb -- eval corpus/bach-wtc/kern              # beat-tempo scoreboard vs humans
-stack exec otb -- eval corpus/bach-wtc/kern --velocity   # note-velocity scoreboard
-stack exec otb -- fit corpus/bach-wtc/kern --dry-run     # per-piece hierarchical fits
-stack exec otb -- landscape corpus/bach-wtc/kern         # multi-start knob landscape
-stack exec otb -- maestro-fetch                          # MAESTRO v3 archive + WTC catalog
-stack exec otb -- maestro-align --validate               # aligner vs ASAP ground truth
-stack exec otb -- maestro-align                          # emit corpus/maestro-wtc
-stack exec otb -- bridge-dump SCORE.krn PERF.match       # score<->performance note pairs
+otb eval corpus/bach-wtc/kern              # beat-tempo scoreboard vs humans
+otb eval corpus/bach-wtc/kern --velocity   # note-velocity scoreboard
+otb fit corpus/bach-wtc/kern --dry-run     # per-piece fits (--apply writes them)
+otb landscape corpus/bach-wtc/kern         # multi-start knob landscape
+otb maestro-fetch                          # MAESTRO v3 archive + WTC catalog
+otb maestro-align --validate               # aligner vs ASAP ground truth
+otb maestro-align                          # emit corpus/maestro-wtc
+otb bridge-dump SCORE.krn PERF.match       # score<->performance note pairs
 ```
 
-The landscape is one experiment under three registered conditions —
-unconstrained (zeros allowed, the default), positive-contribution
-(`--zero-floor FRAC`: every rule must participate at least a little),
-and regularized (`--diversity-bonus L`: selection rewards rule
-diversity, reported r stays raw) — plus `--emit-elite DIR`, which
-renders every equally-predictive final as a runnable config for
-perceptual A/B. The open question these conditions triangulate: does
-the human data pick one rule allocation, or an equivalence class of
-expressive realizations? Runs checkpoint per start (resumable), are
-fingerprinted over the effective config, corpus inputs and the binary
-itself, and a completed run writes an `experiments/` manifest — hashes,
-arguments, train/test membership, results — meant to be committed with
-whatever conclusion it backs.
+Human data: `corpus/asap` (a clone of the ASAP dataset) plus
+`corpus/maestro-wtc`, which `otb maestro-align` derives from MAESTRO v3.
+`otb fit --apply` writes per-piece sections into `config/default.toml`
+with `# PIECE-FIT` provenance; hand-authored keys always win and are
+never touched.
 
-Human data: `corpus/asap` (clone of the ASAP dataset) plus
-`corpus/maestro-wtc`, a derived mirror the aligner builds from MAESTRO v3
-(subsequence DTW; validated 110/114 against ASAP's own alignments, note
-agreement median 0.996, beat |Δ| median 9.5 ms). `config/default.toml`
-carries the fitted per-piece sections with `# PIECE-FIT` provenance; hand
-keys always win and are never touched by `fit --apply`.
+Landscape runs checkpoint per start (resumable), refuse to run under an
+unidentifiable build, and write a registered manifest — hashes,
+arguments, train/test membership, results — into `experiments/`.
+`--zero-floor`, `--diversity-bonus`, `--floor-only` and `--emit-elite`
+select experimental conditions; see `experiments/*.notes.md` for the
+findings to date.
 
-## Status
+## License
 
-M0–M5 land (spine to sound, articulation, temperament, agogics, ornaments
-including grace notes, dynamics, the expressive layer) plus the M6a/b
-audition path. Still open: M6 proper (instrument capability classes, the
-hardware rig). The design document lives outside this repo.
-
-License: GPL-2.0-or-later.
+GPL-2.0-or-later.
