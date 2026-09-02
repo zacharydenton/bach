@@ -24,7 +24,9 @@ Baked (gitignored — regenerate, don't commit):
 - `engine/` — `surge-worklet.{js,wasm}` + `worklet-shim.js`, built
   from the surge fork.
 - `data/` — album IRs, `w3.scl` tuning, the factory patch bank,
-  `patches.json`, `casting.json`, `calibration.json`, `manifest.json`.
+  `patches.json`, `casting.json`, `calibration.json`, `manifest.json`
+  (per-piece entries carry `name`, `group` for the dropdown sections,
+  and `title`/`sct` from the kern's own `!!!OTL`/`!!!SCT` records).
 
 ## Bake and serve
 

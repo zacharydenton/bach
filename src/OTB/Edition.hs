@@ -16,8 +16,10 @@
 --     applies to — is left untouched.
 --
 -- License: GPL-2.0-or-later.
-module OTB.Edition (editionsFor, readKernSource) where
+module OTB.Edition
+  (editionsFor, kernTitle, readKernSource) where
 
+import Data.List (sortOn)
 import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -28,6 +30,28 @@ import System.FilePath (takeDirectory, takeFileName, (</>))
 recordOf :: Text -> Text -> Maybe Text
 recordOf name t = listToMaybe
   [T.strip r | l <- T.lines t, Just r <- [T.stripPrefix name l]]
+
+-- | Title and catalog number from a kern source's reference records:
+-- the primary @!!!OTL@ (language-tagged variants like @OTL\@\@DE@ or
+-- @OTL\@EN@ count, the untagged or @\@\@@-primary one wins) and
+-- @!!!SCT@ (e.g. "BWV 269").
+kernTitle :: Text -> (Maybe Text, Maybe Text)
+kernTitle t = (title, recordOf "!!!SCT:" t)
+  where
+    otls =
+      [ (rank tag, T.strip val)
+      | l <- T.lines t
+      , Just rest <- [T.stripPrefix "!!!OTL" l]
+      , let (tag, v) = T.breakOn ":" rest
+      , not (T.null v)
+      , let val = T.drop 1 v
+      , not (T.null (T.strip val)) ]
+    -- untagged beats the @@-marked primary beats any @-translation
+    rank tag
+      | T.null tag = 0 :: Int
+      | "@@" `T.isPrefixOf` tag = 1
+      | otherwise = 2
+    title = listToMaybe [v | (_, v) <- sortOn fst otls]
 
 -- | The default editions root for a given config path.
 editionsFor :: FilePath -> FilePath

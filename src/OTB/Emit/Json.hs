@@ -15,21 +15,34 @@
 -- License: GPL-2.0-or-later.
 module OTB.Emit.Json
   ( renderJson
+  , renderJsonTitled
   ) where
 
 import Data.List (intercalate)
+import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Map.Strict qualified as Map
 import OTB.Explain (Why (..))
 import OTB.Player (PerfNote (..), Performance (..))
 import OTB.Units (Bpm (..), Seconds (..), WholeNotes (..), secondsAt)
 
 renderJson :: String -> Performance -> String
-renderJson piece (Performance tmap tracks whys cads end) =
-  obj
+renderJson = renderJsonTitled (Nothing, Nothing)
+
+-- | As 'renderJson', carrying the score's display title and catalog
+-- number (from the kern's @!!!OTL@/@!!!SCT@ records) when known.
+renderJsonTitled :: (Maybe Text, Maybe Text) -> String -> Performance
+                 -> String
+renderJsonTitled (mtitle, msct) piece
+               (Performance tmap tracks whys cads end) =
+  obj $
     -- through the JSON escaper, not Haskell show: show writes \233-style
     -- escapes for non-ASCII, which is not legal JSON
-    [ ("piece", str piece)
-    , ("cadences", arr [num (fromRational c) | WholeNotes c <- cads])
+    [ ("piece", str piece) ]
+    <> [ ("title", str (T.unpack v)) | Just v <- [mtitle] ]
+    <> [ ("sct", str (T.unpack v)) | Just v <- [msct] ]
+    <>
+    [ ("cadences", arr [num (fromRational c) | WholeNotes c <- cads])
     , ("tempoMap", arr (map tempoJson tmap))
     -- the piece's full extent — past the last note-off when a held
     -- silence closes the piece; renderers should run out the clock

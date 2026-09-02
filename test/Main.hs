@@ -19,7 +19,7 @@ import OTB.Kern.Parser (parseKern)
 import OTB.Kern.Token (Mark (..), NoteTok (..), Tie (..))
 import OTB.Emit.Json (renderJson)
 import OTB.Emit.Midi (renderSmf)
-import OTB.Edition (readKernSource)
+import OTB.Edition (kernTitle, readKernSource)
 import OTB.Interp.Agogics
 import OTB.Interp.Dynamics
 import OTB.Interp.Express
@@ -69,7 +69,9 @@ corpusDir = "corpus/bach-wtc/kern"
 main :: IO ()
 main = do
   sweep <- corpusSweep
-  defaultMain $ testGroup "all" [units, laws, sweep, oracle, review, sota]
+  chorales <- choraleSweep
+  defaultMain $ testGroup "all"
+    [units, laws, sweep, chorales, oracle, review, sota]
 
 -- | Parse every WTC file; assert full coverage and the known-baseline
 -- number of tie leftovers (encoding lapses in the corpus itself — see
@@ -133,6 +135,52 @@ corpusSweep = do
         ]
 
 units :: TestTree
+-- | The chorale corpus (craigsapp/bach-370-chorales): 370 files, all
+-- parse, ZERO tie leftovers (a cleaner encoding than the WTC), all
+-- perform within 15 lanes. Baselines pinned 2026-09-02 at repo HEAD;
+-- max observed parallel perfects is 4 (Bach's documented ones) — the
+-- ceiling of 10 hunts parser blowups, not musicology.
+choraleSweep :: IO TestTree
+choraleSweep = do
+  let dir = "corpus/bach-chorales/kern"
+  present <- doesDirectoryExist dir
+  allowSkip <- lookupEnv "OTB_NO_CORPUS"
+  if not present
+    then pure $ testCase "chorale sweep" $
+      if allowSkip == Just "1"
+        then pure ()
+        else assertFailure
+          ("chorales not cloned — run\n  git clone --depth 1 "
+             <> "https://github.com/craigsapp/bach-370-chorales "
+             <> "corpus/bach-chorales\nor set OTB_NO_CORPUS=1")
+    else do
+      files <- sort . filter (".krn" `isSuffixOf`) <$> listDirectory dir
+      results <- forM files $ \f -> do
+        src <- TIO.readFile (dir </> f)
+        pure (f, parseKern (Bpm 72) src)
+      pure $ testGroup "chorale sweep"
+        [ testCase "all 370 chorales parse" $ do
+            let failures = [f <> ": " <> e | (f, Left e) <- results]
+            assertEqual (unlines failures) 370
+              (length [() | (_, Right _) <- results])
+        , testCase "no tie leftovers (chorale encoding is clean)" $
+            assertEqual "leftover notes" 0
+              (sum [scTieLeftovers s | (_, Right s) <- results])
+        , testCase "every chorale fits 15 lanes" $ do
+            let overs = [ f | (f, Right s) <- results
+                        , Left _ <- [perform defaultInterp s] ]
+            assertEqual (unlines overs) [] overs
+        , testCase "counterpoint oracle: chorales under threshold" $ do
+            let bad = [ (f, n) | (f, Right s) <- results
+                      , let n = parallelPerfects s, n > 10 ]
+            assertEqual (show bad) [] bad
+        , testCase "titles come out of the kern" $ do
+            src <- TIO.readFile (dir </> "chor001.krn")
+            let (title, sct) = kernTitle src
+            title @?= Just "Aus meines Herzens Grunde"
+            sct @?= Just "BWV 269"
+        ]
+
 units = testGroup "otb"
   [ testGroup "lexer"
       [ testCase "middle c quarter" $ ntPitch (lexNoteTok "4c") @?= Just 60

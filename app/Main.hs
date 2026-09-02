@@ -30,7 +30,7 @@ import OTB.Config
   ( agogicsFor, artParamsFor, dynamicsFor, expressFor, emptyConfig, loadConfig
   , ornamentsFor, phrasingFor, pieceTempo, tuningBendRange )
 import OTB.Config qualified
-import OTB.Edition (editionsFor, readKernSource)
+import OTB.Edition (editionsFor, kernTitle, readKernSource)
 import OTB.Eval
   ( PerfR (..), loadDirAnnotations, pearson, perfBeatTimes
   , scoreBeatPositions, scorePerformances )
@@ -59,7 +59,7 @@ import OTB.Interp.Express (chargesForLane)
 import OTB.Interp.Phrasing (boundaryStrengths)
 
 import OTB.Kern.Token (Mark (..))
-import OTB.Emit.Json (renderJson)
+import OTB.Emit.Json (renderJson, renderJsonTitled)
 import OTB.Explain (renderWhys)
 import OTB.Instrument (hardwareTracks)
 import OTB.Interp.Agogics (defaultAgogicParams)
@@ -114,7 +114,7 @@ data Cmd
   | Bootstrap FilePath FilePath String Int Int String String
   | MaestroFetch Bool
   | MaestroAlign Bool (Maybe String) (Maybe Int)
-  | BakeSite BS.BakeOpts
+  | BakeSite [FilePath] BS.BakeOpts
   | Stats FilePath FilePath Double
   | Ground String Int Double String FilePath (Maybe FilePath) (Maybe FilePath)
   | Analyze Common
@@ -180,8 +180,11 @@ fitCmd =
           <> help "print the config diff instead of writing")
 
 bakeSiteCmd :: Parser Cmd
-bakeSiteCmd = fmap BakeSite $
-  BS.BakeOpts
+bakeSiteCmd = BakeSite
+  <$> many (strOption (long "corpus" <> metavar "DIR"
+        <> help ("kern corpus for the album; repeatable (default: "
+                   <> "bach-wtc + bach-chorales)")))
+  <*> (BS.BakeOpts
     <$> strOption (long "site" <> value "site")
     <*> strOption (long "surge-dir" <> value ""
           <> help "surge fork checkout (default: $SURGE_DIR or ~/code/surge)")
@@ -195,7 +198,7 @@ bakeSiteCmd = fmap BakeSite $
           <> value ("config" </> "calibration.json"))
     <*> switch (long "skip-wasm")
     <*> switch (long "skip-perf")
-    <*> switch (long "skip-patches")
+    <*> switch (long "skip-patches"))
 
 bootstrapCmd :: Parser Cmd
 bootstrapCmd =
@@ -391,7 +394,7 @@ main = do
     Bootstrap fa fb pfx iters bseed stat clus ->
       runBootstrap fa fb pfx iters bseed stat clus
     MaestroFetch catOnly -> M.runMaestroFetch catOnly
-    BakeSite opts0 -> do
+    BakeSite corpora0 opts0 -> do
       opts <- if null (BS.boSurgeDir opts0)
         then do
           menv <- lookupEnv "SURGE_DIR"
@@ -399,9 +402,18 @@ main = do
           pure opts0 {BS.boSurgeDir =
             maybe (home </> "code" </> "surge") id menv}
         else pure opts0
+      let corpora = if null corpora0
+            then [ "corpus" </> "bach-wtc" </> "kern"
+                 , "corpus" </> "bach-chorales" </> "kern" ]
+            else corpora0
+      forM_ corpora $ \c -> do
+        ok <- doesDirectoryExist c
+        unless ok $ die ("album corpus missing: " <> c
+          <> " — clone it (see README's Build section)")
       BS.runBakeSite
-        (\stage -> runAlbum ("corpus" </> "bach-wtc" </> "kern") stage
-           "config/default.toml" TempoDefault "werckmeister3" Nothing)
+        (\stage -> forM_ corpora $ \c ->
+           runAlbum c stage "config/default.toml" TempoDefault
+             "werckmeister3" Nothing)
         opts
     MaestroAlign validate mp ml -> runMaestroAlign validate mp ml
     Stats corpus cfgPath tempo -> runStats corpus cfgPath tempo
@@ -674,7 +686,7 @@ runAlbum corpus outDir cfgPath tempo temp meds = do
                 (badBpm . (\(Bpm b) -> b) . scTempo $ s)
               p <- perform (mkInterp cfg table adaptive piece) s
               pure ( force (renderSmf p)
-                   , force (renderJson piece p) )
+                   , force (renderJsonTitled (kernTitle src) piece p) )
          in (piece, r)
       results = parMap rdeepseq one srcs
   forM_ results $ \(piece, r) -> case r of

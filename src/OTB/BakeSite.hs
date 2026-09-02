@@ -133,8 +133,8 @@ wasmCmakeFlags =
   , "-DSURGE_BUILD_WASM=ON"
   ]
 
--- | Album order: prelude before fugue per key number, non-WTC extras
--- alphabetically at the end.
+-- | Album order: the WTC first (prelude before fugue per key number),
+-- then the chorales by number, then anything else alphabetically.
 albumKey :: FilePath -> (Int, Int, Int, Int, String)
 albumKey path =
   let b = takeBaseName path
@@ -142,7 +142,23 @@ albumKey path =
         && (b !! 4) `elem` ("pf" :: String)
         then ( 0, read [b !! 3], read (drop 5 b)
              , if b !! 4 == 'p' then 0 else 1, "" )
-        else (1, 0, 0, 0, b)
+        else case choraleNum b of
+          Just n -> (1, n, 0, 0, "")
+          Nothing -> (2, 0, 0, 0, b)
+
+choraleNum :: String -> Maybe Int
+choraleNum b = case splitAt 4 b of
+  ("chor", ds) | not (null ds), all (`elem` ("0123456789" :: String)) ds
+    -> Just (read ds)
+  _ -> Nothing
+
+-- | The dropdown's section header for a slug.
+groupOf :: String -> String
+groupOf b
+  | take 4 b == "wtc1" = "The Well-Tempered Clavier, Book I"
+  | take 4 b == "wtc2" = "The Well-Tempered Clavier, Book II"
+  | choraleNum b /= Nothing = "Chorales"
+  | otherwise = "Extras"
 
 -- | Site-relative url for a bank patch:
 -- data/patches/Category/Name.fxp.
@@ -379,6 +395,8 @@ bakeManifest dataDir = do
           perf <- either (die . ((p <> ": ") <>)) pure (parseJson raw)
           let name = fromMaybe (T.pack (takeBaseName p))
                 (jStr =<< jLookup "piece" perf)
+              mtitle = jStr =<< jLookup "title" perf
+              msct = jStr =<< jLookup "sct" perf
               notes =
                 [ nt | tr <- jArrOf (fromMaybe (JArr [])
                                        (jLookup "tracks" perf))
@@ -392,9 +410,13 @@ bakeManifest dataDir = do
               chs = [intOf "ch" nt | nt <- notes]
               inst = pieceInstances
                 [(intOf "ch" nt, intOf "pitch" nt) | nt <- notes]
-              entry = JObj
+              entry = JObj $
                 [ ("name", JStr name)
-                , ("url", JStr (T.pack ("data/perf/"
+                , ("group", JStr (T.pack (groupOf (T.unpack name)))) ]
+                <> [ ("title", JStr v) | Just v <- [mtitle] ]
+                <> [ ("sct", JStr v) | Just v <- [msct] ]
+                <>
+                [ ("url", JStr (T.pack ("data/perf/"
                                           <> takeFileName p)))
                 , ("endS", JNum (T.pack (pyRepr (roundD 3 end))))
                 , ("maxCh", JNum (T.pack

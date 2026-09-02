@@ -46,6 +46,21 @@ const encUrl = (u) => u.split("/").map(encodeURIComponent).join("/");
 const patchDisplay = (url) => url === "(init)"
   ? "(init)" : url.split("/").pop().replace(/\.fxp$/, "");
 const bankTail = (url) => url.split("/").slice(-2).join("/");
+
+// WTC slugs keep their computed titles (the kern's own OTL records
+// are inconsistent there: "Fuga 1, Vol. 1"); everything else takes the
+// manifest's title/sct straight from the kern's !!!OTL/!!!SCT
+function displayTitle(p) {
+  const t = pieceTitle(p.name);
+  if (t.bwv)
+    return { main: t.main, sub: t.bwv, label: `${t.main} · ${t.bwv}` };
+  if (p.title) {
+    const sub = p.sct || "";
+    return { main: p.title, sub,
+             label: sub ? `${p.title} · ${sub}` : p.title };
+  }
+  return { main: t.main, sub: "", label: t.main };
+}
 const fmt = (s) => {
   s = Math.max(0, s | 0);
   return `${(s / 60) | 0}:${String(s % 60).padStart(2, "0")}`;
@@ -56,20 +71,26 @@ async function init() {
     "data/manifest.json", "data/casting.json",
     "data/calibration.json", "data/patches.json",
   ].map((u) => fetch(u).then((r) => r.json())));
-  $("piecesel").innerHTML = MANIFEST.pieces
-    .map((p) => {
-      const t = pieceTitle(p.name);
-      const label = t.bwv
-        ? `${t.main} · ${t.bwv}` : t.main;
-      return `<option>${esc(label)}</option>`;
-    }).join("");
+  // optgroup per manifest group; selectedIndex indexes the flattened
+  // options, so all index-based logic is untouched
+  let html = "", openGroup = null;
+  for (const p of MANIFEST.pieces) {
+    if (p.group !== openGroup) {
+      if (openGroup !== null) html += "</optgroup>";
+      html += `<optgroup label="${esc(p.group || "")}">`;
+      openGroup = p.group;
+    }
+    html += `<option>${esc(displayTitle(p).label)}</option>`;
+  }
+  if (openGroup !== null) html += "</optgroup>";
+  $("piecesel").innerHTML = html;
   startIdx = Math.max(0,
     MANIFEST.pieces.findIndex((p) => p.name === START_PIECE));
   $("piecesel").selectedIndex = startIdx;
-  const t = pieceTitle(MANIFEST.pieces[startIdx].name);
+  const t = displayTitle(MANIFEST.pieces[startIdx]);
   $("title").textContent = t.main;
   $("idx").textContent =
-    `${t.bwv ? t.bwv + " · " : ""}${startIdx + 1} / ${MANIFEST.pieces.length}`;
+    `${t.sub ? t.sub + " · " : ""}${startIdx + 1} / ${MANIFEST.pieces.length}`;
   $("stats").textContent = "";
   renderRig();
 
@@ -317,10 +338,10 @@ function playhead() {
 // ---- rendering -------------------------------------------------------------
 
 function renderHeader() {
-  const t = pieceTitle(PIECE.name);
+  const t = displayTitle(MANIFEST.pieces[PIECE.idx]);
   $("title").textContent = t.main;
   $("idx").textContent =
-    `${t.bwv ? t.bwv + " · " : ""}${PIECE.idx + 1} / ${MANIFEST.pieces.length}`;
+    `${t.sub ? t.sub + " · " : ""}${PIECE.idx + 1} / ${MANIFEST.pieces.length}`;
   if ($("piecesel").selectedIndex !== PIECE.idx)
     $("piecesel").selectedIndex = PIECE.idx;
   $("play").textContent = PLAYING ? "Pause" : "Play";
