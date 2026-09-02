@@ -111,7 +111,7 @@ async function start() {
       fetch("data/init.fxp").then((r) => r.arrayBuffer()),
     ]);
     INIT_BYTES = initBytes;
-    await ctx.audioWorklet.addModule("board-processor.js");
+    await ctx.audioWorklet.addModule("board-processor.js?v=2");
     node = new AudioWorkletNode(ctx, "board", {
       numberOfInputs: 0,
       numberOfOutputs: 1,
@@ -451,15 +451,18 @@ function tick() {
 // bottom.
 const WHY_RE = /^([^:]+): (.*?)(?:\s*\[(.*)\])?$/;
 const slotOf = (ch) => (PIECE && PIECE.chToSlot[ch]) ?? 3;
-const ledger = { piece: null, pos: 0, lastT: -1, activeUntil: new Map() };
+const ledger = { piece: null, pos: 0, lastT: -1, activeUntil: new Map(),
+  holdUntil: 0, wired: false };
 const REENTER_GAP = 1.5; // s of silence before a rule logs again
 
-// Fast attack, slow release, perceptual (pow .4) width — a signal
-// meter behind the fader, not a copy of it.
+// Fast attack, slow release, perceptual (pow .4) width. The worklet
+// reports post-gain peaks; dividing by the slot's own gain makes the
+// meter PRE-FADER — the voice's signal, at any fader position.
 const METER = [0, 0, 0, 0];
 function updateMeters(levels) {
   for (let s = 0; s < 4; s++) {
-    METER[s] = Math.max(levels[s] || 0, METER[s] * 0.72);
+    const lv = (levels[s] || 0) / Math.max(slotGain[s], 0.05);
+    METER[s] = Math.max(lv, METER[s] * 0.72);
     const el = $(`meter${s}`);
     if (el) el.style.width =
       (Math.min(1, METER[s]) ** 0.4 * 100).toFixed(1) + "%";
@@ -482,11 +485,20 @@ function fmtT(t) {
 function refreshWhys() {
   if (!PIECE) return;
   const box = $("whys");
+  if (!ledger.wired) {
+    // the reader's scroll beats the autoscroll: any gesture holds the
+    // stick-to-bottom off long enough to actually read
+    ledger.wired = true;
+    const hold = () => { ledger.holdUntil = Date.now() + 4000; };
+    box.addEventListener("wheel", hold, { passive: true });
+    box.addEventListener("touchmove", hold, { passive: true });
+    box.addEventListener("pointerdown", hold);
+  }
   const t = playhead();
   if (ledger.piece !== PIECE.name || t < ledger.lastT - 0.3) ledgerReset();
   ledger.lastT = t;
-  const stick =
-    box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  const stick = Date.now() > ledger.holdUntil
+    && box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
   const idx = PIECE.whyIdx;
   let appended = false;
   while (ledger.pos < idx.length && idx[ledger.pos][0] <= t) {

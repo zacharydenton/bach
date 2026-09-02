@@ -50,7 +50,7 @@ input[type=range]{width:7.5rem;accent-color:var(--brass)}
 .fader input[type=range]{position:relative;width:100%}
 .fader .meter{position:absolute;left:0;top:50%;transform:translateY(-50%);
      height:16px;width:0%;border-radius:3px;pointer-events:none;
-     background:color-mix(in srgb, var(--vc,var(--dim)) 32%, transparent)}
+     background:color-mix(in srgb, var(--vc,var(--dim)) 45%, transparent)}
 .ledger{margin:1.6rem 0 0}
 .ledger .eyebrow{margin-bottom:.5rem;display:block}
 #whys{min-height:9.2em;max-height:15em;overflow-y:auto;position:relative;
