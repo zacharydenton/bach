@@ -79,13 +79,23 @@ Paired bootstrap (10k samples, clustered by piece) over the 94
 held-out performances, comparing backbone configs differing in one
 free dimension, at the prefit level:
 
-- sus_soft 2 vs 4:      mean diff +0.00001, 95% CI [-0.00035, +0.00035]
-- harm_charge 0 vs .15: mean diff +0.00003, 95% CI [-0.00031, +0.00037]
+under the landscape's own estimand (mean of per-piece medians,
+piece-resampled — an earlier per-performance version is superseded,
+see the archive's corrections section):
+
+- sus_soft 2 vs 4:      point +0.000030, 95% CI [-0.000332, +0.000385]
+- harm_charge 0 vs .15: point +0.000185, 95% CI [-0.000311, +0.000703]
+
+Observations are crossed by piece and pianist (48 performers behind
+the 94 rows); intervals are reported piece-clustered as the wider,
+conservative choice — performer-clustered variants and the two-way
+caveat are in the archive.
 
 (Inputs, method and digests archived in
 experiments/bootstrap-2026-09-02/; a repo-native `otb bootstrap`
-subcommand replaces the scratch analysis so the numbers regenerate
-from HEAD.)
+subcommand WILL replace the scratch analysis once the running
+floor-only series finishes — a source change now would unregister
+those runs mid-flight.)
 
 The near-flat directions are statistically flat on this (development
 — see below) held-out set: intervals an order of magnitude tighter

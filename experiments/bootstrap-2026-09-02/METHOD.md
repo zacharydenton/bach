@@ -25,6 +25,33 @@ the method; the analysis itself was performed with a scratch script
 - Reported: mean difference, 2.5%/97.5% percentiles, and (for the
   basins) P(diff <= 0) as the bootstrap fraction.
 
+## Corrections after review (2026-09-02, same day)
+
+1. ESTIMAND: the velocity comparisons below were first computed as the
+   mean of per-performance differences, but the velocity landscape
+   optimizes the MEAN OF PER-PIECE MEDIANS. Recomputed under the
+   landscape's own statistic (piece-resampled, 10k, seed 1):
+   - sus_soft 2 vs 4:      point +0.000030, CI [-0.000332, +0.000385]
+   - harm_charge 0 vs .15: point +0.000185, CI [-0.000311, +0.000703]
+   These supersede the per-performance velocity numbers for any claim
+   about the landscape objective; the substantive conclusion (flat)
+   is unchanged. (The timing basin comparison needed no correction:
+   the timing objective IS the flat mean over performances.)
+
+2. CROSSED DEPENDENCE: the 94 held-out rows carry only 48 performer
+   IDs (39 span multiple pieces, 85 rows), so observations are
+   crossed by piece and pianist while the original intervals cluster
+   only by piece. One-way performer-clustered intervals (mean-diff
+   statistic, 10k, seed 1):
+   - basin A vs B:         [-0.00508, +0.00599]
+   - sus_soft 2 vs 4:      [-0.00017, +0.00019]
+   - harm_charge 0 vs .15: [-0.00023, +0.00032]
+   In every case the piece-clustered interval is the wider of the
+   two; we report it as the conservative bound. Paper-grade intervals
+   over crossed random effects would need a two-way cluster bootstrap
+   (or a declaration of which population — pieces or pianists — is
+   treated as fixed).
+
 ## Results (as recorded in the notes)
 
 - basin A vs B (timing, tempo r): mean +0.0006,
