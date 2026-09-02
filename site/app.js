@@ -22,7 +22,7 @@ let reqIdx = null;
 let warmedUp = false;
 const slotRev = [0, 0, 0, 0]; // bumped on every user retarget of a slot
 let startIdx = 0; // where the board opens: the E-flat minor prelude
-const START_PIECE = "wtc1p08";
+const START_PIECE = "wtc1p05";
 const instGen = {};
 const lastShipped = {};
 
