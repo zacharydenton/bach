@@ -59,20 +59,25 @@ data KnobFamily = KnobFamily
 timingFamily :: KnobFamily
 timingFamily = KnobFamily "timing" grids sections
   where
-    -- asap_eval.KNOB_GRIDS, verbatim: every grid contains an OFF
-    -- value — fitting may disable a rule the residuals proposed
+    -- asap_eval.KNOB_GRIDS, plus the fine sub-grid values the
+    -- 2026-09-02 floor-only ablations motivated (novelty_brake 0.005,
+    -- arch_group 0.0025 and cadence_depth 0.01 all ran at or above
+    -- the coarse-lattice optimum): arch_group, cadence_depth and
+    -- novelty_brake gain steps below their old smallest nonzero.
+    -- Every grid keeps its OFF value; the experiment fingerprint
+    -- separates fine-lattice runs from the registered coarse ones.
     grids =
       [ ("expression", [0.4, 0.6, 0.8, 1.0, 1.3])
       , ("arch_piece", [0.0, 0.015, 0.03, 0.06])
-      , ("arch_group", [0.0, 0.01, 0.02, 0.04])
+      , ("arch_group", [0.0, 0.0025, 0.005, 0.01, 0.02, 0.04])
       , ("rit_floor", [0.3, 0.4, 0.5, 0.6, 0.75])
       , ("rit_span", [0.5, 1.0, 2.0, 3.0])
-      , ("cadence_depth", [0.0, 0.04, 0.08, 0.15])
+      , ("cadence_depth", [0.0, 0.01, 0.02, 0.04, 0.08, 0.15])
       , ("boundary_ease", [0.0, 0.03, 0.06, 0.12])
       , ("open_push", [0.0, 0.03, 0.06, 0.1])
       , ("open_span", [1.0, 2.0, 4.0])
       , ("subject_push", [0.0, 0.015, 0.03])
-      , ("novelty_brake", [0.0, 0.02, 0.04, 0.08])
+      , ("novelty_brake", [0.0, 0.005, 0.01, 0.02, 0.04, 0.08])
       , ("mid_drift", [0.0, 0.01, 0.02, 0.04])
       , ("sus_lean", [0.0, 0.02, 0.05, 0.1])
       ]
