@@ -25,14 +25,10 @@ body{font:15px/1.5 var(--serif);background:var(--desk);color:var(--ink);
        inset 0 1px 0 rgba(255,240,200,.09)}
 .eyebrow{font:600 11px/1 var(--serif);letter-spacing:.28em;color:var(--dim);
      text-transform:uppercase}
-h1{display:block;margin:0 0 .9rem;padding:.4rem .95rem;
-     font:600 22px/1.25 var(--serif);letter-spacing:.045em;
-     color:#2c1d0a;border-radius:3px;
-     background:linear-gradient(178deg,var(--brass-hi),var(--brass) 45%,#a9822f);
-     box-shadow:inset 0 1px 1px rgba(255,250,230,.55),
-       inset 0 -2px 3px rgba(60,40,10,.35),0 2px 3px rgba(0,0,0,.35);
-     text-shadow:0 1px 0 rgba(255,244,214,.35)}
-h1 .idx{font:400 13px var(--mono);color:#5a4426;margin-left:.6rem}
+h1{margin:0 0 .7rem;font:600 26px/1.2 var(--serif);
+     letter-spacing:.045em;color:var(--brass-hi);
+     text-shadow:0 -1px 0 rgba(20,10,0,.65),0 1px 1px rgba(255,240,200,.12)}
+h1 .idx{font:400 13px var(--mono);color:var(--dim);margin-left:.6rem}
 .seekrow{display:flex;align-items:center;gap:1rem;margin:1rem 0}
 .railwrap{flex:1;min-width:0}
 .rail{position:relative;height:15px;margin:0 0 .2rem;cursor:pointer}
