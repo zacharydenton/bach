@@ -46,17 +46,20 @@ select:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
 .part .tacet{font:italic 11px var(--mono);color:var(--faint);margin-left:auto}
 .part.muted{opacity:.45}
 input[type=range]{width:7.5rem;accent-color:var(--brass)}
+.fader{position:relative;display:inline-flex;align-items:center;width:7.5rem}
+.fader input[type=range]{position:relative;width:100%}
+.fader .meter{position:absolute;left:0;top:50%;transform:translateY(-50%);
+     height:16px;width:0%;border-radius:3px;pointer-events:none;
+     background:color-mix(in srgb, var(--vc,var(--dim)) 32%, transparent)}
 .ledger{margin:1.6rem 0 0}
 .ledger .eyebrow{margin-bottom:.5rem;display:block}
-#whys{min-height:9.2em;max-height:9.2em;overflow:hidden;position:relative;
+#whys{min-height:9.2em;max-height:15em;overflow-y:auto;position:relative;
      border-left:2px solid var(--brass-dim);padding:.15rem 0 .15rem .8rem;
-     font:12px/1.62 var(--mono)}
-#whys:after{content:'';position:absolute;left:0;right:0;bottom:0;height:1.6em;
-     background:linear-gradient(transparent,var(--bg));pointer-events:none}
-.why{display:flex;gap:.55em;align-items:baseline;opacity:1;
-     transition:opacity .24s ease}
+     font:12px/1.62 var(--mono);scrollbar-width:thin;
+     scrollbar-color:var(--faint) transparent}
+.why{display:flex;gap:.55em;align-items:baseline}
 .why.in{animation:rise .24s ease}
-.why.out{opacity:0}
+.why .at{flex:none;color:var(--faint);font-variant-numeric:tabular-nums}
 @keyframes rise{from{opacity:0;transform:translateY(3px)}to{opacity:1}}
 .why .chip{flex:none;font-size:10px;letter-spacing:.06em;color:var(--bg);
      background:var(--vc,var(--dim));border-radius:3px;padding:0 .45em;
@@ -67,13 +70,11 @@ input[type=range]{width:7.5rem;accent-color:var(--brass)}
 details{margin:1.6rem 0 0}
 summary{cursor:pointer;color:var(--dim);font:600 11px/1 var(--mono);
      letter-spacing:.22em;text-transform:uppercase}
-#cast{background:var(--panel);color:#b7ab8a;border:1px solid var(--line);
-     border-radius:8px;font:12px/1.6 var(--mono);padding:.7rem .8rem;
-     white-space:pre-wrap;margin-top:.6rem}
 .stats{margin-top:1.4rem;font:11px var(--mono);color:var(--faint);
      font-variant-numeric:tabular-nums}
 .stats .clip{color:#d98c66;font-weight:700}
 @media (prefers-reduced-motion:reduce){
   .why,.why.in{animation:none;transition:none}
 }
-@media (max-width:520px){ h1{font-size:26px} input[type=range]{width:100%} }
+@media (max-width:520px){ h1{font-size:26px}
+  input[type=range],.fader{width:100%} }

@@ -149,6 +149,7 @@ function onMsg(d) {
   if (d.type === "pos") {
     POS = { frame: d.frame, t: Date.now(), playing: d.playing };
     STAT = { peak: d.peak, riding: d.riding, load: d.load };
+    if (d.levels) updateMeters(d.levels);
     renderStats();
   } else if (d.type === "ended") {
     loadPiece((PIECE.idx + 1) % MANIFEST.pieces.length);
@@ -353,8 +354,9 @@ function renderRig() {
       <select id=sel${s} data-slot=${s} style="flex:1">${opts()}</select>
       <button data-step=1 data-slot=${s} aria-label="next patch">▶</button>
       <button id=mute${s} data-mute=${s}>Mute</button>
-      <input type=range min=0 max=1.5 step=0.05 id=gain${s}
-        data-gain=${s} aria-label="gain">
+      <span class=fader><span class=meter id=meter${s}></span>
+       <input type=range min=0 max=1.5 step=0.05 id=gain${s}
+         data-gain=${s} aria-label="gain"></span>
      </div>
     </div>`).join("");
   div.querySelectorAll("[data-step]").forEach((b) =>
@@ -382,11 +384,6 @@ function refreshRig() {
     $(`tc${s}`).textContent =
       PIECE && !PIECE.slotChannels[s].length ? "tacet" : "";
   });
-  $("cast").textContent = !PIECE ? "" : SLOTS.map((_, s) => {
-    if (slotPatch[s] === "(init)") return "";
-    return PIECE.slotChannels[s]
-      .map((c) => `--patch-ch "${c}:${bankTail(slotPatch[s])}"`).join(" ");
-  }).filter(Boolean).join(" \\\n");
 }
 
 async function setPatch(s, url) {
@@ -444,46 +441,75 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
-// The ledger: keyed per-line DOM. A rule that keeps applying HOLDS STILL;
-// only entering lines rise in and departing lines fade out. Chips wear the
-// slot the note sounds on; rules are deduped per slot.
+// The ledger: an append-only log. A rule logs one line when it ENTERS
+// (rising edge over the why index), holds its place, and scrolls away
+// like history — nothing flashes out. Backward seeks and piece changes
+// rebuild the log up to the playhead, so the list is a pure function
+// of (piece, time). Autoscroll sticks only while the reader is at the
+// bottom.
 const WHY_RE = /^([^:]+): (.*?)(?:\s*\[(.*)\])?$/;
 const slotOf = (ch) => (PIECE && PIECE.chToSlot[ch]) ?? 3;
+const ledger = { piece: null, pos: 0, lastT: -1, activeUntil: new Map() };
+const REENTER_GAP = 1.5; // s of silence before a rule logs again
+
+// Fast attack, slow release, perceptual (pow .4) width — a signal
+// meter behind the fader, not a copy of it.
+const METER = [0, 0, 0, 0];
+function updateMeters(levels) {
+  for (let s = 0; s < 4; s++) {
+    METER[s] = Math.max(levels[s] || 0, METER[s] * 0.72);
+    const el = $(`meter${s}`);
+    if (el) el.style.width =
+      (Math.min(1, METER[s]) ** 0.4 * 100).toFixed(1) + "%";
+  }
+}
+
+function ledgerReset() {
+  ledger.piece = PIECE && PIECE.name;
+  ledger.pos = 0;
+  ledger.lastT = -1;
+  ledger.activeUntil.clear();
+  $("whys").textContent = "";
+}
+
+function fmtT(t) {
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function refreshWhys() {
   if (!PIECE) return;
   const box = $("whys");
-  const ws = whysAt(PIECE.whyIdx, playhead());
-  const seen = new Map();
-  for (const w of ws) {
-    const m = WHY_RE.exec(w.why) || [null, w.why, "", ""];
-    const s = slotOf(w.ch);
-    const key = s + "|" + m[1];
-    if (!seen.has(key))
-      seen.set(key, { slot: s, rule: m[1], delta: m[2] || "", cite: m[3] || "" });
-  }
-  const want = [...seen.entries()].sort(
-    (a, b) => a[1].slot - b[1].slot
-      || a[1].rule.localeCompare(b[1].rule)).slice(0, 6);
-  const wantKeys = new Set(want.map(([k]) => k));
-  for (const el of [...box.children]) {
-    if (!wantKeys.has(el.dataset.key) && !el.classList.contains("out")) {
-      el.classList.add("out");
-      setTimeout(() => el.remove(), 260);
+  const t = playhead();
+  if (ledger.piece !== PIECE.name || t < ledger.lastT - 0.3) ledgerReset();
+  ledger.lastT = t;
+  const stick =
+    box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  const idx = PIECE.whyIdx;
+  let appended = false;
+  while (ledger.pos < idx.length && idx[ledger.pos][0] <= t) {
+    const [on, off, ch, ws] = idx[ledger.pos++];
+    for (const why of ws) {
+      const m = WHY_RE.exec(why) || [null, why, "", ""];
+      const s = slotOf(ch);
+      const key = s + "|" + m[1];
+      const until = ledger.activeUntil.get(key) ?? -Infinity;
+      if (on > until + REENTER_GAP) {
+        const el = document.createElement("div");
+        el.className = "why in";
+        el.style.setProperty("--vc", `var(--v${s})`);
+        el.innerHTML = `<span class=at>${fmtT(on)}</span>`
+          + `<span class=chip>${esc(SLOTS[s])}</span>`
+          + `<span><b>${esc(m[1])}</b> <span class=delta>${esc(m[2] || "")}</span>`
+          + (m[3] ? ` <span class=cite>${esc(m[3])}</span>` : "") + "</span>";
+        box.appendChild(el);
+        appended = true;
+        while (box.children.length > 400) box.firstChild.remove();
+      }
+      ledger.activeUntil.set(key, Math.max(until, off));
     }
   }
-  const have = new Set([...box.children]
-    .filter((el) => !el.classList.contains("out")).map((el) => el.dataset.key));
-  for (const [key, w] of want) {
-    if (have.has(key)) continue;
-    const el = document.createElement("div");
-    el.className = "why in";
-    el.dataset.key = key;
-    el.style.setProperty("--vc", `var(--v${w.slot})`);
-    el.innerHTML = `<span class=chip>${esc(SLOTS[w.slot])}</span>`
-      + `<span><b>${esc(w.rule)}</b> <span class=delta>${esc(w.delta)}</span>`
-      + (w.cite ? ` <span class=cite>${esc(w.cite)}</span>` : "") + "</span>";
-    box.appendChild(el);
-  }
+  if (appended && stick) box.scrollTop = box.scrollHeight;
 }
 
 init();

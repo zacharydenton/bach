@@ -42,6 +42,7 @@ class Board extends AudioWorkletProcessor {
     this.evI = 0;
     this.tempoI = 0;
     this.gain = new Array(N_SLOTS).fill(0.25); // per SLOT (live default)
+    this.slotPeak = new Array(N_SLOTS).fill(0); // post-gain, since last report
     this.mute = new Array(N_SLOTS).fill(false);
     this.laneInst = []; // per lane: its instance
     this.laneScene = []; // per lane: scene A or B on that instance
@@ -222,6 +223,7 @@ class Board extends AudioWorkletProcessor {
       playing: this.playing && !this.ended,
       peak: this.peak,
       riding: this.limApplied < 1,
+      levels: this.slotPeak.slice(),
       // wall ms spent rendering per second of audio, Date-coarse but honest
       load: this.renderN
         ? this.renderMs / ((this.renderN * 128) / sampleRate) / 1000
@@ -274,10 +276,16 @@ class Board extends AudioWorkletProcessor {
           const g = this.gain[slot];
           if (g <= 0) continue;
           const { l, r } = this.views[inst];
+          let pk = this.slotPeak[slot];
           for (let i = 0; i < BLOCK; i++) {
-            L[done + i] += l[i] * g;
-            R[done + i] += r[i] * g;
+            const vl = l[i] * g, vr = r[i] * g;
+            L[done + i] += vl;
+            R[done + i] += vr;
+            const a = Math.abs(vl), b = Math.abs(vr);
+            if (a > pk) pk = a;
+            if (b > pk) pk = b;
           }
+          this.slotPeak[slot] = pk;
         }
 
         this.cursor = blockEnd;
@@ -293,10 +301,12 @@ class Board extends AudioWorkletProcessor {
       this.renderN++;
     }
 
-    // ~4 Hz position reports (375 quanta/s at 48 k)
-    if (++this.posDiv >= 90) {
+    // ~12 Hz position reports (375 quanta/s at 48 k) — the level
+    // meters want ballistics faster than the old 4 Hz
+    if (++this.posDiv >= 30) {
       this.posDiv = 0;
       this.postPos();
+      this.slotPeak.fill(0);
       this.renderMs = 0;
       this.renderN = 0;
     }
