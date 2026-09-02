@@ -79,6 +79,8 @@ import System.Directory
   , getHomeDirectory, listDirectory, renameFile )
 import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (die)
+import System.Info (arch, compilerName, fullCompilerVersion, os)
+import Data.Version (showVersion)
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcess, readProcessWithExitCode)
 import System.FilePath (takeBaseName, takeFileName, (</>))
@@ -1129,6 +1131,18 @@ runLandscape :: FilePath -> FilePath -> String -> Int -> Int -> Double
 runLandscape corpus cfgPath famName starts seed slack zeroFloor
              divBonus emitElite = do
   when (starts < 1) $ die "--starts must be at least 1"
+  let badD nm v = isNaN v || isInfinite v
+  when (badD "slack" slack || slack < 0) $
+    die "--slack must be finite and >= 0"
+  when (badD "zero-floor" zeroFloor
+          || zeroFloor < 0 || zeroFloor > 1) $
+    die "--zero-floor must be finite and in [0, 1]"
+  when (badD "diversity-bonus" divBonus || divBonus < 0) $
+    die "--diversity-bonus must be finite and >= 0"
+  -- one registered condition per run: a mixed transformation would
+  -- carry an unlabeled objective into the record
+  when (zeroFloor > 0 && divBonus > 0) $
+    die "pick one condition: --zero-floor or --diversity-bonus"
   cfgText <- TIO.readFile cfgPath
   prefit <- either (die . ("config: " <>)) pure
               (OTB.Config.loadConfig (F.prefitStrip cfgText))
@@ -1264,23 +1278,25 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
           , ("binary", J.JStr (T.pack binDigest))
           , ("corpus", J.JObj [ (T.pack p, J.JStr (T.pack d))
                               | (p, d) <- corpusDigests ]) ] )
-      metaJson = J.JObj
-        [ ("fingerprint", J.JStr (T.pack fp))
-        , ("family", J.JStr (T.pack famName))
-        , ("seed", J.JNum (T.pack (show seed)))
-        , ("args", J.JObj
-            [ ("corpus", J.JStr (T.pack corpus))
-            , ("config", J.JStr (T.pack cfgPath))
-            , ("starts", J.JNum (T.pack (show starts)))
-            , ("slack", J.JNum (T.pack (MA.pyRepr slack)))
-            , ("zero_floor", J.JNum (T.pack (MA.pyRepr zeroFloor)))
-            , ("diversity_bonus",
-                J.JNum (T.pack (MA.pyRepr divBonus))) ])
-        , ("digests", digestsJson)
-        , ("train", J.JArr [ J.JStr (T.pack (F.pdPiece pd))
-                           | pd <- train ])
-        , ("test", J.JArr [ J.JStr (T.pack (F.pdPiece pd))
-                          | pd <- test ]) ]
+      metaFor nStarts mprod = J.JObj
+        ( [ ("fingerprint", J.JStr (T.pack fp))
+          , ("family", J.JStr (T.pack famName))
+          , ("seed", J.JNum (T.pack (show seed)))
+          , ("args", J.JObj
+              [ ("corpus", J.JStr (T.pack corpus))
+              , ("config", J.JStr (T.pack cfgPath))
+              , ("starts", J.JNum (T.pack (show nStarts)))
+              , ("slack", J.JNum (T.pack (MA.pyRepr slack)))
+              , ("zero_floor", J.JNum (T.pack (MA.pyRepr zeroFloor)))
+              , ("diversity_bonus",
+                  J.JNum (T.pack (MA.pyRepr divBonus))) ])
+          , ("digests", digestsJson)
+          , ("train", J.JArr [ J.JStr (T.pack (F.pdPiece pd))
+                             | pd <- train ])
+          , ("test", J.JArr [ J.JStr (T.pack (F.pdPiece pd))
+                            | pd <- test ]) ]
+          <> [ ("producer", p) | Just p <- [mprod] ] )
+      metaJson = metaFor starts Nothing
 
   haveState <- doesFileExist statePath
   stored0 <- if not haveState then pure [] else do
@@ -1407,17 +1423,46 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
                 <> "/" <> show (length elite) <> "  elite values "
                 <> show (uniqSorted (vals elite)))
 
-  -- ---- experiment manifest: the committed record of a completed run
+  -- ---- experiment manifest: the committed record of a completed
+  -- run. Its id derives from the COMPLETE content (metadata incl.
+  -- producer + results), so different runs can never share a name and
+  -- an existing manifest is never overwritten; args.starts records
+  -- what actually ran, not what this invocation asked for.
   when (length finals >= starts) $ do
     createDirectoryIfMissing True "experiments"
     date <- takeWhile (/= '\n') <$> readProcess "date" ["+%F"] ""
+    producer <- do
+      let tryP c as = either
+            (\e -> let _ = (e :: SomeException) in "unknown")
+            (takeWhile (/= '\n'))
+            <$> try (readProcess c as "")
+      commit <- tryP "git" ["rev-parse", "HEAD"]
+      porc <- either
+        (\e -> let _ = (e :: SomeException) in "unknown")
+        id <$> try (readProcess "git"
+                      ["status", "--porcelain", "-uno"] "")
+      pure (J.JObj
+        [ ("commit", J.JStr (T.pack commit))
+        , ("dirty", J.JBool (not (null porc)))
+        , ("compiler", J.JStr (T.pack
+            (compilerName <> "-" <> showVersion fullCompilerVersion)))
+        , ("os", J.JStr (T.pack os))
+        , ("arch", J.JStr (T.pack arch)) ])
+    let manifestJson = J.dumpJson (Just 1) (J.JObj
+          [ ("_meta", metaFor (length entries) (Just producer))
+          , ("finals", J.JArr entries) ])
+    mid <- sha (T.unpack manifestJson)
     let manifestPath = "experiments"
           </> ("landscape-" <> famName <> "-" <> date <> "-"
-                 <> take 12 fp <> ".json")
-    TIO.writeFile manifestPath (stateJson entries)
-    putStrLn ("\nmanifest: " <> manifestPath
-                <> " — hashes, arguments, membership, results; "
-                <> "commit it with the conclusions it backs")
+                 <> take 12 mid <> ".json")
+    exists <- doesFileExist manifestPath
+    if exists
+      then putStrLn ("\nmanifest already registered: " <> manifestPath)
+      else do
+        TIO.writeFile manifestPath manifestJson
+        putStrLn ("\nmanifest: " <> manifestPath
+                    <> " — hashes, arguments, membership, results; "
+                    <> "commit it with the conclusions it backs")
 
   -- ---- condition 4 bridge: equally predictive solutions, rendered
   forM_ emitElite $ \dir -> do
