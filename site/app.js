@@ -70,10 +70,7 @@ async function init() {
   $("title").textContent = t.main;
   $("idx").textContent =
     `${t.bwv ? t.bwv + " · " : ""}${startIdx + 1} / ${MANIFEST.pieces.length}`;
-  $("stats").textContent =
-    `${MANIFEST.pieces.length} pieces baked · four voices on ` +
-    `${MANIFEST.nInstances} Surge synths` +
-    ` will render in this tab — press Start`;
+  $("stats").textContent = "";
   renderRig();
 
   $("start").addEventListener("click", start);
