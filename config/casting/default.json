@@ -1,7 +1,7 @@
 {
-  "_": "Standing rig casting, updated by ear 2026-09-01: Classical / Poly Lala / Dreamy Flute / Lera. Keyed by the four-voice rig's slot names; the board applies it once at first load, and live tweaks survive piece changes. Per-piece casting files (none at present) would override.",
-  "bass": "/usr/share/surge-xt/patches_factory/Leads/Classical.fxp",
-  "tenor": "/usr/share/surge-xt/patches_factory/Polysynths/Poly Lala.fxp",
-  "alto": "/usr/share/surge-xt/patches_factory/Winds/Dreamy Flute.fxp",
-  "soprano": "/usr/share/surge-xt/patches_factory/Leads/Lera.fxp"
+  "_": "Standing rig casting, updated by ear 2026-09-02: Later / Turbo / Skatteverket / Fyllo Dual. Keyed by the four-voice rig's slot names; the board applies it once at first load, and live tweaks survive piece changes. Per-piece casting files (none at present) would override.",
+  "bass": "/usr/share/surge-xt/patches_factory/Leads/Later.fxp",
+  "tenor": "/usr/share/surge-xt/patches_factory/Leads/Turbo.fxp",
+  "alto": "/usr/share/surge-xt/patches_factory/Polysynths/Skatteverket.fxp",
+  "soprano": "/usr/share/surge-xt/patches_factory/Leads/Fyllo Dual.fxp"
 }
