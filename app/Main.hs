@@ -404,8 +404,9 @@ main = do
         else pure opts0
       let corpora = if null corpora0
             then [ "corpus" </> "bach-wtc" </> "kern"
-                 , "corpus" </> "bach-chorales" </> "kern"
-                 , "corpus" </> "bach-musical-offering" </> "kern" ]
+                 , "corpus" </> "bach-art-of-fugue" </> "kern"
+                 , "corpus" </> "bach-musical-offering" </> "kern"
+                 , "corpus" </> "bach-chorales" </> "kern" ]
             else corpora0
       forM_ corpora $ \c -> do
         ok <- doesDirectoryExist c

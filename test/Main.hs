@@ -71,8 +71,9 @@ main = do
   sweep <- corpusSweep
   chorales <- choraleSweep
   offering <- offeringSweep
+  aof <- artOfFugueSweep
   defaultMain $ testGroup "all"
-    [units, laws, sweep, chorales, offering, oracle, review, sota]
+    [units, laws, sweep, chorales, offering, aof, oracle, review, sota]
 
 -- | Parse every WTC file; assert full coverage and the known-baseline
 -- number of tie leftovers (encoding lapses in the corpus itself — see
@@ -211,6 +212,39 @@ offeringSweep = do
             assertEqual (show failed) ["offering-013b.krn"] failed
             assertEqual "parsed" 5 (length ok)
         , testCase "every parsed movement fits its lanes" $ do
+            let overs = [ f | (f, Right s) <- results
+                        , Left _ <- [perform defaultInterp s] ]
+            assertEqual (unlines overs) [] overs
+        ]
+
+-- | The Art of Fugue (craigsapp/art-of-the-fugue): 20 movements —
+-- contrapuncti, canons, both mirror-fugue realizations, and the
+-- unfinished Contrapunctus XIV, which simply stops. All parse and
+-- perform. Pinned 2026-09-02.
+artOfFugueSweep :: IO TestTree
+artOfFugueSweep = do
+  let dir = "corpus/bach-art-of-fugue/kern"
+  present <- doesDirectoryExist dir
+  allowSkip <- lookupEnv "OTB_NO_CORPUS"
+  if not present
+    then pure $ testCase "art of fugue sweep" $
+      if allowSkip == Just "1"
+        then pure ()
+        else assertFailure
+          ("art of fugue not cloned — run\n  git clone --depth 1 "
+             <> "https://github.com/craigsapp/art-of-the-fugue "
+             <> "corpus/bach-art-of-fugue\nor set OTB_NO_CORPUS=1")
+    else do
+      files <- sort . filter (".krn" `isSuffixOf`) <$> listDirectory dir
+      results <- forM files $ \f -> do
+        src <- TIO.readFile (dir </> f)
+        pure (f, parseKern (Bpm 72) src)
+      pure $ testGroup "art of fugue sweep"
+        [ testCase "all 20 movements parse" $ do
+            let failures = [f <> ": " <> e | (f, Left e) <- results]
+            assertEqual (unlines failures) 20
+              (length [() | (_, Right _) <- results])
+        , testCase "every movement fits its lanes" $ do
             let overs = [ f | (f, Right s) <- results
                         , Left _ <- [perform defaultInterp s] ]
             assertEqual (unlines overs) [] overs
