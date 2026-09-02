@@ -111,6 +111,7 @@ data Cmd
   | Landscape FilePath FilePath String Int Int Double Double Double
       (Maybe String) (Maybe FilePath)
   | Fit FilePath FilePath Double [String] Bool Bool
+  | Bootstrap FilePath FilePath String Int Int String String
   | MaestroFetch Bool
   | MaestroAlign Bool (Maybe String) (Maybe Int)
   | BakeSite BS.BakeOpts
@@ -195,6 +196,27 @@ bakeSiteCmd = fmap BakeSite $
     <*> switch (long "skip-wasm")
     <*> switch (long "skip-perf")
     <*> switch (long "skip-patches")
+
+bootstrapCmd :: Parser Cmd
+bootstrapCmd =
+  Bootstrap
+    <$> argument str (metavar "A.tsv")
+    <*> argument str (metavar "B.tsv")
+    <*> strOption (long "prefix" <> value "wtc2"
+          <> help "piece prefix selecting the comparison set")
+    <*> option auto (long "iters" <> value 10000)
+    <*> option auto (long "seed" <> value 1)
+    <*> option (eitherReader statR) (long "stat" <> value "mean"
+          <> help "mean (paired row diffs) | piece-median (the velocity landscape estimand)")
+    <*> option (eitherReader clusterR) (long "cluster"
+          <> value "piece"
+          <> help "performance | piece | performer")
+  where
+    statR s | s `elem` ["mean", "piece-median"] = Right s
+            | otherwise = Left ("unknown stat '" <> s <> "'")
+    clusterR c | c `elem` ["performance", "piece", "performer"] =
+                   Right c
+               | otherwise = Left ("unknown cluster '" <> c <> "'")
 
 maestroFetchCmd :: Parser Cmd
 maestroFetchCmd =
@@ -321,6 +343,10 @@ cmdP =
         <> command "bake-site"
              (info bakeSiteCmd
                 (progDesc "bake the static patchboard into site/"))
+        <> command "bootstrap"
+             (info bootstrapCmd
+                (progDesc ("paired bootstrap over two otb-eval TSVs "
+                             <> "(point, 95% CI, P(diff<=0))")))
         <> command "maestro-fetch"
              (info maestroFetchCmd
                 (progDesc "fetch the MAESTRO v3 archive + WTC catalog"))
@@ -362,6 +388,8 @@ main = do
     Landscape corpus cfgPath fam st sd sl zf db fo ee ->
       runLandscape corpus cfgPath fam st sd sl zf db fo ee
     Fit corpus cfgPath sk ps ap dr -> runFit corpus cfgPath sk ps ap dr
+    Bootstrap fa fb pfx iters bseed stat clus ->
+      runBootstrap fa fb pfx iters bseed stat clus
     MaestroFetch catOnly -> M.runMaestroFetch catOnly
     BakeSite opts0 -> do
       opts <- if null (BS.boSurgeDir opts0)
@@ -400,7 +428,10 @@ buildScope :: [String]
 (buildCommit, buildDirty, buildTrees, buildCabalLocal, buildScope) =
   $(do
     let scope =
-          [ "src", "app", "test", "config", "otb.cabal"
+          -- what shapes the BINARY, nothing else: config/ is covered
+          -- by the experiment's prefit/corpus digests, test/ by
+          -- nothing the binary runs — both caused false refusals here
+          [ "src", "app", "otb.cabal"
           , "stack.yaml", "stack.yaml.lock", "cabal.project" ]
         run c as = TH.runIO
           (either
@@ -748,6 +779,106 @@ runEval corpus cfgPath tempo temp meds roots0 wanted velocity = do
       putStrLn ("# grand mean r = "
                   <> show (sum allRs / fromIntegral (max 1 (length allRs)))
                   <> " over " <> show (length allRs) <> " performances")
+
+-- | Paired bootstrap over two otb-eval TSVs (rows: piece, performer,
+-- r). The analysis the experiment notes cite, regenerable from HEAD:
+-- percentile intervals, deterministic splitmix resampling, the
+-- statistic either the flat mean of paired differences (the timing
+-- landscape objective) or the difference of mean-of-piece-medians
+-- (the velocity landscape objective, which forces piece clustering).
+runBootstrap :: FilePath -> FilePath -> String -> Int -> Int -> String
+             -> String -> IO ()
+runBootstrap fileA fileB pfx iters seed stat clus = do
+  when (iters < 100) $ die "--iters must be at least 100"
+  when (stat == "piece-median" && clus /= "piece") $
+    die "--stat piece-median resamples pieces; use --cluster piece"
+  rowsA <- loadEvalTsv fileA
+  rowsB <- loadEvalTsv fileB
+  let keys = [ k | k <- Map.keys rowsA
+                 , take (length pfx) (fst k) == pfx
+                 , Map.member k rowsB ]
+      va = Map.filterWithKey (\k _ -> k `elem` keys) rowsA
+      vb = Map.filterWithKey (\k _ -> k `elem` keys) rowsB
+  when (null keys) $ die "no shared rows under that prefix"
+  let pieces = sortOn id (nubOrd (map fst keys))
+      diffs = [(k, va Map.! k - vb Map.! k) | k <- keys]
+
+      -- the two statistics, each a function of a cluster sample
+      pieceMedian side ps =
+        let meds = [ F.medianD (sort rs)
+                   | pc <- ps
+                   , let rs = [ v | ((p, _), v) <- Map.toList side
+                                  , p == pc ]
+                   , not (null rs) ]
+         in sum meds / fromIntegral (length meds)
+      statPieceMedian ps = pieceMedian va ps - pieceMedian vb ps
+      meanOf xs = sum xs / fromIntegral (length xs)
+
+      clusters :: [[Double]]
+      clusters = case clus of
+        "performance" -> [[d] | (_, d) <- diffs]
+        "performer" ->
+          Map.elems (Map.fromListWith (<>)
+            [(pf, [d]) | ((_, pf), d) <- diffs])
+        _ -> Map.elems (Map.fromListWith (<>)
+            [(p, [d]) | ((p, _), d) <- diffs])
+
+      resampleMean rng0 =
+        let n = length clusters
+            cv = clusters
+            go rng 0 acc = (meanOf (concat acc), rng)
+            go rng k acc =
+              let (g, rng') = F.choice rng cv
+               in go rng' (k - 1 :: Int) (g : acc)
+         in go rng0 n []
+      resamplePieceMedian rng0 =
+        let n = length pieces
+            go rng 0 acc = (statPieceMedian acc, rng)
+            go rng k acc =
+              let (p, rng') = F.choice rng pieces
+               in go rng' (k - 1 :: Int) (p : acc)
+         in go rng0 n []
+      draw = if stat == "piece-median"
+               then resamplePieceMedian else resampleMean
+      point = if stat == "piece-median"
+                then statPieceMedian pieces
+                else meanOf (map snd diffs)
+      samples = go (F.mkRng seed) iters []
+        where
+          go _ 0 acc = acc
+          go rng k acc =
+            let (x, rng') = draw rng in go rng' (k - 1) (x : acc)
+      ss = sort samples
+      lo = ss !! (iters * 25 `div` 1000)
+      hi = ss !! (iters * 975 `div` 1000)
+      pLE = fromIntegral (length [() | x <- ss, x <= 0])
+              / fromIntegral iters :: Double
+  putStrLn ("n = " <> show (length keys) <> " rows, "
+              <> show (length pieces) <> " pieces, "
+              <> show (length (nubOrd (map snd keys)))
+              <> " performers (prefix " <> pfx <> ")")
+  putStrLn ("stat " <> stat <> ", cluster " <> clus <> ", "
+              <> show iters <> " iters, seed " <> show seed)
+  putStrLn ("point " <> MA.pyRepr point
+              <> "  95% CI [" <> MA.pyRepr lo <> ", " <> MA.pyRepr hi
+              <> "]  P(diff<=0) " <> MA.pyRepr pLE)
+
+nubOrd :: Ord a => [a] -> [a]
+nubOrd = Map.keys . Map.fromList . map (, ())
+
+loadEvalTsv :: FilePath -> IO (Map.Map (String, String) Double)
+loadEvalTsv fp = do
+  t <- readFile fp
+  pure $ Map.fromList
+    [ ((p, pf), v)
+    | l <- lines t
+    , take 1 l /= "#"
+    , (p : pf : rv : _) <- [wordsBy '\t' l]
+    , (v, "") : _ <- [reads rv] ]
+  where
+    wordsBy c s = case break (== c) s of
+      (a, []) -> [a]
+      (a, _ : rest) -> a : wordsBy c rest
 
 -- | The MAESTRO aligner's IO orchestration (@otb maestro-align@):
 -- catalog in, aligned mirror tree (or validation verdicts) out.
@@ -1233,11 +1364,19 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
   -- a typo'd knob must not silently run the unconstrained experiment
   -- under a positive-contribution label
   forM_ floorOnly $ \k ->
-    unless (T.pack k `elem` map fst (F.kfGrids fam)) $
-      die ("--floor-only: unknown " <> famName <> " knob '" <> k
-             <> "' (know: "
-             <> intercalate ", "
-                  (map (T.unpack . fst) (F.kfGrids fam)) <> ")")
+    case lookup (T.pack k) (F.kfGrids fam) of
+      Nothing ->
+        die ("--floor-only: unknown " <> famName <> " knob '" <> k
+               <> "' (know: "
+               <> intercalate ", "
+                    (map (T.unpack . fst) (F.kfGrids fam)) <> ")")
+      Just g
+        | notElem 0 g || not (any (> 0) g) ->
+            -- a grid without a zero has nothing to floor: accepting
+            -- it would record a no-op as an intervention
+            die ("--floor-only " <> k <> " is a no-op: its grid "
+                   <> show g <> " has no zero to floor")
+        | otherwise -> pure ()
   files <- filter (isSuffixOf ".krn") <$> listDirectory corpus
   pds0 <- forM (sort (map takeBaseName files)) $ \piece -> do
     src <- readKernSource eds (corpus </> piece <> ".krn")
@@ -1358,7 +1497,7 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
     takeWhile (/= ' ') <$> readProcess "sha256sum" [exe] ""
   paramsDigest <- sha (show grids <> show (sortOn fst baseKnobs)
                          <> famName <> show seed <> show zeroFloor
-                         <> show divBonus)
+                         <> show divBonus <> show floorOnly)
   fp <- sha (paramsDigest <> prefitDigest <> binDigest
                <> concatMap snd corpusDigests)
   -- the state file is per-EXPERIMENT (fingerprint in the name):

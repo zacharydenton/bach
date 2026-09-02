@@ -3,9 +3,21 @@
 Two paired-bootstrap analyses referenced by the experiment notes
 (timing basins A/B; velocity free dimensions sus_soft and
 harm_charge). This directory preserves the exact inputs and records
-the method; the analysis itself was performed with a scratch script
-(python3 stdlib `random`), and is being replaced by a repo-native
-`otb bootstrap` subcommand so future runs regenerate from HEAD.
+the method. The analysis was first performed with a scratch script
+(python3 stdlib `random`); it is now regenerable from HEAD with
+`otb bootstrap`, which reproduces every point estimate exactly and
+the intervals to within resampling noise (different RNG):
+
+    otb bootstrap eval-basinA.tsv eval-basinB.tsv                     # piece cluster
+    otb bootstrap eval-basinA.tsv eval-basinB.tsv --cluster performer
+    otb bootstrap veval-sus2.tsv veval-sus4.tsv --stat piece-median
+    otb bootstrap veval-harm0.tsv veval-harm15.tsv --stat piece-median
+
+Regenerated 2026-09-02 (iters 10000, seed 1, splitmix):
+- basins, piece cluster:     point +0.000614, CI [-0.008899, +0.009097], P .4194
+- basins, performer cluster: point +0.000614, CI [-0.005144, +0.005977], P .4022
+- sus_soft (piece-median):   point +0.0000305, CI [-0.000327, +0.000375]
+- harm_charge (piece-median): point +0.000185, CI [-0.000298, +0.000694]
 
 ## Method (as run)
 
