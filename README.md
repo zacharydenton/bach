@@ -16,6 +16,7 @@ dynamic-only build — cannot compile this):
 stack build
 git clone --depth 1 https://github.com/humdrum-tools/bach-wtc corpus/bach-wtc
 git clone --depth 1 https://github.com/craigsapp/bach-370-chorales corpus/bach-chorales
+git clone --depth 1 https://github.com/craigsapp/bach-musical-offering corpus/bach-musical-offering
 stack test        # the corpus sweep needs the clone; OTB_NO_CORPUS=1 runs units only
 stack run -- corpus/bach-wtc/kern/wtc1p01.krn -o bwv846.mid
 ```
@@ -31,7 +32,8 @@ otb album corpus/bach-wtc/kern OUT/  # the whole corpus, in parallel
 ## The patchboard (a static site)
 
 `site/` is a self-contained player: the Surge XT engine compiled to
-WebAssembly renders the collections (the WTC and the 371 chorales) in
+WebAssembly renders the collections (the WTC, the 371 chorales, the
+Musical Offering) in
 the browser. Bake and serve:
 
 ```sh

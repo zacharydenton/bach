@@ -70,8 +70,9 @@ main :: IO ()
 main = do
   sweep <- corpusSweep
   chorales <- choraleSweep
+  offering <- offeringSweep
   defaultMain $ testGroup "all"
-    [units, laws, sweep, chorales, oracle, review, sota]
+    [units, laws, sweep, chorales, offering, oracle, review, sota]
 
 -- | Parse every WTC file; assert full coverage and the known-baseline
 -- number of tie leftovers (encoding lapses in the corpus itself — see
@@ -179,6 +180,40 @@ choraleSweep = do
             let (title, sct) = kernTitle src
             title @?= Just "Aus meines Herzens Grunde"
             sct @?= Just "BWV 269"
+        ]
+
+-- | The Musical Offering (craigsapp/bach-musical-offering): 6 kern
+-- files; offering-013b carries a real mid-piece *MM (the trio
+-- sonata's closing adagio) which the parser deliberately refuses —
+-- 5 of 6 parse until mid-piece tempo lands. Pinned 2026-09-02.
+offeringSweep :: IO TestTree
+offeringSweep = do
+  let dir = "corpus/bach-musical-offering/kern"
+  present <- doesDirectoryExist dir
+  allowSkip <- lookupEnv "OTB_NO_CORPUS"
+  if not present
+    then pure $ testCase "offering sweep" $
+      if allowSkip == Just "1"
+        then pure ()
+        else assertFailure
+          ("musical offering not cloned — run\n  git clone --depth 1 "
+             <> "https://github.com/craigsapp/bach-musical-offering "
+             <> "corpus/bach-musical-offering\nor set OTB_NO_CORPUS=1")
+    else do
+      files <- sort . filter (".krn" `isSuffixOf`) <$> listDirectory dir
+      results <- forM files $ \f -> do
+        src <- TIO.readFile (dir </> f)
+        pure (f, parseKern (Bpm 72) src)
+      pure $ testGroup "offering sweep"
+        [ testCase "5 of 6 parse (013b: mid-piece tempo, known out)" $ do
+            let ok = [f | (f, Right _) <- results]
+                failed = [f | (f, Left _) <- results]
+            assertEqual (show failed) ["offering-013b.krn"] failed
+            assertEqual "parsed" 5 (length ok)
+        , testCase "every parsed movement fits its lanes" $ do
+            let overs = [ f | (f, Right s) <- results
+                        , Left _ <- [perform defaultInterp s] ]
+            assertEqual (unlines overs) [] overs
         ]
 
 units = testGroup "otb"
