@@ -1,0 +1,40 @@
+note: the binary was built from 292a83efd1a0 but HEAD is 1abf089458db — stack skips unchanged sources; rebuild with stack build --force-dirty — the run will checkpoint but will NOT register a manifest
+landscape inputs changed (params, config, binary) — starting fresh
+start 0: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 2
+start 1: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 4
+start 2: train 0.3926314057887349 test Just 0.41170774397993803 sweeps 3
+start 3: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 4
+start 4: train 0.39222284719045014 test Just 0.40911687349475 sweeps 2
+start 5: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 3
+start 6: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 3
+start 7: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 4
+start 8: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 4
+start 9: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 3
+start 10: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 3
+start 11: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 2
+start 12: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 4
+start 13: train 0.39222284719045014 test Just 0.40911687349475 sweeps 3
+start 14: train 0.3923150271074534 test Just 0.40922844318422963 sweeps 3
+start 15: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 3
+start 16: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 4
+start 17: train 0.3926314057887349 test Just 0.41170774397993803 sweeps 3
+start 18: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 4
+start 19: train 0.3927019060956634 test Just 0.4116731766495072 sweeps 4
+
+condition: positive-contribution (zero-floor 0.25)
+20 starts; best train 0.3927; 20 within slack 5.0e-3 (test spread 0.4091..0.4117)
+vel_bar  zero 0/20 elite-zero 0/20  elite values [1.0]
+vel_halfbar  zero 0/20 elite-zero 0/20  elite values [0.75]
+vel_beat  zero 0/20 elite-zero 0/20  elite values [0.375]
+vel_arch  zero 0/20 elite-zero 0/20  elite values [1.0]
+vel_highloud  zero 0/20 elite-zero 0/20  elite values [0.8]
+dis_vel  zero 0/20 elite-zero 0/20  elite values [1.25,5.0]
+sus_soft  zero 0/20 elite-zero 0/20  elite values [0.5,2.0,4.0]
+mel_charge  zero 0/20 elite-zero 0/20  elite values [5.0e-2,0.4]
+harm_charge  zero 0/20 elite-zero 0/20  elite values [3.75e-2]
+subject_vel  zero 0/20 elite-zero 0/20  elite values [10.0]
+dialogue_vel  zero 0/20 elite-zero 0/20  elite values [2.0]
+dialogue_yield  zero 0/20 elite-zero 0/20  elite values [0.25]
+seq_echo  zero 0/20 elite-zero 0/20  elite values [0.25]
+
+run complete but NOT registered: the binary was built from 292a83efd1a0 but HEAD is 1abf089458db — stack skips unchanged sources; rebuild with stack build --force-dirty — an unidentifiable build must not enter the experiment record

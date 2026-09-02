@@ -389,23 +389,35 @@ main = do
 -- could, so its digest (or absence) is recorded rather than policed.
 buildCommit :: String
 buildDirty :: Bool
+buildTrees :: String
 buildCabalLocal :: String
-(buildCommit, buildDirty, buildCabalLocal) = $(do
-  let run c as = TH.runIO
-        (either (\e -> let _ = (e :: SomeException) in "unknown") id
-           <$> try (readProcess c as ""))
-  commit <- run "git" ["rev-parse", "HEAD"]
-  porc <- run "git"
-    [ "status", "--porcelain", "--"
-    , "src", "app", "test", "config", "otb.cabal"
-    , "stack.yaml", "stack.yaml.lock", "cabal.project" ]
-  haveLocal <- TH.runIO (doesFileExist "cabal.project.local")
-  localSha <- if not haveLocal then pure "absent"
-    else takeWhile (/= ' ')
-           <$> run "sha256sum" ["cabal.project.local"]
-  TH.lift ( takeWhile (/= '\n') commit
-          , not (null (porc :: String))
-          , localSha ))
+buildScope :: [String]
+-- the scope list is lifted OUT of the splice (stage restriction), so
+-- build and runtime interrogate identical paths by construction
+(buildCommit, buildDirty, buildTrees, buildCabalLocal, buildScope) =
+  $(do
+    let scope =
+          [ "src", "app", "test", "config", "otb.cabal"
+          , "stack.yaml", "stack.yaml.lock", "cabal.project" ]
+        run c as = TH.runIO
+          (either
+             (\e -> let _ = (e :: SomeException) in "unknown") id
+             <$> try (readProcess c as ""))
+    commit <- run "git" ["rev-parse", "HEAD"]
+    porc <- run "git" (["status", "--porcelain", "--"] <> scope)
+    -- the SCOPED tree hashes, not the commit: registration compares
+    -- source state, so commits that touch nothing build-relevant
+    -- (experiments/, README) cannot unregister a binary
+    trees <- run "git" ("rev-parse" : ["HEAD:" <> p | p <- scope])
+    haveLocal <- TH.runIO (doesFileExist "cabal.project.local")
+    localSha <- if not haveLocal then pure "absent"
+      else takeWhile (/= ' ')
+             <$> run "sha256sum" ["cabal.project.local"]
+    TH.lift ( takeWhile (/= '\n') commit
+            , not (null (porc :: String))
+            , trees :: String
+            , localSha
+            , scope :: [String] ))
 
 -- | Every tempo that enters the pipeline — CLI or per-piece config
 -- override — passes through here; a non-finite or non-positive BPM
@@ -1181,27 +1193,24 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
   -- checkout, or a commit stack never recompiled for (it skips
   -- unchanged sources, so -fforce-recomp never fires), shows up as a
   -- mismatch here
-  (rtCommit, rtDirty) <- do
-    let tryP c as = either
-          (\e -> let _ = (e :: SomeException) in "unknown")
-          (takeWhile (/= '\n')) <$> try (readProcess c as "")
-    rc <- tryP "git" ["rev-parse", "HEAD"]
-    porc <- either
-      (\e -> let _ = (e :: SomeException) in "unknown") id
-      <$> try (readProcess "git"
-            [ "status", "--porcelain", "--"
-            , "src", "app", "test", "config", "otb.cabal"
-            , "stack.yaml", "stack.yaml.lock", "cabal.project" ] "")
-    pure (rc, not (null porc))
+  (rtTrees, rtDirty) <- do
+    let tryS c as = either
+          (\e -> let _ = (e :: SomeException) in "unknown") id
+          <$> try (readProcess c as "")
+    trees <- tryS "git"
+      ("rev-parse" : ["HEAD:" <> p | p <- buildScope])
+    porc <- tryS "git"
+      (["status", "--porcelain", "--"] <> buildScope)
+    pure (trees, not (null porc))
   let whyNot
         | buildDirty || buildCommit == "unknown" =
             Just "the binary was built from a dirty or unknown tree"
-        | rtDirty = Just "the tree is dirty at run time"
-        | rtCommit /= buildCommit = Just
-            ("the binary was built from " <> take 12 buildCommit
-               <> " but HEAD is " <> take 12 rtCommit
-               <> " — stack skips unchanged sources; rebuild with "
-               <> "stack build --force-dirty")
+        | rtDirty = Just "the source tree is dirty at run time"
+        | rtTrees /= buildTrees = Just
+            ("the binary was built from source state "
+               <> take 12 buildCommit <> " and HEAD's build-scoped "
+               <> "trees differ — stack skips unchanged sources; "
+               <> "rebuild with stack build --force-dirty")
         | otherwise = Nothing
       registrable = whyNot == Nothing
   forM_ whyNot $ \why ->
@@ -1317,8 +1326,7 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
   -- different compiler code, configs, editions or human data must
   -- never be combined. Each component is digested separately so a
   -- mismatch names what changed.
-  let statePath = "corpus" </> ("knob-landscape-" <> famName <> ".json")
-      pieceBlob pd = T.concat
+  let pieceBlob pd = T.concat
         ( [T.pack (F.pdPiece pd), F.pdSource pd]
             <> concat [ scoreT : concat [[T.pack nm, t]
                                         | (nm, t) <- perfs]
@@ -1336,6 +1344,12 @@ runLandscape corpus cfgPath famName starts seed slack zeroFloor
                          <> show divBonus)
   fp <- sha (paramsDigest <> prefitDigest <> binDigest
                <> concatMap snd corpusDigests)
+  -- the state file is per-EXPERIMENT (fingerprint in the name):
+  -- sequential runs of the same family under different conditions
+  -- must never clobber each other's checkpoints
+  let statePath = "corpus"
+        </> ("knob-landscape-" <> famName <> "-" <> take 12 fp
+               <> ".json")
   let digestsJson = J.JObj
         ( [ ("params", J.JStr (T.pack paramsDigest))
           , ("prefit_config", J.JStr (T.pack prefitDigest))
