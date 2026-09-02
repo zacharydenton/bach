@@ -87,9 +87,10 @@ see the archive's corrections section):
 - harm_charge 0 vs .15: point +0.000185, 95% CI [-0.000311, +0.000703]
 
 Observations are crossed by piece and pianist (48 performers behind
-the 94 rows); intervals are reported piece-clustered as the wider,
-conservative choice — performer-clustered variants and the two-way
-caveat are in the archive.
+the 94 rows); the reported intervals cluster by piece, with
+performer-clustered variants in the archive as one-way sensitivity
+analyses — neither is a bound on the two-way interval a crossed
+design properly needs.
 
 (Inputs, method and digests archived in
 experiments/bootstrap-2026-09-02/; a repo-native `otb bootstrap`

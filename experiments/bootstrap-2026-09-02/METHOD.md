@@ -46,11 +46,15 @@ the method; the analysis itself was performed with a scratch script
    - basin A vs B:         [-0.00508, +0.00599]
    - sus_soft 2 vs 4:      [-0.00017, +0.00019]
    - harm_charge 0 vs .15: [-0.00023, +0.00032]
-   In every case the piece-clustered interval is the wider of the
-   two; we report it as the conservative bound. Paper-grade intervals
-   over crossed random effects would need a two-way cluster bootstrap
-   (or a declaration of which population — pieces or pianists — is
-   treated as fixed).
+   These are ONE-WAY SENSITIVITY ANALYSES, not bounds: with crossed
+   piece and pianist effects, the wider of two one-way intervals is
+   not an upper bound on a two-way interval. (Note also the two
+   clusterings here use different statistics — the performer-
+   clustered velocity intervals predate the estimand correction and
+   use the per-performance mean — so their widths are not directly
+   comparable.) Paper-grade intervals over crossed random effects
+   need a two-way cluster bootstrap, or a declaration of which
+   population — pieces or pianists — is treated as fixed.
 
 ## Results (as recorded in the notes)
 
