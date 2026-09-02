@@ -182,7 +182,9 @@ vel_highloud = 0.5333 # PIECE-FIT 2026-09-02 n=1 r -0.2404->-0.2273 unvalidated(
 
 [piece.wtc1p05]
 inegal = 0.18     # audition: French-style D major sixteenths, gently swung
-                  # (Quantz XI says yes, Neumann says not for Bach — ears decide)
+                  # (Quantz XI says yes, Neumann says not for Bach) —
+                  # CONFIRMED by ear 2026-09-02 at the fitted 137, the
+                  # two competition humans' tempo; swing and speed coexist
 tempo = 137.1 # PIECE-FIT 2026-09-02 n=2 human 139.2 vs authority 132.8
 arch_piece = 0.0195 # PIECE-FIT 2026-09-02 n=2 r 0.6882->0.8502 unvalidated(n<3)
 boundary_ease = 0.02 # PIECE-FIT 2026-09-02 n=2 r 0.6882->0.8502 unvalidated(n<3)
