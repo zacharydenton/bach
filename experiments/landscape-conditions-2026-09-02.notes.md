@@ -38,9 +38,12 @@ sha256 of preserved files:
 on is nearly free.** (A collective claim: the zero-floor condition
 floors every zero simultaneously, so it cannot apportion the cost to
 individual rules — the diversity run already shows cadence_depth and
-sus_lean can activate cheaply. Per-rule verdicts require the
-one-at-a-time ablations registered separately as the floor-only
-series.)
+sus_lean can activate cheaply. The floor-only series measures each
+rule's CONDITIONAL MARGINAL cost — flooring one rule while the rest
+reoptimize freely — which is the right first instrument but not an
+attribution: with interactions, every single floor can be cheap
+while combinations cause the joint collapse. Apportioning the
+collective cost would need pairwise or coalition floors.)
 
 - Timing zero-floor 0.25: forcing every rule to participate costs
   train 0.6304 → 0.5767 and held-out 0.5801 → ~0.533 — a collapse,
@@ -78,6 +81,11 @@ free dimension, at the prefit level:
 
 - sus_soft 2 vs 4:      mean diff +0.00001, 95% CI [-0.00035, +0.00035]
 - harm_charge 0 vs .15: mean diff +0.00003, 95% CI [-0.00031, +0.00037]
+
+(Inputs, method and digests archived in
+experiments/bootstrap-2026-09-02/; a repo-native `otb bootstrap`
+subcommand replaces the scratch analysis so the numbers regenerate
+from HEAD.)
 
 The near-flat directions are statistically flat on this (development
 — see below) held-out set: intervals an order of magnitude tighter

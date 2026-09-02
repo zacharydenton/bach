@@ -30,13 +30,20 @@ claim: the honest version is that the TRAIN objective has one active
 optimum, while the held-out data is consistent with (at least) two
 allocations that trade expression intensity against settling-in push.
 An uncertainty analysis (10,000-sample paired bootstrap over the 94
-held-out performances, and clustered by piece; 2026-09-02, from
-otb eval runs of both basin configs at the prefit level) settles it:
+held-out performances, and clustered by piece; 2026-09-02; inputs
+and method archived in experiments/bootstrap-2026-09-02/) bounds it:
 mean held-out difference +0.0006, 95% CI [-0.0054, +0.0061]
 per-performance and [-0.0091, +0.0089] clustered by piece,
-P(diff <= 0) = 0.41-0.42. The held-out data does NOT distinguish the
-basins; the uniqueness claim is train-set-only, and the basin pair is
-a real equivalence class whose resolution is legitimately perceptual.
+P(diff <= 0) = 0.41-0.42. Two distinct statements follow, and only
+the first is licensed: (1) the held-out data does not distinguish
+the basins — the uniqueness claim is train-set-only; (2) the basins
+are NOT thereby shown equivalent — the clustered interval (+/-0.009)
+is wider than the program's 0.005 slack, so differences of practical
+size are not excluded. Statistically the pair is
+indistinguishable-with-present-data; demonstrating equivalence would
+require the interval inside a prespecified margin (more data, or a
+tighter design). The perceptual comparison needs no such license —
+the ear can arbitrate between candidates either way.
 Both basins share six of the seven zeros — they disagree only on
 whether open_push participates. The pair is the first concrete
 target for the perceptual condition (A/B at the board; the deployed

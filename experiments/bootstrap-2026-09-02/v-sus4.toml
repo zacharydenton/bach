@@ -1,0 +1,332 @@
+# The interpretation, as data. A performance = corpus commit + this file +
+# compiler version. Per-piece sections are the exception log: every override
+# carries its why.
+
+[articulation]
+base = 0.78       # détaché: the default speech of a baroque line
+staccato = 0.40
+tenuto = 0.95
+legato = 1.00
+repeated = 0.45   # MEASURED (note-level ASAP, 2026-09-01): humans cut
+                  # repeated notes to 0.43 of the IOI against 0.86 for
+                  # détaché — a far deeper relative separation than the
+                  # 0.60 hand value (vel_fit --measure; contrast readout,
+                  # pedal-safe)
+cantabile = 0.90  # stepwise motion at singing values leans legato
+min_gate = 0.10
+
+[agogics]
+# rit + opening fitted against 166 ASAP human performances of the WTC
+# (asap_eval --fit-defaults, 2026-08-31): coordinate descent on Book I,
+# Book II held out. Test r 0.234 -> 0.558; grand mean 0.333 -> 0.578.
+rit_span = 2.0      # FITTED (was 1.0): humans slow -21% over the final
+                    # two bars (residual mining, t = -14.1)
+rit_floor = 0.3     # FITTED (was 0.6): the deep ending humans take
+rit_curve = 2       # Friberg–Sundberg q: 2 = stopping-runner braking curve
+tempo_step = 0.125  # curve granularity (eighth notes): smooth, not steppy
+fermata_hold = 1.75
+open_push = 0.0     # DISCOVERED, then retired globally: the +5% settling-in
+                    # is real per piece (the fits carry it, e.g. wtc1p08)
+                    # but has no universal setting — 17/20 landscape starts
+                    # zero it (experiments/landscape-timing-…d3a8a0a9ecbf)
+open_span = 4.0     # inert while open_push = 0 (the landscape's one free
+                    # knob spreads [1,2,4] with identical r)
+cadence_depth = 0.0 # mined marginal effect was confounded (joint model
+                    # -3.4%, mostly shared with breath/bar-final); the fit
+                    # switched it off on held-out evidence, and the
+                    # structural/passing stratification + kinematic shape
+                    # did not revive it (refit 2026-09-01)
+boundary_ease = 0.0 # the deep boundary holds are real in the residuals,
+                    # but neither a linear easing (2026-08-31) nor the
+                    # Friberg-Sundberg kinematic brake (refit 2026-09-01,
+                    # no train gain at any depth) is how humans do them —
+                    # the shape is still not found
+subject_push = 0.0  # +0.9% joint did not survive fitting
+mid_drift = 0.01    # slow middles drift a touch under the piece arch —
+                    # the one knob the 2026-09-02 landscape turned ON that
+                    # hand tuning never had (elite-unanimous at 0.01)
+
+[phrasing]
+# KTH Punctuation via Quantz's placement rules: breathe at rests, after
+# long notes, at leaps — never mid-step. Per-lane micropauses only;
+# tempo stays global (Harnoncourt: polyphony breathes per voice).
+breath_threshold = 1.0
+breath = 0.25       # fraction of the note's sounding length given to air
+w_gap = 1.2         # written rest after the note (strongest signal)
+w_dur = 0.7         # long note arriving after shorter ones
+w_leap = 0.5        # leap away from the note
+
+[dynamics]
+# NOTE-LEVEL FIT (vel_fit --fit-defaults --from-prefit vs 166 ASAP
+# performances, 2026-09-01, under ADDITIVE metrical semantics): held-out
+# Book II velocity r 0.132 -> 0.423. Register is what humans actually
+# voice by — vel_highloud triples and dominates; read the zeros below
+# with that in mind: rules whose contribution is invisible beside
+# register got switched off, not disproven at zero register-contrast.
+# All remain per-piece knobs. (An earlier run under the old select-one
+# accent semantics appeared to keep vel_beat; that was an inversion
+# artifact — additive levels retract it.)
+vel_base = 84       # centre velocity (unfittable: r is affine-invariant)
+vel_bar = 0         # FITTED (was 12): the whole Sloboda metrical
+vel_halfbar = 0     # hierarchy — bar, half-bar, beat — leaves no
+vel_beat = 0        # velocity trace beside register in the WTC
+vel_arch = 0        # FITTED (was 8): no Todd loudness arch in the keys
+vel_highloud = 0.8  # FITTED (was 0.25): the dominant driver — melodic
+                    # height IS the human loudness map here
+vel_accent = 14     # kern ^ marks: the score's own emphasis (too rare
+                    # in the WTC to fit)
+# NB: velocity lands on the A4 and BS2; the Model D ignores it (CV + hands)
+
+[ornaments]
+trill_rate = 12   # trill subnotes per second — C.P.E. Bach ties rate to
+                  # tempo and affect; 10–14 covers keyboard practice
+grace_ms = 70     # short Vorschlag length: on the beat, stolen from the
+                  # main note (C.P.E. Bach, Versuch I.2)
+grace_long = 0    # 1 = single graces become long appoggiaturas (half the
+                  # main note, 2/3 of a dotted one — Versuch I.2 §11); a
+                  # per-piece stylistic decision, so off in the base
+
+[tuning]
+bend_range = 2    # receiver's pitch-bend range in ± semitones. 2 is the
+                  # power-on default nearly everywhere; MUST match what the
+                  # A4 / Model D / BS2 are configured for, or the
+                  # temperament lands scaled wrong.
+
+[interpretation]
+# The two master knobs (Director Musices architecture: rule quantities
+# scaled by family multipliers). 0 = mechanical, 1 = literature defaults.
+expression = 0.6  # dissonance emphasis, phrase arches, agogic leans —
+                  # FITTED (was 1.0): the TRAIN objective's optimum
+                  # (landscape 2026-09-02); held-out data cannot
+                  # distinguish this basin from expression 0.8 with
+                  # open_push 0.03 (gap 0.0007 — see the manifest's
+                  # .notes.md), so the ear arbitrates between them
+ensemble = 1.0    # melody lead, chord roll, seeded micro-jitter
+
+[dissonance]
+dis_vel = 5       # CPE Bach 1753's dissonances-louder — fitted to 0
+                  # under expression 1.0 (2026-09-01), turned back ON by
+                  # the velocity landscape against the 0.6 baseline
+                  # (20/20 starts): less agogic emphasis leaves the keys
+                  # room to say it in velocity. The families interact.
+dis_lean = 0.10   # ...and leaned on: gate boost toward legato per charge
+sus_soft = 2      # a suspension's RESOLUTION arriving gently — absent
+                  # under expression 1.0, present under 0.6 (landscape
+                  # 2026-09-02, 18/20 at 2); a free dimension of the
+                  # velocity equivalence class ({2,4} tie held-out —
+                  # the ear may prefer 4)
+sus_lean = 0.0    # tempo lean into the dissonant moment — VETOED by the
+                  # fit (2026-09-01: off beats 0.02 on train AND held-out
+                  # r); the suspension's legato hold and gentle resolution
+                  # stand, but humans do not bend the beat for it
+
+[arches]
+arch_piece = 0.015 # FITTED (was 0.024): Todd 1992 piece arch, at the depth
+                   # the widened corpus takes (landscape 2026-09-02)
+arch_group = 0.0   # group arches off in every 2026-09-02 landscape
+                   # start — no train gain at any grid value (a training
+                   # result on this corpus, not proof of how the shape
+                   # is carried)
+arch_bars = 4
+
+[performance]
+lead_ms = 2       # MEASURED (note-level ASAP, 2026-09-01): in WTC
+                  # counterpoint the top voice leads by only ~2 ms
+                  # (median -2.1, IQR -10..+7, n=47230). Palmer 1996's
+                  # 20-30 ms is melody-over-accompaniment texture, not
+                  # polyphony — the voices are near-synchronous here
+roll_ms = 0       # MEASURED (timing_fit 2026-09-01): ASAP pianists
+                  # do not roll final chords (-2.1 ms/rank — if
+                  # anything slightly top-first, n=357). The bass-up
+                  # roll is harpsichord idiom: keep it per-piece
+jitter_ms = 3     # KTH noise rules — seeded by piece name: deterministic
+jitter_vel = 2
+dialogue_vel = 2   # FITTED (was 4): the floor-holder's presence survives
+                   # the note-level fit at half strength
+dialogue_yield = 0 # FITTED (was 2): the listeners' yielding does not —
+                   # not measurable beside register (per-piece knob)
+uphill = 0.0       # MEASURED to null (timing_fit 2026-09-01: -0.1 ms,
+                   # t=-0.2, piece-clustered over 56 pieces) — no
+                   # run-rushing in the human onsets; KTH faster-uphill
+                   # switched off
+double_dur = 0.0   # DIRECTION DISPROVEN (timing_fit 2026-09-01): the
+                   # KTH rule SOFTENS 2:1 to a measured 1.807 (analytic
+                   # (2-k)/(1+k) = 1.804), but humans play
+                   # 2.041 — they slightly OVERDOT (short half +2.6 ms
+                   # late, t=3.6 piece-clustered, n=7862). Softening
+                   # off; a future overdot rule is the discovered
+                   # shape. (Also discovered, unmodelled: post-leap
+                   # arrivals land +1.2 ms late, t=4.2. And inegales
+                   # measured 0.93 — no French swing in the WTC; inegal
+                   # stays a per-piece style decision at 0.)
+seq_echo = 0      # FITTED (was 2): no terraced echo in the human keys
+subject_vel = 10  # FITTED (was 5, the hand value): the 0.6 baseline
+                  # asks double — fugue
+                  # subjects really are voiced up
+mel_charge = 0    # FITTED (was 0.4): Friberg's melodic charge, no
+harm_charge = 0   # FITTED (was 0.3): ...and harmonic charge — neither
+                  # survives beside register (per-piece knobs)
+
+[piece.wtc1p01]
+base = 0.85       # pure arpeggiated figuration: let it ring toward pedal
+overhold = 0.9    # finger pedal a la Czerny: the arpeggios bloom to the bar
+
+[piece.wtc1p05]
+inegal = 0.18     # audition: French-style D major sixteenths, gently swung
+                  # (Quantz XI says yes, Neumann says not for Bach — ears decide)
+
+[piece.wtc1p08]
+# The E-flat minor lament (BWV 853). The 2026-09-01 audition entries
+# (cadence_depth, boundary_ease) were flagged unvalidated; five
+# MAESTRO humans arrived the same day and the LOPO-validated fit now
+# carries the tempo contour. The PIECE-FIT lines below hold the
+# current numbers and their evidence — regenerated by otb fit, never
+# duplicated here where they would go stale. What stays by ear is
+# what the fit cannot see:
+overhold = 0.5       # finger-pedal legato in the chordal texture
+repeated = 0.7       # the corpus median 0.45 gate reads clipped at this
+                     # tempo; a lament rearticulates, it does not detach
+trill_rate = 10      # 12/s is keyboard-brilliant; grave asks for fewer
+
+
+
+[piece.wtc1f01]
+
+[piece.wtc1f03]
+
+[piece.wtc1f04]
+
+[piece.wtc1f05]
+
+[piece.wtc1f06]
+
+[piece.wtc1f08]
+
+[piece.wtc1f09]
+
+[piece.wtc1f10]
+
+[piece.wtc1f11]
+
+[piece.wtc1f12]
+
+[piece.wtc1f13]
+
+[piece.wtc1f15]
+
+[piece.wtc1f17]
+
+[piece.wtc1f18]
+
+[piece.wtc1f19]
+
+[piece.wtc1f20]
+
+[piece.wtc1f21]
+
+[piece.wtc1f22]
+
+[piece.wtc1f23]
+
+[piece.wtc1p03]
+
+[piece.wtc1p04]
+
+[piece.wtc1p06]
+
+[piece.wtc1p09]
+
+[piece.wtc1p10]
+
+[piece.wtc1p11]
+
+[piece.wtc1p12]
+
+[piece.wtc1p13]
+
+[piece.wtc1p15]
+
+[piece.wtc1p17]
+
+[piece.wtc1p18]
+
+[piece.wtc1p19]
+
+[piece.wtc1p20]
+
+[piece.wtc1p21]
+
+[piece.wtc1p22]
+
+[piece.wtc1p23]
+
+[piece.wtc2f01]
+
+[piece.wtc2f02]
+
+[piece.wtc2f04]
+
+[piece.wtc2f05]
+
+[piece.wtc2f06]
+
+[piece.wtc2f07]
+
+[piece.wtc2f08]
+
+[piece.wtc2f11]
+
+[piece.wtc2f14]
+
+[piece.wtc2f15]
+
+[piece.wtc2f16]
+
+[piece.wtc2f18]
+
+[piece.wtc2f19]
+
+[piece.wtc2f20]
+
+[piece.wtc2f22]
+
+[piece.wtc2f23]
+
+[piece.wtc2f24]
+
+[piece.wtc2p01]
+
+[piece.wtc2p02]
+
+[piece.wtc2p04]
+
+[piece.wtc2p05]
+
+[piece.wtc2p06]
+
+[piece.wtc2p07]
+
+[piece.wtc2p08]
+
+[piece.wtc2p11]
+
+[piece.wtc2p14]
+
+[piece.wtc2p15]
+
+[piece.wtc2p16]
+
+[piece.wtc2p18]
+
+[piece.wtc2p19]
+
+[piece.wtc2p20]
+
+[piece.wtc2p22]
+
+[piece.wtc2p23]
+
+[piece.wtc2p24]
+
+[dissonance]
+sus_soft = 4
