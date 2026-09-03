@@ -4,6 +4,7 @@ cabal.project.local
 *.mid
 *.wav
 corpus/
+!corpus/bach-inventions/
 __pycache__/
 /site/data/
 /site/engine/

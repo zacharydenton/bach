@@ -404,6 +404,7 @@ main = do
         else pure opts0
       let corpora = if null corpora0
             then [ "corpus" </> "bach-wtc" </> "kern"
+                 , "corpus" </> "bach-inventions" </> "kern"
                  , "corpus" </> "bach-art-of-fugue" </> "kern"
                  , "corpus" </> "bach-musical-offering" </> "kern"
                  , "corpus" </> "bach-chorales" </> "kern" ]

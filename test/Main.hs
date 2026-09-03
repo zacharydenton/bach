@@ -72,8 +72,10 @@ main = do
   chorales <- choraleSweep
   offering <- offeringSweep
   aof <- artOfFugueSweep
+  inv <- inventionSweep
   defaultMain $ testGroup "all"
-    [units, laws, sweep, chorales, offering, aof, oracle, review, sota]
+    [units, laws, sweep, chorales, offering, aof, inv, oracle, review,
+     sota]
 
 -- | Parse every WTC file; assert full coverage and the known-baseline
 -- number of tie leftovers (encoding lapses in the corpus itself — see
@@ -249,6 +251,29 @@ artOfFugueSweep = do
                         , Left _ <- [perform defaultInterp s] ]
             assertEqual (unlines overs) [] overs
         ]
+
+-- | Inventions & Sinfonias, converted from MuseData (see
+-- corpus/bach-inventions/regenerate.sh — this corpus is COMMITTED,
+-- not cloned): 16 inventions (incl. the BWV 772a triplet variant) +
+-- 15 sinfonias. All parse and perform; BWV 776 and 797 carry a
+-- known grace-note fidelity caveat from the converter.
+inventionSweep :: IO TestTree
+inventionSweep = do
+  let dir = "corpus/bach-inventions/kern"
+  files <- sort . filter (".krn" `isSuffixOf`) <$> listDirectory dir
+  results <- forM files $ \f -> do
+    src <- TIO.readFile (dir </> f)
+    pure (f, parseKern (Bpm 72) src)
+  pure $ testGroup "invention sweep"
+    [ testCase "all 31 movements parse" $ do
+        let failures = [f <> ": " <> e | (f, Left e) <- results]
+        assertEqual (unlines failures) 31
+          (length [() | (_, Right _) <- results])
+    , testCase "every movement fits its lanes" $ do
+        let overs = [ f | (f, Right s) <- results
+                    , Left _ <- [perform defaultInterp s] ]
+        assertEqual (unlines overs) [] overs
+    ]
 
 units = testGroup "otb"
   [ testGroup "lexer"

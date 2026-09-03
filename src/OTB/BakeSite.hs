@@ -143,11 +143,13 @@ albumKey path =
         then ( 0, read [b !! 3], read (drop 5 b)
              , if b !! 4 == 'p' then 0 else 1, "" )
         else case choraleNum b of
-          Just n -> (3, n, 0, 0, "")
+          Just n -> (4, n, 0, 0, "")
           Nothing
-            | take 9 b == "artfugue-" -> (1, 0, 0, 0, b)
-            | take 9 b == "offering-" -> (2, 0, 0, 0, b)
-            | otherwise -> (4, 0, 0, 0, b)
+            | take 3 b == "inv" -> (1, 0, 0, 0, b)
+            | take 4 b == "sinf" -> (1, 1, 0, 0, b)
+            | take 9 b == "artfugue-" -> (2, 0, 0, 0, b)
+            | take 9 b == "offering-" -> (3, 0, 0, 0, b)
+            | otherwise -> (5, 0, 0, 0, b)
 
 choraleNum :: String -> Maybe Int
 choraleNum b = case splitAt 4 b of
@@ -161,6 +163,7 @@ groupOf b
   | take 4 b == "wtc1" = "The Well-Tempered Clavier, Book I"
   | take 4 b == "wtc2" = "The Well-Tempered Clavier, Book II"
   | choraleNum b /= Nothing = "Chorales"
+  | take 3 b == "inv" || take 4 b == "sinf" = "Inventions & Sinfonias"
   | take 9 b == "artfugue-" = "The Art of Fugue"
   | take 9 b == "offering-" = "Musical Offering"
   | otherwise = "Extras"

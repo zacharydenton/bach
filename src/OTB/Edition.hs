@@ -52,10 +52,13 @@ kernTitle t = (full, recordOf "!!!SCT:" t)
       | "@@" `T.isPrefixOf` tag = 1
       | otherwise = 2
     title = listToMaybe [v | (_, v) <- sortOn fst otls]
-    -- a movement designation (!!!OMD) disambiguates generic titles:
-    -- the Musical Offering's trio sonata is three files named "Trio"
-    full = case (title, recordOf "!!!OMD:" t) of
-      (Just ti, Just md) -> Just (ti <> " — " <> md)
+    -- a movement title (!!!OMV) beats the work title — MuseData
+    -- conversions carry "Two-part Inventions" in OTL and "Inventio 1.
+    -- (in C)" in OMV; a movement designation (!!!OMD) disambiguates
+    -- generic titles like the trio sonata's three "Trio"s
+    full = case (recordOf "!!!OMV:" t, title, recordOf "!!!OMD:" t) of
+      (Just mv, _, _) -> Just mv
+      (_, Just ti, Just md) -> Just (ti <> " — " <> md)
       _ -> title
 
 -- | The default editions root for a given config path.

@@ -33,8 +33,9 @@ otb album corpus/bach-wtc/kern OUT/  # the whole corpus, in parallel
 ## The patchboard (a static site)
 
 `site/` is a self-contained player: the Surge XT engine compiled to
-WebAssembly renders the collections (the WTC, the Art of Fugue, the
-Musical Offering, the 371 chorales) in
+WebAssembly renders the collections (the WTC, the Inventions &
+Sinfonias, the Art of Fugue, the Musical Offering, the 371 chorales)
+in
 the browser. Bake and serve:
 
 ```sh
