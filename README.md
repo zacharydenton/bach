@@ -85,8 +85,10 @@ otb maestro-align                          # emit corpus/maestro-wtc
 otb bridge-dump SCORE.krn PERF.match       # score<->performance note pairs
 ```
 
-Human data: `corpus/asap` (a clone of the ASAP dataset) plus
-`corpus/maestro-wtc`, which `otb maestro-align` derives from MAESTRO v3.
+Human data (needed for eval/fit/landscape, not for compiling or the
+board): `corpus/asap` (a clone of the ASAP dataset) plus
+`corpus/maestro-wtc`, which `otb maestro-fetch` + `otb maestro-align`
+derive from MAESTRO v3.
 `otb fit --apply` writes per-piece sections into `config/default.toml`
 with `# PIECE-FIT` provenance; hand-authored keys always win and are
 never touched.
