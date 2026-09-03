@@ -3,7 +3,7 @@ dist-newstyle/
 cabal.project.local
 *.mid
 *.wav
-corpus/
+corpus/*
 !corpus/bach-inventions/
 __pycache__/
 /site/data/
