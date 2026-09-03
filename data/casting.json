@@ -1,0 +1,8 @@
+{
+ "default": {
+  "bass": "data/patches/Leads/Later.fxp",
+  "tenor": "data/patches/Leads/Turbo.fxp",
+  "alto": "data/patches/Polysynths/Skatteverket.fxp",
+  "soprano": "data/patches/Leads/Fyllo Dual.fxp"
+ }
+}

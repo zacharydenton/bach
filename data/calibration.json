@@ -1,0 +1,22 @@
+{
+ "data/patches/Keys/EP 2.fxp": {
+  "attackS": 0.01,
+  "releaseS": 0.29
+ },
+ "data/patches/Leads/Clean Shit.fxp": {
+  "attackS": 0.01,
+  "releaseS": 0.015
+ },
+ "data/patches/Leads/Cray.fxp": {
+  "attackS": 0.005,
+  "releaseS": 0.255
+ },
+ "data/patches/Leads/DNA Sequencer.fxp": {
+  "attackS": 0.005,
+  "releaseS": 0.015
+ },
+ "data/patches/Plucks/Nice Pluck 2.fxp": {
+  "attackS": 0.125,
+  "releaseS": 1.54
+ }
+}

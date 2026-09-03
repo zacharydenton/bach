@@ -1,0 +1,4671 @@
+{
+ "pieces": [
+  {
+   "name": "wtc1p01",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude I",
+   "sct": "BWV 846",
+   "url": "data/perf/wtc1p01.json",
+   "endS": 103.594,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1f01",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 1, Vol. 1",
+   "sct": "BWV 846b",
+   "url": "data/perf/wtc1f01.json",
+   "endS": 129.897,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc1p02",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude II",
+   "sct": "BWV 847",
+   "url": "data/perf/wtc1p02.json",
+   "endS": 87.538,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1f02",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 2, Vol. 1",
+   "sct": "BWV 847b",
+   "url": "data/perf/wtc1f02.json",
+   "endS": 107.016,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc1p03",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude III",
+   "sct": "BWV 848",
+   "url": "data/perf/wtc1p03.json",
+   "endS": 72.646,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc1f03",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 3, Vol. 1",
+   "sct": "BWV 848b",
+   "url": "data/perf/wtc1f03.json",
+   "endS": 130.732,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1p04",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude IV",
+   "sct": "BWV 849",
+   "url": "data/perf/wtc1p04.json",
+   "endS": 147.938,
+   "maxCh": 9
+  },
+  {
+   "name": "wtc1f04",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 4, Vol. 1",
+   "sct": "BWV 849b",
+   "url": "data/perf/wtc1f04.json",
+   "endS": 272.221,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1p05",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude V",
+   "sct": "BWV 850",
+   "url": "data/perf/wtc1p05.json",
+   "endS": 68.66,
+   "maxCh": 12
+  },
+  {
+   "name": "wtc1f05",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 5, Vol. 1",
+   "sct": "BWV 850b",
+   "url": "data/perf/wtc1f05.json",
+   "endS": 130.478,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1p06",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude VI",
+   "sct": "BWV 851",
+   "url": "data/perf/wtc1p06.json",
+   "endS": 87.648,
+   "maxCh": 11
+  },
+  {
+   "name": "wtc1f06",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 6, Vol. 1",
+   "sct": "BWV 851b",
+   "url": "data/perf/wtc1f06.json",
+   "endS": 118.751,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc1p07",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude VII",
+   "sct": "BWV 852",
+   "url": "data/perf/wtc1p07.json",
+   "endS": 253.509,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1f07",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 7, Vol. 1",
+   "sct": "BWV 852b",
+   "url": "data/perf/wtc1f07.json",
+   "endS": 114.464,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc1p08",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude VIII",
+   "sct": "BWV 853",
+   "url": "data/perf/wtc1p08.json",
+   "endS": 211.149,
+   "maxCh": 11
+  },
+  {
+   "name": "wtc1f08",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 8, Vol. 1",
+   "sct": "BWV 853b",
+   "url": "data/perf/wtc1f08.json",
+   "endS": 295.337,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc1p09",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude IX",
+   "sct": "BWV 854",
+   "url": "data/perf/wtc1p09.json",
+   "endS": 85.87,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc1f09",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 9, Vol. 1",
+   "sct": "BWV 854b",
+   "url": "data/perf/wtc1f09.json",
+   "endS": 69.201,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc1p10",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude X",
+   "sct": "BWV 855",
+   "url": "data/perf/wtc1p10.json",
+   "endS": 149.802,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc1f10",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 10, Vol. 1",
+   "sct": "BWV 855b",
+   "url": "data/perf/wtc1f10.json",
+   "endS": 65.958,
+   "maxCh": 2
+  },
+  {
+   "name": "wtc1p11",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XI",
+   "sct": "BWV 856",
+   "url": "data/perf/wtc1p11.json",
+   "endS": 67.278,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc1f11",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 11, Vol. 1",
+   "sct": "BWV 856b",
+   "url": "data/perf/wtc1f11.json",
+   "endS": 71.831,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc1p12",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XII",
+   "sct": "BWV 857",
+   "url": "data/perf/wtc1p12.json",
+   "endS": 123.544,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc1f12",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 12, Vol. 1",
+   "sct": "BWV 857b",
+   "url": "data/perf/wtc1f12.json",
+   "endS": 226.943,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1p13",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XIII",
+   "sct": "BWV 858",
+   "url": "data/perf/wtc1p13.json",
+   "endS": 71.395,
+   "maxCh": 2
+  },
+  {
+   "name": "wtc1f13",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 13, Vol. 1",
+   "sct": "BWV 858b",
+   "url": "data/perf/wtc1f13.json",
+   "endS": 139.465,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc1p14",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XIV",
+   "sct": "BWV 859",
+   "url": "data/perf/wtc1p14.json",
+   "endS": 57.784,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc1f14",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 14, Vol. 1",
+   "sct": "BWV 859b",
+   "url": "data/perf/wtc1f14.json",
+   "endS": 182.433,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc1p15",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XV",
+   "sct": "BWV 860",
+   "url": "data/perf/wtc1p15.json",
+   "endS": 38.426,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc1f15",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 15, Vol. 1",
+   "sct": "BWV 860b",
+   "url": "data/perf/wtc1f15.json",
+   "endS": 161.31,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1p16",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XVI",
+   "sct": "BWV 861",
+   "url": "data/perf/wtc1p16.json",
+   "endS": 89.836,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc1f16",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 16, Vol. 1",
+   "sct": "BWV 861b",
+   "url": "data/perf/wtc1f16.json",
+   "endS": 143.609,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1p17",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XVII",
+   "sct": "BWV 862",
+   "url": "data/perf/wtc1p17.json",
+   "endS": 76.038,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1f17",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 17, Vol. 1",
+   "sct": "BWV 862b",
+   "url": "data/perf/wtc1f17.json",
+   "endS": 153.08,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc1p18",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XVIII",
+   "sct": "BWV 863",
+   "url": "data/perf/wtc1p18.json",
+   "endS": 88.475,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1f18",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 18, Vol. 1",
+   "sct": "BWV 863b",
+   "url": "data/perf/wtc1f18.json",
+   "endS": 176.796,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1p19",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XIX",
+   "sct": "BWV 864",
+   "url": "data/perf/wtc1p19.json",
+   "endS": 70.873,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc1f19",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 19, Vol. 1",
+   "sct": "BWV 864b",
+   "url": "data/perf/wtc1f19.json",
+   "endS": 191.29,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc1p20",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XX",
+   "sct": "BWV 865",
+   "url": "data/perf/wtc1p20.json",
+   "endS": 64.191,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc1f20",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 20, Vol. 1",
+   "sct": "BWV 865b",
+   "url": "data/perf/wtc1f20.json",
+   "endS": 242.429,
+   "maxCh": 9
+  },
+  {
+   "name": "wtc1p21",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XXI",
+   "sct": "BWV 866",
+   "url": "data/perf/wtc1p21.json",
+   "endS": 70.058,
+   "maxCh": 9
+  },
+  {
+   "name": "wtc1f21",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 21, Vol. 1",
+   "sct": "BWV 866b",
+   "url": "data/perf/wtc1f21.json",
+   "endS": 96.395,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc1p22",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XXII",
+   "sct": "BWV 867",
+   "url": "data/perf/wtc1p22.json",
+   "endS": 127.737,
+   "maxCh": 11
+  },
+  {
+   "name": "wtc1f22",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 22, Vol. 1",
+   "sct": "BWV 867b",
+   "url": "data/perf/wtc1f22.json",
+   "endS": 160.87,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1p23",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XXIII",
+   "sct": "BWV 868",
+   "url": "data/perf/wtc1p23.json",
+   "endS": 65.045,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc1f23",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 23, Vol. 1",
+   "sct": "BWV 868b",
+   "url": "data/perf/wtc1f23.json",
+   "endS": 142.815,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc1p24",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Prelude XXIV",
+   "sct": "BWV 869",
+   "url": "data/perf/wtc1p24.json",
+   "endS": 166.68,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc1f24",
+   "group": "The Well-Tempered Clavier, Book I",
+   "title": "Fuga 24, Vol. 1",
+   "sct": "BWV 869b",
+   "url": "data/perf/wtc1f24.json",
+   "endS": 326.072,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc2p01",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude I",
+   "sct": "BWV 870",
+   "url": "data/perf/wtc2p01.json",
+   "endS": 151.098,
+   "maxCh": 9
+  },
+  {
+   "name": "wtc2f01",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 1, Vol. 2",
+   "sct": "BWV 870b",
+   "url": "data/perf/wtc2f01.json",
+   "endS": 90.21,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc2p02",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude II",
+   "sct": "BWV 871",
+   "url": "data/perf/wtc2p02.json",
+   "endS": 82.71,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2f02",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 2, Vol. 2",
+   "sct": "BWV 871b",
+   "url": "data/perf/wtc2f02.json",
+   "endS": 149.652,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc2p03",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude III",
+   "sct": "BWV 872",
+   "url": "data/perf/wtc2p03.json",
+   "endS": 112.042,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2f03",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 3, Vol. 2",
+   "sct": "BWV 872b",
+   "url": "data/perf/wtc2f03.json",
+   "endS": 106.573,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc2p04",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude IV",
+   "sct": "BWV 873",
+   "url": "data/perf/wtc2p04.json",
+   "endS": 232.079,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc2f04",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 4, Vol. 2",
+   "sct": "BWV 873b",
+   "url": "data/perf/wtc2f04.json",
+   "endS": 126.436,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc2p05",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude No. 5 in D major",
+   "url": "data/perf/wtc2p05.json",
+   "endS": 116.748,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2f05",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 5, Vol. 2",
+   "sct": "BWV 874b",
+   "url": "data/perf/wtc2f05.json",
+   "endS": 168.93,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc2p06",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude VI",
+   "sct": "BWV 875",
+   "url": "data/perf/wtc2p06.json",
+   "endS": 99.045,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc2f06",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 6, Vol. 2",
+   "sct": "BWV 875b",
+   "url": "data/perf/wtc2f06.json",
+   "endS": 125.747,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc2p07",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude No. 7 in E-flat major",
+   "url": "data/perf/wtc2p07.json",
+   "endS": 133.739,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2f07",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 7, Vol. 2",
+   "sct": "BWV 876b",
+   "url": "data/perf/wtc2f07.json",
+   "endS": 110.428,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc2p08",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude VIII",
+   "sct": "BWV 877",
+   "url": "data/perf/wtc2p08.json",
+   "endS": 121.747,
+   "maxCh": 2
+  },
+  {
+   "name": "wtc2f08",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 8, Vol. 2",
+   "sct": "BWV 877b",
+   "url": "data/perf/wtc2f08.json",
+   "endS": 245.555,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc2p09",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude IX",
+   "sct": "BWV 878",
+   "url": "data/perf/wtc2p09.json",
+   "endS": 146.987,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc2f09",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 9, Vol. 2",
+   "sct": "BWV 878b",
+   "url": "data/perf/wtc2f09.json",
+   "endS": 172.201,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc2p10",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude X",
+   "sct": "BWV 879",
+   "url": "data/perf/wtc2p10.json",
+   "endS": 81.821,
+   "maxCh": 2
+  },
+  {
+   "name": "wtc2f10",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 10, Vol. 2",
+   "sct": "BWV 879b",
+   "url": "data/perf/wtc2f10.json",
+   "endS": 164.419,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc2p11",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude No. 11 in F major",
+   "url": "data/perf/wtc2p11.json",
+   "endS": 219.317,
+   "maxCh": 9
+  },
+  {
+   "name": "wtc2f11",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 11, Vol. 2",
+   "sct": "BWV 880b",
+   "url": "data/perf/wtc2f11.json",
+   "endS": 102.674,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc2p12",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude No. 12 in F minor",
+   "url": "data/perf/wtc2p12.json",
+   "endS": 71.918,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2f12",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 12, Vol. 2",
+   "sct": "BWV 881b",
+   "url": "data/perf/wtc2f12.json",
+   "endS": 126.093,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc2p13",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude No. 13 in F-sharp major",
+   "url": "data/perf/wtc2p13.json",
+   "endS": 155.935,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2f13",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 13, Vol. 2",
+   "sct": "BWV 882b",
+   "url": "data/perf/wtc2f13.json",
+   "endS": 135.558,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc2p14",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude No. 14 in F-sharp minor",
+   "url": "data/perf/wtc2p14.json",
+   "endS": 189.966,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc2f14",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 14, Vol. 2",
+   "sct": "BWV 883b",
+   "url": "data/perf/wtc2f14.json",
+   "endS": 215.123,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc2p15",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude XV",
+   "sct": "BWV 884",
+   "url": "data/perf/wtc2p15.json",
+   "endS": 87.221,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc2f15",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 15, Vol. 2",
+   "sct": "BWV 884b",
+   "url": "data/perf/wtc2f15.json",
+   "endS": 75.188,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2p16",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude XVI",
+   "sct": "BWV 885",
+   "url": "data/perf/wtc2p16.json",
+   "endS": 151.688,
+   "maxCh": 8
+  },
+  {
+   "name": "wtc2f16",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 16, Vol. 2",
+   "sct": "BWV 885b",
+   "url": "data/perf/wtc2f16.json",
+   "endS": 154.343,
+   "maxCh": 5
+  },
+  {
+   "name": "wtc2p17",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude No. 17 in F-sharp minor",
+   "url": "data/perf/wtc2p17.json",
+   "endS": 208.249,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc2f17",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 17, Vol. 2",
+   "sct": "BWV 886b",
+   "url": "data/perf/wtc2f17.json",
+   "endS": 169.684,
+   "maxCh": 11
+  },
+  {
+   "name": "wtc2p18",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude XVIII",
+   "sct": "BWV 887",
+   "url": "data/perf/wtc2p18.json",
+   "endS": 134.344,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2f18",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 18, Vol. 2",
+   "sct": "BWV 887b",
+   "url": "data/perf/wtc2f18.json",
+   "endS": 299.961,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc2p19",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude XIX",
+   "sct": "BWV 888",
+   "url": "data/perf/wtc2p19.json",
+   "endS": 126.665,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc2f19",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 19, Vol. 2",
+   "sct": "BWV 888b",
+   "url": "data/perf/wtc2f19.json",
+   "endS": 77.099,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc2p20",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude XX",
+   "sct": "BWV 889",
+   "url": "data/perf/wtc2p20.json",
+   "endS": 135.765,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc2f20",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 20, Vol. 2",
+   "sct": "BWV 889b",
+   "url": "data/perf/wtc2f20.json",
+   "endS": 95.353,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2p21",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude No. 17 in F-sharp minor",
+   "url": "data/perf/wtc2p21.json",
+   "endS": 195.863,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2f21",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 21, Vol. 2",
+   "sct": "BWV 890b",
+   "url": "data/perf/wtc2f21.json",
+   "endS": 154.003,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2p22",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude XXII",
+   "sct": "BWV 891",
+   "url": "data/perf/wtc2p22.json",
+   "endS": 192.597,
+   "maxCh": 3
+  },
+  {
+   "name": "wtc2f22",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 22, Vol. 2",
+   "sct": "BWV 891b",
+   "url": "data/perf/wtc2f22.json",
+   "endS": 246.273,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc2p23",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude XXIII",
+   "sct": "BWV 892",
+   "url": "data/perf/wtc2p23.json",
+   "endS": 116.554,
+   "maxCh": 7
+  },
+  {
+   "name": "wtc2f23",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 23, Vol. 2",
+   "sct": "BWV 892b",
+   "url": "data/perf/wtc2f23.json",
+   "endS": 228.351,
+   "maxCh": 4
+  },
+  {
+   "name": "wtc2p24",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Prelude XXIV",
+   "sct": "BWV 893",
+   "url": "data/perf/wtc2p24.json",
+   "endS": 155.504,
+   "maxCh": 6
+  },
+  {
+   "name": "wtc2f24",
+   "group": "The Well-Tempered Clavier, Book II",
+   "title": "Fuga 24, Vol. 2",
+   "sct": "BWV 893b",
+   "url": "data/perf/wtc2f24.json",
+   "endS": 95.82,
+   "maxCh": 3
+  },
+  {
+   "name": "inv0772",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 1. (in C)",
+   "sct": "BWV 772",
+   "url": "data/perf/inv0772.json",
+   "endS": 79.357,
+   "maxCh": 5
+  },
+  {
+   "name": "inv0772a",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 1. (in C) [Triplet Variant]",
+   "sct": "BWV 772a",
+   "url": "data/perf/inv0772a.json",
+   "endS": 74.347,
+   "maxCh": 5
+  },
+  {
+   "name": "inv0773",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 2. (in Cm)",
+   "sct": "BWV 773",
+   "url": "data/perf/inv0773.json",
+   "endS": 89.609,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0774",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 3. (in D)",
+   "sct": "BWV 774",
+   "url": "data/perf/inv0774.json",
+   "endS": 47.378,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0775",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 4. (in Dm)",
+   "sct": "BWV 775",
+   "url": "data/perf/inv0775.json",
+   "endS": 41.402,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0776",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 5. (in Ef)",
+   "sct": "BWV 776",
+   "url": "data/perf/inv0776.json",
+   "endS": 108.977,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0777",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 6. (in E)",
+   "sct": "BWV 777",
+   "url": "data/perf/inv0777.json",
+   "endS": 55.834,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0778",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 7. (in Em)",
+   "sct": "BWV 778",
+   "url": "data/perf/inv0778.json",
+   "endS": 77.772,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0779",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 8. (in F)",
+   "sct": "BWV 779",
+   "url": "data/perf/inv0779.json",
+   "endS": 83.509,
+   "maxCh": 4
+  },
+  {
+   "name": "inv0780",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 9. (in Fm)",
+   "sct": "BWV 780",
+   "url": "data/perf/inv0780.json",
+   "endS": 87.374,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0781",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 10. (in G)",
+   "sct": "BWV 781",
+   "url": "data/perf/inv0781.json",
+   "endS": 127.414,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0782",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 11. (in Gm)",
+   "sct": "BWV 782",
+   "url": "data/perf/inv0782.json",
+   "endS": 75.13,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0783",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 12. (in A)",
+   "sct": "BWV 783",
+   "url": "data/perf/inv0783.json",
+   "endS": 72.315,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0784",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 13. (in Am)",
+   "sct": "BWV 784",
+   "url": "data/perf/inv0784.json",
+   "endS": 86.801,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0785",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 14. (in Bf)",
+   "sct": "BWV 785",
+   "url": "data/perf/inv0785.json",
+   "endS": 72.035,
+   "maxCh": 2
+  },
+  {
+   "name": "inv0786",
+   "group": "Inventions & Sinfonias",
+   "title": "Inventio 15. (in Bm)",
+   "sct": "BWV 786",
+   "url": "data/perf/inv0786.json",
+   "endS": 83.586,
+   "maxCh": 2
+  },
+  {
+   "name": "sinf0787",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 1 in C major",
+   "sct": "BWV 787",
+   "url": "data/perf/sinf0787.json",
+   "endS": 74.202,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0788",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 2. (in Cm)",
+   "sct": "BWV 788",
+   "url": "data/perf/sinf0788.json",
+   "endS": 141.307,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0789",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 3. (in D)",
+   "sct": "BWV 789",
+   "url": "data/perf/sinf0789.json",
+   "endS": 87.075,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0790",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 4. (in Dm)",
+   "sct": "BWV 790",
+   "url": "data/perf/sinf0790.json",
+   "endS": 88.143,
+   "maxCh": 4
+  },
+  {
+   "name": "sinf0791",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 5. (in Ef)",
+   "sct": "BWV 791",
+   "url": "data/perf/sinf0791.json",
+   "endS": 111.72,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0792",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 6. (in E)",
+   "sct": "BWV 792",
+   "url": "data/perf/sinf0792.json",
+   "endS": 166.318,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0793",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 7. (in Em)",
+   "sct": "BWV 793",
+   "url": "data/perf/sinf0793.json",
+   "endS": 131.059,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0794",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 8. (in F)",
+   "sct": "BWV 794",
+   "url": "data/perf/sinf0794.json",
+   "endS": 83.658,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0795",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 9. (in Fm)",
+   "sct": "BWV 795",
+   "url": "data/perf/sinf0795.json",
+   "endS": 157.831,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0796",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 10. (in G)",
+   "sct": "BWV 796",
+   "url": "data/perf/sinf0796.json",
+   "endS": 87.566,
+   "maxCh": 4
+  },
+  {
+   "name": "sinf0797",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 11. (in Gm)",
+   "sct": "BWV 797",
+   "url": "data/perf/sinf0797.json",
+   "endS": 71.606,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0798",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 12. (in A)",
+   "sct": "BWV 798",
+   "url": "data/perf/sinf0798.json",
+   "endS": 107.164,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0799",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 13. (in Am)",
+   "sct": "BWV 799",
+   "url": "data/perf/sinf0799.json",
+   "endS": 56.593,
+   "maxCh": 3
+  },
+  {
+   "name": "sinf0800",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 14. (in Bf)",
+   "sct": "BWV 800",
+   "url": "data/perf/sinf0800.json",
+   "endS": 92.614,
+   "maxCh": 4
+  },
+  {
+   "name": "sinf0801",
+   "group": "Inventions & Sinfonias",
+   "title": "Sinfonia 15. (in Bm)",
+   "sct": "BWV 801",
+   "url": "data/perf/sinf0801.json",
+   "endS": 51.731,
+   "maxCh": 3
+  },
+  {
+   "name": "artfugue-001",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 1, a 4.",
+   "url": "data/perf/artfugue-001.json",
+   "endS": 194.154,
+   "maxCh": 4
+  },
+  {
+   "name": "artfugue-002",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 2, a 4.",
+   "url": "data/perf/artfugue-002.json",
+   "endS": 208.404,
+   "maxCh": 4
+  },
+  {
+   "name": "artfugue-003",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 3, a 4.",
+   "url": "data/perf/artfugue-003.json",
+   "endS": 179.584,
+   "maxCh": 4
+  },
+  {
+   "name": "artfugue-004",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 4, a 4.",
+   "url": "data/perf/artfugue-004.json",
+   "endS": 337.813,
+   "maxCh": 4
+  },
+  {
+   "name": "artfugue-005",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 5, a 4.",
+   "url": "data/perf/artfugue-005.json",
+   "endS": 205.869,
+   "maxCh": 7
+  },
+  {
+   "name": "artfugue-006",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 6, a 4, in Stile francese",
+   "url": "data/perf/artfugue-006.json",
+   "endS": 245.357,
+   "maxCh": 7
+  },
+  {
+   "name": "artfugue-007",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 7, a 4. per Augment et Diminut",
+   "url": "data/perf/artfugue-007.json",
+   "endS": 164.113,
+   "maxCh": 5
+  },
+  {
+   "name": "artfugue-008",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 8, a 3.",
+   "url": "data/perf/artfugue-008.json",
+   "endS": 453.941,
+   "maxCh": 3
+  },
+  {
+   "name": "artfugue-009",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 9, a 4, alla Duodecima",
+   "url": "data/perf/artfugue-009.json",
+   "endS": 176.875,
+   "maxCh": 4
+  },
+  {
+   "name": "artfugue-010",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 10, a 4, alla Decima",
+   "url": "data/perf/artfugue-010.json",
+   "endS": 202.167,
+   "maxCh": 4
+  },
+  {
+   "name": "artfugue-011",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 11, a 4.",
+   "url": "data/perf/artfugue-011.json",
+   "endS": 373.217,
+   "maxCh": 5
+  },
+  {
+   "name": "artfugue-012",
+   "group": "The Art of Fugue",
+   "title": "Canon alla Ottava",
+   "url": "data/perf/artfugue-012.json",
+   "endS": 152.802,
+   "maxCh": 2
+  },
+  {
+   "name": "artfugue-013",
+   "group": "The Art of Fugue",
+   "title": "Canon alla Duodecima in Contrapunto alla Qunita",
+   "url": "data/perf/artfugue-013.json",
+   "endS": 173.326,
+   "maxCh": 2
+  },
+  {
+   "name": "artfugue-014",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus XIV: Canon in Double Counterpoint at the Tenth",
+   "url": "data/perf/artfugue-014.json",
+   "endS": 203.692,
+   "maxCh": 2
+  },
+  {
+   "name": "artfugue-015",
+   "group": "The Art of Fugue",
+   "title": "Contrpunctus XV: Canon in Augmentation in Inversion",
+   "url": "data/perf/artfugue-015.json",
+   "endS": 334.992,
+   "maxCh": 2
+  },
+  {
+   "name": "artfugue-016a",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 16 (XIII), a 3. (rectus)",
+   "url": "data/perf/artfugue-016a.json",
+   "endS": 133.335,
+   "maxCh": 3
+  },
+  {
+   "name": "artfugue-016b",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 16 (XIII), a 3. (inversus)",
+   "url": "data/perf/artfugue-016b.json",
+   "endS": 133.353,
+   "maxCh": 3
+  },
+  {
+   "name": "artfugue-018a",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 18 (XII), a 4. (rectus)",
+   "url": "data/perf/artfugue-018a.json",
+   "endS": 105.33,
+   "maxCh": 4
+  },
+  {
+   "name": "artfugue-018b",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus 18 (XII), a 4. (inversus)",
+   "url": "data/perf/artfugue-018b.json",
+   "endS": 105.346,
+   "maxCh": 4
+  },
+  {
+   "name": "artfugue-019",
+   "group": "The Art of Fugue",
+   "title": "Contrapunctus XIX: Quadruple Fugue on the name B-A-C-H",
+   "url": "data/perf/artfugue-019.json",
+   "endS": 276.235,
+   "maxCh": 4
+  },
+  {
+   "name": "offering-001",
+   "group": "Musical Offering",
+   "title": "Ricarcare in C minor, a 3.",
+   "url": "data/perf/offering-001.json",
+   "endS": 370.163,
+   "maxCh": 3
+  },
+  {
+   "name": "offering-002",
+   "group": "Musical Offering",
+   "title": "Ricarcare in C minor, a 6.",
+   "url": "data/perf/offering-002.json",
+   "endS": 291.574,
+   "maxCh": 6
+  },
+  {
+   "name": "offering-013a",
+   "group": "Musical Offering",
+   "title": "Trio \u2014 Largo",
+   "url": "data/perf/offering-013a.json",
+   "endS": 174.125,
+   "maxCh": 3
+  },
+  {
+   "name": "offering-013c",
+   "group": "Musical Offering",
+   "title": "Trio \u2014 Adagio",
+   "url": "data/perf/offering-013c.json",
+   "endS": 134.182,
+   "maxCh": 3
+  },
+  {
+   "name": "offering-013d",
+   "group": "Musical Offering",
+   "title": "Trio \u2014 Allegro",
+   "url": "data/perf/offering-013d.json",
+   "endS": 155.379,
+   "maxCh": 3
+  },
+  {
+   "name": "chor001",
+   "group": "Chorales",
+   "title": "Aus meines Herzens Grunde",
+   "sct": "BWV 269",
+   "url": "data/perf/chor001.json",
+   "endS": 42.615,
+   "maxCh": 4
+  },
+  {
+   "name": "chor002",
+   "group": "Chorales",
+   "title": "Ich dank dir, lieber Herre",
+   "sct": "BWV 347",
+   "url": "data/perf/chor002.json",
+   "endS": 37.33,
+   "maxCh": 4
+  },
+  {
+   "name": "chor003",
+   "group": "Chorales",
+   "title": "Ach Gott, vom Himmel sieh darein",
+   "sct": "BWV 153/1",
+   "url": "data/perf/chor003.json",
+   "endS": 27.495,
+   "maxCh": 4
+  },
+  {
+   "name": "chor004",
+   "group": "Chorales",
+   "title": "Es ist das Heil uns kommen her",
+   "sct": "BWV 86/6",
+   "url": "data/perf/chor004.json",
+   "endS": 27.58,
+   "maxCh": 4
+  },
+  {
+   "name": "chor005",
+   "group": "Chorales",
+   "title": "An Wasserfl\u00fcssen Babylon",
+   "sct": "BWV 267",
+   "url": "data/perf/chor005.json",
+   "endS": 44.368,
+   "maxCh": 4
+  },
+  {
+   "name": "chor006",
+   "group": "Chorales",
+   "title": "Christus, der ist mein Leben",
+   "sct": "BWV 281",
+   "url": "data/perf/chor006.json",
+   "endS": 25.336,
+   "maxCh": 4
+  },
+  {
+   "name": "chor007",
+   "group": "Chorales",
+   "title": "Nun lob, mein Seel, den Herren",
+   "sct": "BWV 17/7",
+   "url": "data/perf/chor007.json",
+   "endS": 71.424,
+   "maxCh": 4
+  },
+  {
+   "name": "chor008",
+   "group": "Chorales",
+   "title": "Freuet euch, ihr Christen alle",
+   "sct": "BWV 40/8",
+   "url": "data/perf/chor008.json",
+   "endS": 51.475,
+   "maxCh": 4
+  },
+  {
+   "name": "chor009",
+   "group": "Chorales",
+   "title": "Ermuntre dich, mein schwacher Geist",
+   "sct": "BWV 248/12",
+   "url": "data/perf/chor009.json",
+   "endS": 32.387,
+   "maxCh": 4
+  },
+  {
+   "name": "chor010",
+   "group": "Chorales",
+   "title": "Aus tiefer Not schrei ich zu dir",
+   "sct": "BWV 38/6",
+   "url": "data/perf/chor010.json",
+   "endS": 38.259,
+   "maxCh": 4
+  },
+  {
+   "name": "chor011",
+   "group": "Chorales",
+   "title": "Jesu, nun sei gepreiset",
+   "sct": "BWV 41/6 & 171/6",
+   "url": "data/perf/chor011.json",
+   "endS": 73.036,
+   "maxCh": 4
+  },
+  {
+   "name": "chor012",
+   "group": "Chorales",
+   "title": "Puer natus in Bethlehem",
+   "sct": "BWV 65/2",
+   "url": "data/perf/chor012.json",
+   "endS": 33.653,
+   "maxCh": 4
+  },
+  {
+   "name": "chor013",
+   "group": "Chorales",
+   "title": "Allein zu dir, Herr Jesu Christ",
+   "sct": "BWV 33/6",
+   "url": "data/perf/chor013.json",
+   "endS": 41.957,
+   "maxCh": 4
+  },
+  {
+   "name": "chor014",
+   "group": "Chorales",
+   "title": "O Herre Gott, dein g\u00f6ttlich Wort",
+   "sct": "BWV 185/5",
+   "url": "data/perf/chor014.json",
+   "endS": 39.713,
+   "maxCh": 4
+  },
+  {
+   "name": "chor015",
+   "group": "Chorales",
+   "title": "Christ lag in Todesbanden",
+   "sct": "BWV 277",
+   "url": "data/perf/chor015.json",
+   "endS": 36.823,
+   "maxCh": 4
+  },
+  {
+   "name": "chor016",
+   "group": "Chorales",
+   "title": "Es woll' uns Gott gen\u00e4dig sein",
+   "sct": "BWV 311",
+   "url": "data/perf/chor016.json",
+   "endS": 46.664,
+   "maxCh": 4
+  },
+  {
+   "name": "chor017",
+   "group": "Chorales",
+   "title": "Erschienen ist der herrliche Tag",
+   "sct": "BWV 145/5",
+   "url": "data/perf/chor017.json",
+   "endS": 38.281,
+   "maxCh": 4
+  },
+  {
+   "name": "chor018",
+   "group": "Chorales",
+   "title": "Gottes Sohn ist kommen",
+   "sct": "BWV 318",
+   "url": "data/perf/chor018.json",
+   "endS": 35.869,
+   "maxCh": 4
+  },
+  {
+   "name": "chor019",
+   "group": "Chorales",
+   "title": "Ich hab mein Sach Gott heimgestellt",
+   "sct": "BWV 351",
+   "url": "data/perf/chor019.json",
+   "endS": 25.109,
+   "maxCh": 4
+  },
+  {
+   "name": "chor020",
+   "group": "Chorales",
+   "title": "Ein feste Burg ist unser Gott",
+   "sct": "BWV 302",
+   "url": "data/perf/chor020.json",
+   "endS": 32.372,
+   "maxCh": 4
+  },
+  {
+   "name": "chor021",
+   "group": "Chorales",
+   "title": "Herzlich tut mich verlangen",
+   "sct": "BWV 153/5",
+   "url": "data/perf/chor021.json",
+   "endS": 34.69,
+   "maxCh": 4
+  },
+  {
+   "name": "chor022",
+   "group": "Chorales",
+   "title": "Schm\u00fccke dich, o liebe Seele",
+   "sct": "BWV 180/7",
+   "url": "data/perf/chor022.json",
+   "endS": 43.402,
+   "maxCh": 4
+  },
+  {
+   "name": "chor023",
+   "group": "Chorales",
+   "title": "Zeuch ein zu deinen Toren",
+   "sct": "BWV 28/6",
+   "url": "data/perf/chor023.json",
+   "endS": 34.92,
+   "maxCh": 4
+  },
+  {
+   "name": "chor024",
+   "group": "Chorales",
+   "title": "Valet will ich dir geben",
+   "sct": "BWV 415",
+   "url": "data/perf/chor024.json",
+   "endS": 34.927,
+   "maxCh": 4
+  },
+  {
+   "name": "chor025",
+   "group": "Chorales",
+   "title": "Wo soll ich fliehen hin",
+   "sct": "BWV 148/6",
+   "url": "data/perf/chor025.json",
+   "endS": 32.381,
+   "maxCh": 4
+  },
+  {
+   "name": "chor026",
+   "group": "Chorales",
+   "title": "O Ewigkeit, du Donnerwort",
+   "sct": "BWV 20/7,11",
+   "url": "data/perf/chor026.json",
+   "endS": 27.592,
+   "maxCh": 4
+  },
+  {
+   "name": "chor027",
+   "group": "Chorales",
+   "title": "Es spricht der Unweisen Mund",
+   "sct": "BWV 308",
+   "url": "data/perf/chor027.json",
+   "endS": 27.573,
+   "maxCh": 4
+  },
+  {
+   "name": "chor028",
+   "group": "Chorales",
+   "title": "Nun komm, der Heiden Heiland",
+   "sct": "BWV 36(2)/8",
+   "url": "data/perf/chor028.json",
+   "endS": 24.052,
+   "maxCh": 4
+  },
+  {
+   "name": "chor029",
+   "group": "Chorales",
+   "title": "Freu dich sehr, o meine Seele",
+   "sct": "BWV 32/6",
+   "url": "data/perf/chor029.json",
+   "endS": 36.035,
+   "maxCh": 4
+  },
+  {
+   "name": "chor030",
+   "group": "Chorales",
+   "title": "Jesus Christus, unser Heiland",
+   "sct": "BWV 363",
+   "url": "data/perf/chor030.json",
+   "endS": 34.315,
+   "maxCh": 4
+  },
+  {
+   "name": "chor031",
+   "group": "Chorales",
+   "title": "Ach lieben Christen, seid getrost",
+   "sct": "BWV 256",
+   "url": "data/perf/chor031.json",
+   "endS": 27.584,
+   "maxCh": 4
+  },
+  {
+   "name": "chor032",
+   "group": "Chorales",
+   "title": "Nun danket alle Gott",
+   "sct": "BWV 386",
+   "url": "data/perf/chor032.json",
+   "endS": 34.663,
+   "maxCh": 4
+  },
+  {
+   "name": "chor033",
+   "group": "Chorales",
+   "title": "Herr, ich habe mi\u00dfgehandelt",
+   "sct": "BWV 330",
+   "url": "data/perf/chor033.json",
+   "endS": 26.882,
+   "maxCh": 4
+  },
+  {
+   "name": "chor034",
+   "group": "Chorales",
+   "title": "Erbarm dich mein, o Herre Gott",
+   "sct": "BWV 305",
+   "url": "data/perf/chor034.json",
+   "endS": 34.698,
+   "maxCh": 4
+  },
+  {
+   "name": "chor035",
+   "group": "Chorales",
+   "title": "Gott des Himmels und der Erden",
+   "sct": "BWV 248/53",
+   "url": "data/perf/chor035.json",
+   "endS": 22.7,
+   "maxCh": 4
+  },
+  {
+   "name": "chor036",
+   "group": "Chorales",
+   "title": "Nun bitten wir den heiligen Geist",
+   "sct": "BWV 385",
+   "url": "data/perf/chor036.json",
+   "endS": 37.081,
+   "maxCh": 4
+  },
+  {
+   "name": "chor037",
+   "group": "Chorales",
+   "title": "Jesu, der du meine Seele",
+   "sct": "BWV 352",
+   "url": "data/perf/chor037.json",
+   "endS": 33.654,
+   "maxCh": 4
+  },
+  {
+   "name": "chor038",
+   "group": "Chorales",
+   "title": "Straf mich nicht in deinem Zorn",
+   "sct": "BWV 115/6",
+   "url": "data/perf/chor038.json",
+   "endS": 28.849,
+   "maxCh": 4
+  },
+  {
+   "name": "chor039",
+   "group": "Chorales",
+   "title": "Ach, was soll ich S\u00fcnder machen?",
+   "sct": "BWV 259",
+   "url": "data/perf/chor039.json",
+   "endS": 33.651,
+   "maxCh": 4
+  },
+  {
+   "name": "chor040",
+   "group": "Chorales",
+   "title": "Ach Gott und Herr",
+   "sct": "BWV 255",
+   "url": "data/perf/chor040.json",
+   "endS": 22.703,
+   "maxCh": 4
+  },
+  {
+   "name": "chor041",
+   "group": "Chorales",
+   "title": "Was mein Gott will, das g'scheh allzeit",
+   "sct": "BWV 65/7",
+   "url": "data/perf/chor041.json",
+   "endS": 37.178,
+   "maxCh": 4
+  },
+  {
+   "name": "chor042",
+   "group": "Chorales",
+   "title": "Du Friedef\u00fcrst, Herr Jesu Christ",
+   "sct": "BWV 67/7",
+   "url": "data/perf/chor042.json",
+   "endS": 27.731,
+   "maxCh": 4
+  },
+  {
+   "name": "chor043",
+   "group": "Chorales",
+   "title": "Liebester Gott, wann werd ich sterben",
+   "sct": "BWV 8/6",
+   "url": "data/perf/chor043.json",
+   "endS": 40.689,
+   "maxCh": 4
+  },
+  {
+   "name": "chor044",
+   "group": "Chorales",
+   "title": "Mach's mit mir, Gott, nach deiner G\u00fct",
+   "sct": "BWV 377",
+   "url": "data/perf/chor044.json",
+   "endS": 22.776,
+   "maxCh": 4
+  },
+  {
+   "name": "chor045",
+   "group": "Chorales",
+   "title": "Kommt her zu mir, spricht",
+   "sct": "BWV 108/6",
+   "url": "data/perf/chor045.json",
+   "endS": 34.773,
+   "maxCh": 4
+  },
+  {
+   "name": "chor046",
+   "group": "Chorales",
+   "title": "Vom Himmel hoch, da komm ich her",
+   "sct": "BWV 248/9",
+   "url": "data/perf/chor046.json",
+   "endS": 22.693,
+   "maxCh": 4
+  },
+  {
+   "name": "chor047",
+   "group": "Chorales",
+   "title": "Vater unser im Himmelreich",
+   "sct": "BWV 245/5 & 416",
+   "url": "data/perf/chor047.json",
+   "endS": 32.316,
+   "maxCh": 4
+  },
+  {
+   "name": "chor048",
+   "group": "Chorales",
+   "title": "Ach wie fl\u00fcchtig, ach wie nichtig",
+   "sct": "BWV 26/6",
+   "url": "data/perf/chor048.json",
+   "endS": 27.567,
+   "maxCh": 4
+  },
+  {
+   "name": "chor049",
+   "group": "Chorales",
+   "title": "Mit Fried' und Freud' fahr' ich dahin",
+   "sct": "BWV 382",
+   "url": "data/perf/chor049.json",
+   "endS": 36.818,
+   "maxCh": 4
+  },
+  {
+   "name": "chor050",
+   "group": "Chorales",
+   "title": "In allen meinen Taten",
+   "sct": "BWV 244/37",
+   "url": "data/perf/chor050.json",
+   "endS": 32.362,
+   "maxCh": 4
+  },
+  {
+   "name": "chor051",
+   "group": "Chorales",
+   "title": "Gelobet seist du, Jesu Christ",
+   "sct": "BWV 91/6",
+   "url": "data/perf/chor051.json",
+   "endS": 27.583,
+   "maxCh": 4
+  },
+  {
+   "name": "chor052",
+   "group": "Chorales",
+   "title": "Wenn mein St\u00fcndlein vorhanden ist",
+   "sct": "BWV 429",
+   "url": "data/perf/chor052.json",
+   "endS": 42.144,
+   "maxCh": 4
+  },
+  {
+   "name": "chor053",
+   "group": "Chorales",
+   "title": "Das neugeborne Kindelein",
+   "sct": "BWV 122/6",
+   "url": "data/perf/chor053.json",
+   "endS": 34.924,
+   "maxCh": 4
+  },
+  {
+   "name": "chor054",
+   "group": "Chorales",
+   "title": "Lobt Gott, ihr Christen allzugleich",
+   "sct": "BWV 151/5",
+   "url": "data/perf/chor054.json",
+   "endS": 30.13,
+   "maxCh": 4
+  },
+  {
+   "name": "chor055",
+   "group": "Chorales",
+   "title": "Wir Christenleut",
+   "sct": "BWV 110/7",
+   "url": "data/perf/chor055.json",
+   "endS": 27.568,
+   "maxCh": 4
+  },
+  {
+   "name": "chor056",
+   "group": "Chorales",
+   "title": "Christum wir sollen loben schon",
+   "sct": "BWV 121/6",
+   "url": "data/perf/chor056.json",
+   "endS": 46.047,
+   "maxCh": 4
+  },
+  {
+   "name": "chor057",
+   "group": "Chorales",
+   "title": "O Traurigkeit, o Herzeleid",
+   "sct": "BWV 404",
+   "url": "data/perf/chor057.json",
+   "endS": 24.656,
+   "maxCh": 4
+  },
+  {
+   "name": "chor058",
+   "group": "Chorales",
+   "title": "Herzlich lieb hab ich dich, o Herr",
+   "sct": "BWV 174/5",
+   "url": "data/perf/chor058.json",
+   "endS": 49.074,
+   "maxCh": 4
+  },
+  {
+   "name": "chor059",
+   "group": "Chorales",
+   "title": "Herzliebster Jesu, was hast du verbrochen",
+   "sct": "BWV 245/3",
+   "url": "data/perf/chor059.json",
+   "endS": 32.539,
+   "maxCh": 4
+  },
+  {
+   "name": "chor060",
+   "group": "Chorales",
+   "title": "Ich freue mich in dir",
+   "sct": "BWV 133/6",
+   "url": "data/perf/chor060.json",
+   "endS": 34.663,
+   "maxCh": 4
+  },
+  {
+   "name": "chor061",
+   "group": "Chorales",
+   "title": "Jesu Leiden, Pein und Tod",
+   "sct": "BWV 159/5",
+   "url": "data/perf/chor061.json",
+   "endS": 43.248,
+   "maxCh": 4
+  },
+  {
+   "name": "chor062",
+   "group": "Chorales",
+   "title": "Wer nur den lieben Gott l\u00e4\u00dft walten",
+   "sct": "BWV 197/10",
+   "url": "data/perf/chor062.json",
+   "endS": 25.172,
+   "maxCh": 4
+  },
+  {
+   "name": "chor063",
+   "group": "Chorales",
+   "title": "Nun ruhen alle W\u00e4lder",
+   "sct": "BWV 245/11",
+   "url": "data/perf/chor063.json",
+   "endS": 32.372,
+   "maxCh": 4
+  },
+  {
+   "name": "chor064",
+   "group": "Chorales",
+   "title": "Freu dich sehr, o meine Seele",
+   "sct": "BWV 194/6",
+   "url": "data/perf/chor064.json",
+   "endS": 35.87,
+   "maxCh": 4
+  },
+  {
+   "name": "chor065",
+   "group": "Chorales",
+   "title": "Was Gott tut, das ist wohlgetan",
+   "sct": "BWV 144/3",
+   "url": "data/perf/chor065.json",
+   "endS": 27.58,
+   "maxCh": 4
+  },
+  {
+   "name": "chor066",
+   "group": "Chorales",
+   "title": "Christ, unser Herr zum Jordan kam",
+   "sct": "BWV 280",
+   "url": "data/perf/chor066.json",
+   "endS": 37.173,
+   "maxCh": 4
+  },
+  {
+   "name": "chor067",
+   "group": "Chorales",
+   "title": "Freu dich sehr, o meine Seele",
+   "sct": "BWV 39/7",
+   "url": "data/perf/chor067.json",
+   "endS": 36.036,
+   "maxCh": 4
+  },
+  {
+   "name": "chor068",
+   "group": "Chorales",
+   "title": "Wenn wir in h\u00f6chsten N\u00f6ten sein",
+   "sct": "BWV 431",
+   "url": "data/perf/chor068.json",
+   "endS": 25.173,
+   "maxCh": 4
+  },
+  {
+   "name": "chor069",
+   "group": "Chorales",
+   "title": "Komm, heiliger Geist, Herre Gott",
+   "sct": "BWV 226",
+   "url": "data/perf/chor069.json",
+   "endS": 61.114,
+   "maxCh": 4
+  },
+  {
+   "name": "chor070",
+   "group": "Chorales",
+   "title": "Gott sei gelobet und gebenedeiet",
+   "sct": "BWV 322",
+   "url": "data/perf/chor070.json",
+   "endS": 54.093,
+   "maxCh": 4
+  },
+  {
+   "name": "chor071",
+   "group": "Chorales",
+   "title": "Ich ruf zu dir, Herr Jesu Christ",
+   "sct": "BWV 177/5",
+   "url": "data/perf/chor071.json",
+   "endS": 34.688,
+   "maxCh": 4
+  },
+  {
+   "name": "chor072",
+   "group": "Chorales",
+   "title": "Erhalt uns, Herr, bei deinem Wort",
+   "sct": "BWV 6/6",
+   "url": "data/perf/chor072.json",
+   "endS": 24.66,
+   "maxCh": 4
+  },
+  {
+   "name": "chor073",
+   "group": "Chorales",
+   "title": "Herr Jesu Christ, ich schrei zu dir",
+   "sct": "BWV 334",
+   "url": "data/perf/chor073.json",
+   "endS": 32.542,
+   "maxCh": 4
+  },
+  {
+   "name": "chor074",
+   "group": "Chorales",
+   "title": "O Haupt voll Blut und Wunden",
+   "sct": "BWV 244/54",
+   "url": "data/perf/chor074.json",
+   "endS": 34.692,
+   "maxCh": 4
+  },
+  {
+   "name": "chor075",
+   "group": "Chorales",
+   "title": "Das walt mein Gott",
+   "sct": "BWV 291",
+   "url": "data/perf/chor075.json",
+   "endS": 32.532,
+   "maxCh": 4
+  },
+  {
+   "name": "chor076",
+   "group": "Chorales",
+   "title": "Freu dich sehr, o meine Seele",
+   "sct": "BWV 30/6",
+   "url": "data/perf/chor076.json",
+   "endS": 38.27,
+   "maxCh": 4
+  },
+  {
+   "name": "chor077",
+   "group": "Chorales",
+   "title": "In dich hab ich gehoffet, Herr",
+   "sct": "BWV 248/46",
+   "url": "data/perf/chor077.json",
+   "endS": 34.935,
+   "maxCh": 4
+  },
+  {
+   "name": "chor078",
+   "group": "Chorales",
+   "title": "Herzliebester Jesu, was hast du verbrochen",
+   "sct": "BWV 244/3",
+   "url": "data/perf/chor078.json",
+   "endS": 32.281,
+   "maxCh": 4
+  },
+  {
+   "name": "chor079",
+   "group": "Chorales",
+   "title": "Heut triumphieret Gottes Sohn",
+   "sct": "BWV 342",
+   "url": "data/perf/chor079.json",
+   "endS": 49.065,
+   "maxCh": 4
+  },
+  {
+   "name": "chor080",
+   "group": "Chorales",
+   "title": "O Haupt voll Blut und Wunden",
+   "sct": "BWV 244/44",
+   "url": "data/perf/chor080.json",
+   "endS": 34.683,
+   "maxCh": 4
+  },
+  {
+   "name": "chor081",
+   "group": "Chorales",
+   "title": "Christus, der uns delig macht",
+   "sct": "BWV 245/15",
+   "url": "data/perf/chor081.json",
+   "endS": 47.839,
+   "maxCh": 4
+  },
+  {
+   "name": "chor082",
+   "group": "Chorales",
+   "title": "O gro\u00dfer Gott von Macht",
+   "sct": "BWV 46/6",
+   "url": "data/perf/chor082.json",
+   "endS": 50.865,
+   "maxCh": 4
+  },
+  {
+   "name": "chor083",
+   "group": "Chorales",
+   "title": "Jesu Leiden, Pein und Tod",
+   "sct": "BWV 245/14",
+   "url": "data/perf/chor083.json",
+   "endS": 43.249,
+   "maxCh": 4
+  },
+  {
+   "name": "chor084",
+   "group": "Chorales",
+   "title": "Nun bitten wir den heiligen Geist",
+   "sct": "BWV 197/5",
+   "url": "data/perf/chor084.json",
+   "endS": 37.071,
+   "maxCh": 4
+  },
+  {
+   "name": "chor085",
+   "group": "Chorales",
+   "title": "O Gott, du frommer Gott",
+   "sct": "BWV 45/7",
+   "url": "data/perf/chor085.json",
+   "endS": 44.503,
+   "maxCh": 4
+  },
+  {
+   "name": "chor086",
+   "group": "Chorales",
+   "title": "Wie sch\u00f6n leuchtet der Morgenstern",
+   "sct": "BWV 36(1) & 36(2)/4",
+   "url": "data/perf/chor086.json",
+   "endS": 37.164,
+   "maxCh": 4
+  },
+  {
+   "name": "chor087",
+   "group": "Chorales",
+   "title": "Du, o sch\u00f6nes Weltgeb\u00e4ude",
+   "sct": "BWV 56/5",
+   "url": "data/perf/chor087.json",
+   "endS": 35.876,
+   "maxCh": 4
+  },
+  {
+   "name": "chor088",
+   "group": "Chorales",
+   "title": "Helft mir Gotts G\u00fcte preisen",
+   "sct": "BWV 28/6",
+   "url": "data/perf/chor088.json",
+   "endS": 34.924,
+   "maxCh": 4
+  },
+  {
+   "name": "chor089",
+   "group": "Chorales",
+   "title": "O Haupt voll Blut und Wunden",
+   "sct": "BWV 244/62",
+   "url": "data/perf/chor089.json",
+   "endS": 32.307,
+   "maxCh": 4
+  },
+  {
+   "name": "chor090",
+   "group": "Chorales",
+   "title": "Hast du denn, Jesu, dein Angesicht",
+   "sct": "BWV 57/8",
+   "url": "data/perf/chor090.json",
+   "endS": 26.963,
+   "maxCh": 4
+  },
+  {
+   "name": "chor091",
+   "group": "Chorales",
+   "title": "Verleih uns Frieden gn\u00e4diglich",
+   "sct": "BWV 42/7",
+   "url": "data/perf/chor091.json",
+   "endS": 70.889,
+   "maxCh": 4
+  },
+  {
+   "name": "chor092",
+   "group": "Chorales",
+   "title": "Herr Jesu Christ, du h\u00f6chstes Gut",
+   "sct": "BWV 168/6",
+   "url": "data/perf/chor092.json",
+   "endS": 32.527,
+   "maxCh": 4
+  },
+  {
+   "name": "chor093",
+   "group": "Chorales",
+   "title": "Wach auf, mein Herz",
+   "sct": "BWV 194/12",
+   "url": "data/perf/chor093.json",
+   "endS": 35.518,
+   "maxCh": 4
+  },
+  {
+   "name": "chor094",
+   "group": "Chorales",
+   "title": "Warum betr\u00fcbst du dich, mein Herz",
+   "sct": "BWV 47/5",
+   "url": "data/perf/chor094.json",
+   "endS": 27.586,
+   "maxCh": 4
+  },
+  {
+   "name": "chor095",
+   "group": "Chorales",
+   "title": "Werde munter, mein Gem\u00fcte",
+   "sct": "BWV 55/5",
+   "url": "data/perf/chor095.json",
+   "endS": 32.274,
+   "maxCh": 4
+  },
+  {
+   "name": "chor096",
+   "group": "Chorales",
+   "title": "Jesu, meine Freude",
+   "sct": "BWV 87/7",
+   "url": "data/perf/chor096.json",
+   "endS": 38.271,
+   "maxCh": 4
+  },
+  {
+   "name": "chor097",
+   "group": "Chorales",
+   "title": "Nun bitten wir den heiligen Geist",
+   "sct": "BWV 169/7",
+   "url": "data/perf/chor097.json",
+   "endS": 42.11,
+   "maxCh": 4
+  },
+  {
+   "name": "chor098",
+   "group": "Chorales",
+   "title": "O Haupt voll Blut und Wunden",
+   "sct": "BWV 244/15,17",
+   "url": "data/perf/chor098.json",
+   "endS": 34.935,
+   "maxCh": 4
+  },
+  {
+   "name": "chor099",
+   "group": "Chorales",
+   "title": "Helft mir Gotts G\u00fcte preisen",
+   "sct": "BWV 16/6",
+   "url": "data/perf/chor099.json",
+   "endS": 34.927,
+   "maxCh": 4
+  },
+  {
+   "name": "chor100",
+   "group": "Chorales",
+   "title": "Durch Adams Fall ist ganz verderbt",
+   "sct": "BWV 18/5",
+   "url": "data/perf/chor100.json",
+   "endS": 37.334,
+   "maxCh": 4
+  },
+  {
+   "name": "chor101",
+   "group": "Chorales",
+   "title": "Herr Christ, der ein'ge Gottes Sohn",
+   "sct": "BWV 164/6",
+   "url": "data/perf/chor101.json",
+   "endS": 29.886,
+   "maxCh": 4
+  },
+  {
+   "name": "chor102",
+   "group": "Chorales",
+   "title": "Du lebensf\u00fcrst, Herr Jesu Christ",
+   "sct": "BWV 43/11",
+   "url": "data/perf/chor102.json",
+   "endS": 45.713,
+   "maxCh": 4
+  },
+  {
+   "name": "chor103",
+   "group": "Chorales",
+   "title": "Nun ruhen alle W\u00e4lder",
+   "sct": "BWV 13/6",
+   "url": "data/perf/chor103.json",
+   "endS": 32.372,
+   "maxCh": 4
+  },
+  {
+   "name": "chor104",
+   "group": "Chorales",
+   "title": "Wer nur den lieben Gott l\u00e4\u00dft walten",
+   "sct": "BWV 88/7",
+   "url": "data/perf/chor104.json",
+   "endS": 25.177,
+   "maxCh": 4
+  },
+  {
+   "name": "chor105",
+   "group": "Chorales",
+   "title": "Herzliebester Jesu, was hast du verbrochen",
+   "sct": "BWV 244/46",
+   "url": "data/perf/chor105.json",
+   "endS": 32.532,
+   "maxCh": 4
+  },
+  {
+   "name": "chor106",
+   "group": "Chorales",
+   "title": "Jesu Leiden, Pein und Tod",
+   "sct": "BWV 245/28",
+   "url": "data/perf/chor106.json",
+   "endS": 43.246,
+   "maxCh": 4
+  },
+  {
+   "name": "chor107",
+   "group": "Chorales",
+   "title": "Herzlich lieb hab ich dich, o Herr",
+   "sct": "BWV 245/40",
+   "url": "data/perf/chor107.json",
+   "endS": 56.516,
+   "maxCh": 4
+  },
+  {
+   "name": "chor108",
+   "group": "Chorales",
+   "title": "Valet will ich dir geben",
+   "sct": "BWV 245/26",
+   "url": "data/perf/chor108.json",
+   "endS": 34.926,
+   "maxCh": 4
+  },
+  {
+   "name": "chor109",
+   "group": "Chorales",
+   "title": "Singen wir aus Herzensgrund",
+   "sct": "BWV 187/7",
+   "url": "data/perf/chor109.json",
+   "endS": 56.493,
+   "maxCh": 4
+  },
+  {
+   "name": "chor110",
+   "group": "Chorales",
+   "title": "Vater unser im Himmelreich",
+   "sct": "BWV 102/7",
+   "url": "data/perf/chor110.json",
+   "endS": 32.3,
+   "maxCh": 4
+  },
+  {
+   "name": "chor111",
+   "group": "Chorales",
+   "title": "Herzliebester Jesu, was hast du verbrochen",
+   "sct": "BWV 245/17",
+   "url": "data/perf/chor111.json",
+   "endS": 32.543,
+   "maxCh": 4
+  },
+  {
+   "name": "chor112",
+   "group": "Chorales",
+   "title": "Wer nur den lieben Gott l\u00e4\u00dft walten",
+   "sct": "BWV 84/5",
+   "url": "data/perf/chor112.json",
+   "endS": 25.174,
+   "maxCh": 4
+  },
+  {
+   "name": "chor113",
+   "group": "Chorales",
+   "title": "Christus, der uns selig macht",
+   "sct": "BWV 245/37",
+   "url": "data/perf/chor113.json",
+   "endS": 47.846,
+   "maxCh": 4
+  },
+  {
+   "name": "chor114",
+   "group": "Chorales",
+   "title": "Von Gott will ich nicht lassen",
+   "sct": "BWV 419",
+   "url": "data/perf/chor114.json",
+   "endS": 34.936,
+   "maxCh": 4
+  },
+  {
+   "name": "chor115",
+   "group": "Chorales",
+   "title": "Was mein Gott will, das g'scheh allzeit",
+   "sct": "BWV 244/25",
+   "url": "data/perf/chor115.json",
+   "endS": 32.368,
+   "maxCh": 4
+  },
+  {
+   "name": "chor116",
+   "group": "Chorales",
+   "title": "Nun lob, mein Seel, den Herren",
+   "sct": "BWV 29/8",
+   "url": "data/perf/chor116.json",
+   "endS": 69.614,
+   "maxCh": 4
+  },
+  {
+   "name": "chor117",
+   "group": "Chorales",
+   "title": "Nun ruhen alle W\u00e4lder",
+   "sct": "BWV 244/10",
+   "url": "data/perf/chor117.json",
+   "endS": 32.37,
+   "maxCh": 4
+  },
+  {
+   "name": "chor118",
+   "group": "Chorales",
+   "title": "In dich hab ich gehoffet, Herr",
+   "sct": "BWV 244/32",
+   "url": "data/perf/chor118.json",
+   "endS": 29.976,
+   "maxCh": 4
+  },
+  {
+   "name": "chor119",
+   "group": "Chorales",
+   "title": "Christ, unser Herr zum Jordan kam",
+   "sct": "BWV 176/6",
+   "url": "data/perf/chor119.json",
+   "endS": 46.686,
+   "maxCh": 4
+  },
+  {
+   "name": "chor120",
+   "group": "Chorales",
+   "title": "Was mein Gott will, das g'scheh allzeit",
+   "sct": "BWV 103/6",
+   "url": "data/perf/chor120.json",
+   "endS": 32.376,
+   "maxCh": 4
+  },
+  {
+   "name": "chor121",
+   "group": "Chorales",
+   "title": "Werde munter, mein Gem\u00fcte",
+   "sct": "BWV 244/40",
+   "url": "data/perf/chor121.json",
+   "endS": 41.855,
+   "maxCh": 4
+  },
+  {
+   "name": "chor122",
+   "group": "Chorales",
+   "title": "Ist Gott mein Schild und Helfersmann",
+   "sct": "BWV 85/6",
+   "url": "data/perf/chor122.json",
+   "endS": 37.102,
+   "maxCh": 4
+  },
+  {
+   "name": "chor123",
+   "group": "Chorales",
+   "title": "Helft mir Gotts G\u00fcte preisen",
+   "sct": "BWV 183/5",
+   "url": "data/perf/chor123.json",
+   "endS": 34.929,
+   "maxCh": 4
+  },
+  {
+   "name": "chor124",
+   "group": "Chorales",
+   "title": "Auf, auf, mein Herz, und du mein ganzer Sinn",
+   "sct": "BWV 268",
+   "url": "data/perf/chor124.json",
+   "endS": 29.981,
+   "maxCh": 4
+  },
+  {
+   "name": "chor125",
+   "group": "Chorales",
+   "title": "Allein Gott in der H\u00f6h sei Ehr",
+   "sct": "BWV 104/6",
+   "url": "data/perf/chor125.json",
+   "endS": 27.576,
+   "maxCh": 4
+  },
+  {
+   "name": "chor126",
+   "group": "Chorales",
+   "title": "Durch Adams Fall ist ganz verderbt",
+   "sct": "BWV 18/5",
+   "url": "data/perf/chor126.json",
+   "endS": 37.334,
+   "maxCh": 4
+  },
+  {
+   "name": "chor127",
+   "group": "Chorales",
+   "title": "Dies sind die heil'gen zehn Gebot",
+   "sct": "BWV 298",
+   "url": "data/perf/chor127.json",
+   "endS": 26.883,
+   "maxCh": 4
+  },
+  {
+   "name": "chor128",
+   "group": "Chorales",
+   "title": "Alles ist an Gottes Segen",
+   "sct": "BWV 263",
+   "url": "data/perf/chor128.json",
+   "endS": 33.486,
+   "maxCh": 4
+  },
+  {
+   "name": "chor129",
+   "group": "Chorales",
+   "title": "Keinen hat Gott verlassen",
+   "sct": "BWV 369",
+   "url": "data/perf/chor129.json",
+   "endS": 34.934,
+   "maxCh": 4
+  },
+  {
+   "name": "chor130",
+   "group": "Chorales",
+   "title": "Mein Seele erhebet den Herrn",
+   "sct": "BWV 324",
+   "url": "data/perf/chor130.json",
+   "endS": 37.35,
+   "maxCh": 4
+  },
+  {
+   "name": "chor131",
+   "group": "Chorales",
+   "title": "Liebester Jesu, wir sind hier",
+   "sct": "BWV 373",
+   "url": "data/perf/chor131.json",
+   "endS": 31.4,
+   "maxCh": 4
+  },
+  {
+   "name": "chor132",
+   "group": "Chorales",
+   "title": "Kyrie! Gott Vater in Ewigkeit",
+   "sct": "BWV 371",
+   "url": "data/perf/chor132.json",
+   "endS": 102.992,
+   "maxCh": 4
+  },
+  {
+   "name": "chor133",
+   "group": "Chorales",
+   "title": "Wir glauben all an einen Gott",
+   "sct": "BWV 437",
+   "url": "data/perf/chor133.json",
+   "endS": 84.174,
+   "maxCh": 4
+  },
+  {
+   "name": "chor134",
+   "group": "Chorales",
+   "title": "Du, o sch\u00f6nes Weltgeb\u00e4ude",
+   "sct": "BWV 301",
+   "url": "data/perf/chor134.json",
+   "endS": 38.44,
+   "maxCh": 4
+  },
+  {
+   "name": "chor135",
+   "group": "Chorales",
+   "title": "Gott der Vater wohn uns bei",
+   "sct": "BWV 317",
+   "url": "data/perf/chor135.json",
+   "endS": 43.08,
+   "maxCh": 4
+  },
+  {
+   "name": "chor136",
+   "group": "Chorales",
+   "title": "Herr Jesu Christ, dich zu uns wend",
+   "sct": "BWV 332",
+   "url": "data/perf/chor136.json",
+   "endS": 22.779,
+   "maxCh": 4
+  },
+  {
+   "name": "chor137",
+   "group": "Chorales",
+   "title": "Wer Gott vertraut, hat wohl gebaut",
+   "sct": "BWV 433",
+   "url": "data/perf/chor137.json",
+   "endS": 55.208,
+   "maxCh": 4
+  },
+  {
+   "name": "chor138",
+   "group": "Chorales",
+   "title": "Jesu, meine Freude",
+   "sct": "BWV 64/8",
+   "url": "data/perf/chor138.json",
+   "endS": 38.601,
+   "maxCh": 4
+  },
+  {
+   "name": "chor139",
+   "group": "Chorales",
+   "title": "Warum sollt ich mich denn gr\u00e4men",
+   "sct": "BWV 248/33",
+   "url": "data/perf/chor139.json",
+   "endS": 35.886,
+   "maxCh": 4
+  },
+  {
+   "name": "chor140",
+   "group": "Chorales",
+   "title": "In allen meinen Taten",
+   "sct": "BWV 367",
+   "url": "data/perf/chor140.json",
+   "endS": 34.937,
+   "maxCh": 4
+  },
+  {
+   "name": "chor141",
+   "group": "Chorales",
+   "title": "Seelenbr\u00e4utigam",
+   "sct": "BWV 409",
+   "url": "data/perf/chor141.json",
+   "endS": 31.258,
+   "maxCh": 4
+  },
+  {
+   "name": "chor142",
+   "group": "Chorales",
+   "title": "Schwing dich auf zu deinem Gott",
+   "sct": "BWV 40/6",
+   "url": "data/perf/chor142.json",
+   "endS": 43.075,
+   "maxCh": 4
+  },
+  {
+   "name": "chor143",
+   "group": "Chorales",
+   "title": "In dulci jubilo",
+   "sct": "BWV 368",
+   "url": "data/perf/chor143.json",
+   "endS": 64.037,
+   "maxCh": 4
+  },
+  {
+   "name": "chor144",
+   "group": "Chorales",
+   "title": "Wer in dem Schutz des H\u00f6chsten ist",
+   "sct": "BWV 339",
+   "url": "data/perf/chor144.json",
+   "endS": 35.871,
+   "maxCh": 4
+  },
+  {
+   "name": "chor145",
+   "group": "Chorales",
+   "title": "Warum betr\u00fcbst du dich, mein Herz",
+   "sct": "BWV 420",
+   "url": "data/perf/chor145.json",
+   "endS": 27.497,
+   "maxCh": 4
+  },
+  {
+   "name": "chor146",
+   "group": "Chorales",
+   "title": "Wer nur den lieben Gott la\u00dft walten",
+   "sct": "BWV 434",
+   "url": "data/perf/chor146.json",
+   "endS": 25.176,
+   "maxCh": 4
+  },
+  {
+   "name": "chor147",
+   "group": "Chorales",
+   "title": "Wenn ich in Angst und Not",
+   "sct": "BWV 427",
+   "url": "data/perf/chor147.json",
+   "endS": 39.721,
+   "maxCh": 4
+  },
+  {
+   "name": "chor148",
+   "group": "Chorales",
+   "title": "Uns ist ein Kindlein heut geborn",
+   "sct": "BWV 414",
+   "url": "data/perf/chor148.json",
+   "endS": 30.132,
+   "maxCh": 4
+  },
+  {
+   "name": "chor149",
+   "group": "Chorales",
+   "title": "Nicht so traurig, nicht so sehr",
+   "sct": "BWV 384",
+   "url": "data/perf/chor149.json",
+   "endS": 23.884,
+   "maxCh": 4
+  },
+  {
+   "name": "chor151",
+   "group": "Chorales",
+   "title": "Meinen Jesum la\u00df ich nicht, Jesus",
+   "sct": "BWV 379",
+   "url": "data/perf/chor151.json",
+   "endS": 26.442,
+   "maxCh": 4
+  },
+  {
+   "name": "chor152",
+   "group": "Chorales",
+   "title": "Meinen Jesum la\u00df ich nicht, weil",
+   "sct": "BWV 154/8",
+   "url": "data/perf/chor152.json",
+   "endS": 35.877,
+   "maxCh": 4
+  },
+  {
+   "name": "chor153",
+   "group": "Chorales",
+   "title": "Alle Menschen m\u00fcssen sterben",
+   "sct": "BWV 262",
+   "url": "data/perf/chor153.json",
+   "endS": 33.48,
+   "maxCh": 4
+  },
+  {
+   "name": "chor154",
+   "group": "Chorales",
+   "title": "Der du bist drei in Einigkeit",
+   "sct": "BWV 293",
+   "url": "data/perf/chor154.json",
+   "endS": 22.757,
+   "maxCh": 4
+  },
+  {
+   "name": "chor155",
+   "group": "Chorales",
+   "title": "Hilf, Herr Jesu, la\u00df gelingen",
+   "sct": "BWV 344",
+   "url": "data/perf/chor155.json",
+   "endS": 46.69,
+   "maxCh": 4
+  },
+  {
+   "name": "chor156",
+   "group": "Chorales",
+   "title": "Ach Gott, wie manches Herzeleid",
+   "sct": "BWV 3/6",
+   "url": "data/perf/chor156.json",
+   "endS": 22.775,
+   "maxCh": 4
+  },
+  {
+   "name": "chor157",
+   "group": "Chorales",
+   "title": "Wo Gott zum Haus nicht gibt sein' Gunst",
+   "sct": "BWV 438",
+   "url": "data/perf/chor157.json",
+   "endS": 22.7,
+   "maxCh": 4
+  },
+  {
+   "name": "chor158",
+   "group": "Chorales",
+   "title": "Der Tag, der ist so freudenreich",
+   "sct": "BWV 294",
+   "url": "data/perf/chor158.json",
+   "endS": 41.962,
+   "maxCh": 4
+  },
+  {
+   "name": "chor159",
+   "group": "Chorales",
+   "title": "Als der g\u00fctige Gott",
+   "sct": "BWV 264",
+   "url": "data/perf/chor159.json",
+   "endS": 29.875,
+   "maxCh": 4
+  },
+  {
+   "name": "chor160",
+   "group": "Chorales",
+   "title": "Gelobet seist du, Jesu Christ",
+   "sct": "BWV 64/2",
+   "url": "data/perf/chor160.json",
+   "endS": 31.682,
+   "maxCh": 4
+  },
+  {
+   "name": "chor161",
+   "group": "Chorales",
+   "title": "Ihr Gestirn, ihr hohen L\u00fcfte",
+   "sct": "BWV 366",
+   "url": "data/perf/chor161.json",
+   "endS": 32.281,
+   "maxCh": 4
+  },
+  {
+   "name": "chor162",
+   "group": "Chorales",
+   "title": "Das alte Jahr vergangen ist",
+   "sct": "BWV 288",
+   "url": "data/perf/chor162.json",
+   "endS": 32.304,
+   "maxCh": 4
+  },
+  {
+   "name": "chor163",
+   "group": "Chorales",
+   "title": "F\u00fcr Freuden la\u00dft uns springen",
+   "sct": "BWV 313",
+   "url": "data/perf/chor163.json",
+   "endS": 25.095,
+   "maxCh": 4
+  },
+  {
+   "name": "chor164",
+   "group": "Chorales",
+   "title": "Herr Gott, dich loben alle wir",
+   "sct": "BWV 326",
+   "url": "data/perf/chor164.json",
+   "endS": 33.493,
+   "maxCh": 4
+  },
+  {
+   "name": "chor165",
+   "group": "Chorales",
+   "title": "O Lamm Gottes, unschuldig",
+   "sct": "BWV 401",
+   "url": "data/perf/chor165.json",
+   "endS": 32.538,
+   "maxCh": 4
+  },
+  {
+   "name": "chor166",
+   "group": "Chorales",
+   "title": "Es stehn vor Gottes Throne",
+   "sct": "BWV 309",
+   "url": "data/perf/chor166.json",
+   "endS": 34.78,
+   "maxCh": 4
+  },
+  {
+   "name": "chor167",
+   "group": "Chorales",
+   "title": "Du gro\u00dfer Schmerzensmann",
+   "sct": "BWV 300",
+   "url": "data/perf/chor167.json",
+   "endS": 44.523,
+   "maxCh": 4
+  },
+  {
+   "name": "chor168",
+   "group": "Chorales",
+   "title": "Heut ist, o Mensch, ein gro\u00dfer Trauertag",
+   "sct": "BWV 341",
+   "url": "data/perf/chor168.json",
+   "endS": 27.724,
+   "maxCh": 4
+  },
+  {
+   "name": "chor169",
+   "group": "Chorales",
+   "title": "Jesu, der du selbsten wohl",
+   "sct": "BWV 355",
+   "url": "data/perf/chor169.json",
+   "endS": 43.24,
+   "maxCh": 4
+  },
+  {
+   "name": "chor170",
+   "group": "Chorales",
+   "title": "Nun komm, der Heiden Heiland",
+   "sct": "BWV 62/6",
+   "url": "data/perf/chor170.json",
+   "endS": 24.053,
+   "maxCh": 4
+  },
+  {
+   "name": "chor171",
+   "group": "Chorales",
+   "title": "Schaut, ihr S\u00fcnder",
+   "sct": "BWV 408",
+   "url": "data/perf/chor171.json",
+   "endS": 33.488,
+   "maxCh": 4
+  },
+  {
+   "name": "chor172",
+   "group": "Chorales",
+   "title": "Sei gegr\u00fc\u00dfet, Jesu g\u00fctig",
+   "sct": "BWV 410",
+   "url": "data/perf/chor172.json",
+   "endS": 40.677,
+   "maxCh": 4
+  },
+  {
+   "name": "chor173",
+   "group": "Chorales",
+   "title": "O Herzensangst, o Bangigkeit",
+   "sct": "BWV 400",
+   "url": "data/perf/chor173.json",
+   "endS": 38.521,
+   "maxCh": 4
+  },
+  {
+   "name": "chor174",
+   "group": "Chorales",
+   "title": "Jesus Christus, unser Heiland",
+   "sct": "BWV 364",
+   "url": "data/perf/chor174.json",
+   "endS": 33.468,
+   "maxCh": 4
+  },
+  {
+   "name": "chor175",
+   "group": "Chorales",
+   "title": "Jesus, meine Zuversicht",
+   "sct": "BWV 365",
+   "url": "data/perf/chor175.json",
+   "endS": 26.453,
+   "maxCh": 4
+  },
+  {
+   "name": "chor176",
+   "group": "Chorales",
+   "title": "Erstanden ist der heil'ge Christ",
+   "sct": "BWV 306",
+   "url": "data/perf/chor176.json",
+   "endS": 33.648,
+   "maxCh": 4
+  },
+  {
+   "name": "chor177",
+   "group": "Chorales",
+   "title": "Ach bleib bei uns, Herr Jesu Christ",
+   "sct": "BWV 253",
+   "url": "data/perf/chor177.json",
+   "endS": 30.135,
+   "maxCh": 4
+  },
+  {
+   "name": "chor178",
+   "group": "Chorales",
+   "title": "Das neugeborne Kindelein",
+   "sct": "BWV 122",
+   "url": "data/perf/chor178.json",
+   "endS": 34.923,
+   "maxCh": 4
+  },
+  {
+   "name": "chor179",
+   "group": "Chorales",
+   "title": "Wachet auf, ruft uns die Stimme",
+   "sct": "BWV 140/7",
+   "url": "data/perf/chor179.json",
+   "endS": 45.476,
+   "maxCh": 4
+  },
+  {
+   "name": "chor180",
+   "group": "Chorales",
+   "title": "Als Jesus Christus in der Nacht",
+   "sct": "BWV 265",
+   "url": "data/perf/chor180.json",
+   "endS": 22.699,
+   "maxCh": 4
+  },
+  {
+   "name": "chor181",
+   "group": "Chorales",
+   "title": "Gott hat das Evangelium",
+   "sct": "BWV 319",
+   "url": "data/perf/chor181.json",
+   "endS": 32.281,
+   "maxCh": 4
+  },
+  {
+   "name": "chor182",
+   "group": "Chorales",
+   "title": "W\u00e4r Gott nicht mit uns diese Zeit",
+   "sct": "BWV 14/5",
+   "url": "data/perf/chor182.json",
+   "endS": 27.57,
+   "maxCh": 4
+  },
+  {
+   "name": "chor183",
+   "group": "Chorales",
+   "title": "Nun freut euch, lieben Christen g'mein",
+   "sct": "BWV 388",
+   "url": "data/perf/chor183.json",
+   "endS": 27.582,
+   "maxCh": 4
+  },
+  {
+   "name": "chor184",
+   "group": "Chorales",
+   "title": "Christ lag in Todesbanden",
+   "sct": "BWV 4/8",
+   "url": "data/perf/chor184.json",
+   "endS": 34.264,
+   "maxCh": 4
+  },
+  {
+   "name": "chor185",
+   "group": "Chorales",
+   "title": "Nun freut euch, Gottes Kinder all",
+   "sct": "BWV 387",
+   "url": "data/perf/chor185.json",
+   "endS": 22.791,
+   "maxCh": 4
+  },
+  {
+   "name": "chor186",
+   "group": "Chorales",
+   "title": "Ach Gott, erh\u00f6r mein Seufzen",
+   "sct": "BWV 254",
+   "url": "data/perf/chor186.json",
+   "endS": 29.977,
+   "maxCh": 4
+  },
+  {
+   "name": "chor187",
+   "group": "Chorales",
+   "title": "Komm, Gott Sch\u00f6pfer, heiliger Geist",
+   "sct": "BWV 370",
+   "url": "data/perf/chor187.json",
+   "endS": 22.698,
+   "maxCh": 4
+  },
+  {
+   "name": "chor188",
+   "group": "Chorales",
+   "title": "Ich dank dir schon durch deinen Sohn",
+   "sct": "BWV 349",
+   "url": "data/perf/chor188.json",
+   "endS": 34.678,
+   "maxCh": 4
+  },
+  {
+   "name": "chor189",
+   "group": "Chorales",
+   "title": "Herr Jesu Christ, wahr Mensch und Gott",
+   "sct": "BWV 336",
+   "url": "data/perf/chor189.json",
+   "endS": 22.78,
+   "maxCh": 4
+  },
+  {
+   "name": "chor190",
+   "group": "Chorales",
+   "title": "Herr, nun la\u00df in Friede",
+   "sct": "BWV 337",
+   "url": "data/perf/chor190.json",
+   "endS": 33.488,
+   "maxCh": 4
+  },
+  {
+   "name": "chor191",
+   "group": "Chorales",
+   "title": "Von Gott will ich nicht lassen",
+   "sct": "BWV 73/5",
+   "url": "data/perf/chor191.json",
+   "endS": 34.698,
+   "maxCh": 4
+  },
+  {
+   "name": "chor192",
+   "group": "Chorales",
+   "title": "Gottlob, es geht nunmehr zu Ende",
+   "sct": "BWV 321",
+   "url": "data/perf/chor192.json",
+   "endS": 34.924,
+   "maxCh": 4
+  },
+  {
+   "name": "chor193",
+   "group": "Chorales",
+   "title": "Was bist du doch, o Seele, so betr\u00fcbet",
+   "sct": "BWV 424",
+   "url": "data/perf/chor193.json",
+   "endS": 27.479,
+   "maxCh": 4
+  },
+  {
+   "name": "chor194",
+   "group": "Chorales",
+   "title": "Liebster Immanuel, Herzog der Frommen",
+   "sct": "BWV 123/16",
+   "url": "data/perf/chor194.json",
+   "endS": 67.091,
+   "maxCh": 4
+  },
+  {
+   "name": "chor195",
+   "group": "Chorales",
+   "title": "Wie sch\u00f6n leuchtet der Morgenstern",
+   "sct": "BWV 36(1)/5 & 36(2)/4",
+   "url": "data/perf/chor195.json",
+   "endS": 37.158,
+   "maxCh": 4
+  },
+  {
+   "name": "chor196",
+   "group": "Chorales",
+   "title": "Da der Herr Christ zu Tische sa\u00df",
+   "sct": "BWV 285",
+   "url": "data/perf/chor196.json",
+   "endS": 32.302,
+   "maxCh": 4
+  },
+  {
+   "name": "chor197",
+   "group": "Chorales",
+   "title": "Christ ist erstanden",
+   "sct": "BWV 276",
+   "url": "data/perf/chor197.json",
+   "endS": 77.836,
+   "maxCh": 4
+  },
+  {
+   "name": "chor198",
+   "group": "Chorales",
+   "title": "Christus, der uns selig macht",
+   "sct": "BWV 283",
+   "url": "data/perf/chor198.json",
+   "endS": 45.463,
+   "maxCh": 4
+  },
+  {
+   "name": "chor199",
+   "group": "Chorales",
+   "title": "Hilf, Gott, la\u00df mir's gelingen",
+   "sct": "BWV 343",
+   "url": "data/perf/chor199.json",
+   "endS": 42.649,
+   "maxCh": 4
+  },
+  {
+   "name": "chor200",
+   "group": "Chorales",
+   "title": "Christus ist erstanden, hat \u00fcberwunden",
+   "sct": "BWV 284",
+   "url": "data/perf/chor200.json",
+   "endS": 40.852,
+   "maxCh": 4
+  },
+  {
+   "name": "chor201",
+   "group": "Chorales",
+   "title": "O Mensch, bewein dein' S\u00fcnde gro\u00df",
+   "sct": "BWV 402",
+   "url": "data/perf/chor201.json",
+   "endS": 46.781,
+   "maxCh": 4
+  },
+  {
+   "name": "chor202",
+   "group": "Chorales",
+   "title": "O wir armen S\u00fcnder",
+   "sct": "BWV 407",
+   "url": "data/perf/chor202.json",
+   "endS": 69.61,
+   "maxCh": 4
+  },
+  {
+   "name": "chor203",
+   "group": "Chorales",
+   "title": "O Mensch, schau Jesum Christum an",
+   "sct": "BWV 403",
+   "url": "data/perf/chor203.json",
+   "endS": 43.926,
+   "maxCh": 4
+  },
+  {
+   "name": "chor204",
+   "group": "Chorales",
+   "title": "Wer wei\u00df, wie nahe mir mein Ende",
+   "sct": "BWV 166/6",
+   "url": "data/perf/chor204.json",
+   "endS": 25.174,
+   "maxCh": 4
+  },
+  {
+   "name": "chor205",
+   "group": "Chorales",
+   "title": "Herr Gott, dich loben wir",
+   "sct": "BWV 328",
+   "url": "data/perf/chor205.json",
+   "endS": 122.783,
+   "maxCh": 4
+  },
+  {
+   "name": "chor206",
+   "group": "Chorales",
+   "title": "So gibst du nun, mein Jesu, gute Nacht",
+   "sct": "BWV 412",
+   "url": "data/perf/chor206.json",
+   "endS": 39.556,
+   "maxCh": 4
+  },
+  {
+   "name": "chor207",
+   "group": "Chorales",
+   "title": "Des heil'gen Geistes reiche Gnad",
+   "sct": "BWV 295",
+   "url": "data/perf/chor207.json",
+   "endS": 34.935,
+   "maxCh": 4
+  },
+  {
+   "name": "chor208",
+   "group": "Chorales",
+   "title": "Als vierzig Tag nach Ostern",
+   "sct": "BWV 266",
+   "url": "data/perf/chor208.json",
+   "endS": 45.471,
+   "maxCh": 4
+  },
+  {
+   "name": "chor209",
+   "group": "Chorales",
+   "title": "Dir, dir, Jehova will ich singen",
+   "sct": "BWV 299",
+   "url": "data/perf/chor209.json",
+   "endS": 33.494,
+   "maxCh": 4
+  },
+  {
+   "name": "chor210",
+   "group": "Chorales",
+   "title": "Christe, du Beistand deiner Kreuzgemeinde",
+   "sct": "BWV 275",
+   "url": "data/perf/chor210.json",
+   "endS": 41.871,
+   "maxCh": 4
+  },
+  {
+   "name": "chor211",
+   "group": "Chorales",
+   "title": "Weltlich Ehr und zeitlich Gut",
+   "sct": "BWV 426",
+   "url": "data/perf/chor211.json",
+   "endS": 43.078,
+   "maxCh": 4
+  },
+  {
+   "name": "chor212",
+   "group": "Chorales",
+   "title": "Herr, ich dank an jene Zeit",
+   "sct": "BWV 329",
+   "url": "data/perf/chor212.json",
+   "endS": 40.665,
+   "maxCh": 4
+  },
+  {
+   "name": "chor213",
+   "group": "Chorales",
+   "title": "O wie selig ihr doch, ihr Frommen",
+   "sct": "BWV 405",
+   "url": "data/perf/chor213.json",
+   "endS": 31.09,
+   "maxCh": 4
+  },
+  {
+   "name": "chor214",
+   "group": "Chorales",
+   "title": "Mitten wir im Leben sind",
+   "sct": "BWV 383",
+   "url": "data/perf/chor214.json",
+   "endS": 71.823,
+   "maxCh": 4
+  },
+  {
+   "name": "chor215",
+   "group": "Chorales",
+   "title": "Verleih uns Frieden gn\u00e4diglich",
+   "sct": "BWV 126/6",
+   "url": "data/perf/chor215.json",
+   "endS": 70.892,
+   "maxCh": 4
+  },
+  {
+   "name": "chor216",
+   "group": "Chorales",
+   "title": "Es ist genug! so nimm Herr",
+   "sct": "BWV 60/5",
+   "url": "data/perf/chor216.json",
+   "endS": 52.806,
+   "maxCh": 4
+  },
+  {
+   "name": "chor217",
+   "group": "Chorales",
+   "title": "Ach Gott, wie manches Herzeleid",
+   "sct": "BWV 153/9",
+   "url": "data/perf/chor217.json",
+   "endS": 34.676,
+   "maxCh": 4
+  },
+  {
+   "name": "chor218",
+   "group": "Chorales",
+   "title": "La\u00df, o Herr, dein Ohr sich neigen",
+   "sct": "BWV 372",
+   "url": "data/perf/chor218.json",
+   "endS": 42.046,
+   "maxCh": 4
+  },
+  {
+   "name": "chor219",
+   "group": "Chorales",
+   "title": "O wie selig seid ihr doch, ihr Frommen",
+   "sct": "BWV 406",
+   "url": "data/perf/chor219.json",
+   "endS": 33.819,
+   "maxCh": 4
+  },
+  {
+   "name": "chor220",
+   "group": "Chorales",
+   "title": "Sollt ich meinem Gott nicht singen",
+   "sct": "BWV 413",
+   "url": "data/perf/chor220.json",
+   "endS": 63.447,
+   "maxCh": 4
+  },
+  {
+   "name": "chor221",
+   "group": "Chorales",
+   "title": "Herr, straf mich nicht in deinem Zorn",
+   "sct": "BWV 338",
+   "url": "data/perf/chor221.json",
+   "endS": 27.575,
+   "maxCh": 4
+  },
+  {
+   "name": "chor222",
+   "group": "Chorales",
+   "title": "Nun preiset alle Gottes Barmherzigkeit",
+   "sct": "BWV 391",
+   "url": "data/perf/chor222.json",
+   "endS": 35.969,
+   "maxCh": 4
+  },
+  {
+   "name": "chor223",
+   "group": "Chorales",
+   "title": "Ich dank dir, Gott, f\u00fcr all Wohlat",
+   "sct": "BWV 346",
+   "url": "data/perf/chor223.json",
+   "endS": 44.036,
+   "maxCh": 4
+  },
+  {
+   "name": "chor224",
+   "group": "Chorales",
+   "title": "Das walt Gott Vater und Gott Sohn",
+   "sct": "BWV 290",
+   "url": "data/perf/chor224.json",
+   "endS": 22.708,
+   "maxCh": 4
+  },
+  {
+   "name": "chor225",
+   "group": "Chorales",
+   "title": "Gott, der du selber bist das Licht",
+   "sct": "BWV 316",
+   "url": "data/perf/chor225.json",
+   "endS": 27.586,
+   "maxCh": 4
+  },
+  {
+   "name": "chor226",
+   "group": "Chorales",
+   "title": "Herr Jesu Christ, du hast bereit't",
+   "sct": "BWV 333",
+   "url": "data/perf/chor226.json",
+   "endS": 27.579,
+   "maxCh": 4
+  },
+  {
+   "name": "chor227",
+   "group": "Chorales",
+   "title": "Lobet den Herren, denn er ist freundlich",
+   "sct": "BWV 374",
+   "url": "data/perf/chor227.json",
+   "endS": 51.441,
+   "maxCh": 4
+  },
+  {
+   "name": "chor228",
+   "group": "Chorales",
+   "title": "Danket dem Herren, denn er ist sehr freundlich",
+   "sct": "BWV 286",
+   "url": "data/perf/chor228.json",
+   "endS": 17.968,
+   "maxCh": 4
+  },
+  {
+   "name": "chor229",
+   "group": "Chorales",
+   "title": "Ich danke dir, o Gott, in deinem Throne",
+   "sct": "BWV 350",
+   "url": "data/perf/chor229.json",
+   "endS": 46.758,
+   "maxCh": 4
+  },
+  {
+   "name": "chor230",
+   "group": "Chorales",
+   "title": "Christ, der du bist der helle Tag",
+   "sct": "BWV 273",
+   "url": "data/perf/chor230.json",
+   "endS": 27.583,
+   "maxCh": 4
+  },
+  {
+   "name": "chor231",
+   "group": "Chorales",
+   "title": "Die Nacht ist kommen",
+   "sct": "BWV 296",
+   "url": "data/perf/chor231.json",
+   "endS": 41.269,
+   "maxCh": 4
+  },
+  {
+   "name": "chor232",
+   "group": "Chorales",
+   "title": "Die Sonn hat sich mit ihrem Glanz",
+   "sct": "BWV 297",
+   "url": "data/perf/chor232.json",
+   "endS": 31.867,
+   "maxCh": 4
+  },
+  {
+   "name": "chor233",
+   "group": "Chorales",
+   "title": "Werde munter, mein Gem\u00fcte",
+   "sct": "BWV 154/3",
+   "url": "data/perf/chor233.json",
+   "endS": 33.643,
+   "maxCh": 4
+  },
+  {
+   "name": "chor234",
+   "group": "Chorales",
+   "title": "Gott lebet noch",
+   "sct": "BWV 320",
+   "url": "data/perf/chor234.json",
+   "endS": 74.516,
+   "maxCh": 4
+  },
+  {
+   "name": "chor235",
+   "group": "Chorales",
+   "title": "Heilig, heilig",
+   "sct": "BWV 325",
+   "url": "data/perf/chor235.json",
+   "endS": 45.636,
+   "maxCh": 4
+  },
+  {
+   "name": "chor236",
+   "group": "Chorales",
+   "title": "O Jesu, du mein Br\u00e4utigam",
+   "sct": "BWV 335",
+   "url": "data/perf/chor236.json",
+   "endS": 22.79,
+   "maxCh": 4
+  },
+  {
+   "name": "chor237",
+   "group": "Chorales",
+   "title": "Was betr\u00fcbst du dich, mein Herze",
+   "sct": "BWV 423",
+   "url": "data/perf/chor237.json",
+   "endS": 43.097,
+   "maxCh": 4
+  },
+  {
+   "name": "chor238",
+   "group": "Chorales",
+   "title": "Es wind schier der letzte Tag",
+   "sct": "BWV 310",
+   "url": "data/perf/chor238.json",
+   "endS": 31.072,
+   "maxCh": 4
+  },
+  {
+   "name": "chor239",
+   "group": "Chorales",
+   "title": "Den Veter dort oben",
+   "sct": "BWV 292",
+   "url": "data/perf/chor239.json",
+   "endS": 38.434,
+   "maxCh": 4
+  },
+  {
+   "name": "chor240",
+   "group": "Chorales",
+   "title": "Nun sich der Tag geendet hat",
+   "sct": "BWV 396",
+   "url": "data/perf/chor240.json",
+   "endS": 25.345,
+   "maxCh": 4
+  },
+  {
+   "name": "chor241",
+   "group": "Chorales",
+   "title": "Was willst du dich, o meine Seele",
+   "sct": "BWV 425",
+   "url": "data/perf/chor241.json",
+   "endS": 65.218,
+   "maxCh": 4
+  },
+  {
+   "name": "chor242",
+   "group": "Chorales",
+   "title": "Wie bist du, Seele, in mir so gar betr\u00fcbt",
+   "sct": "BWV 435",
+   "url": "data/perf/chor242.json",
+   "endS": 29.892,
+   "maxCh": 4
+  },
+  {
+   "name": "chor243",
+   "group": "Chorales",
+   "title": "Jesu, du mein liebstes Leben",
+   "sct": "BWV 356",
+   "url": "data/perf/chor243.json",
+   "endS": 42.127,
+   "maxCh": 4
+  },
+  {
+   "name": "chor244",
+   "group": "Chorales",
+   "title": "Jesu, Jesu, du bist mein",
+   "sct": "BWV 357",
+   "url": "data/perf/chor244.json",
+   "endS": 43.087,
+   "maxCh": 4
+  },
+  {
+   "name": "chor245",
+   "group": "Chorales",
+   "title": "Christe, der du bist Tag und Licht",
+   "sct": "BWV 274",
+   "url": "data/perf/chor245.json",
+   "endS": 22.761,
+   "maxCh": 4
+  },
+  {
+   "name": "chor246",
+   "group": "Chorales",
+   "title": "Singt dem Herrn ein neues Lied",
+   "sct": "BWV 411",
+   "url": "data/perf/chor246.json",
+   "endS": 36.039,
+   "maxCh": 4
+  },
+  {
+   "name": "chor247",
+   "group": "Chorales",
+   "title": "Wenn wir in h\u00f6chsten N\u00f6ten sein",
+   "sct": "BWV 432",
+   "url": "data/perf/chor247.json",
+   "endS": 22.78,
+   "maxCh": 4
+  },
+  {
+   "name": "chor248",
+   "group": "Chorales",
+   "title": "Sei Lob und Ehr dem h\u00f6chsten Gut",
+   "sct": "BWV 117/4",
+   "url": "data/perf/chor248.json",
+   "endS": 27.574,
+   "maxCh": 4
+  },
+  {
+   "name": "chor249",
+   "group": "Chorales",
+   "title": "Allein Gott in der H\u00f6h sei Ehr",
+   "sct": "BWV 260",
+   "url": "data/perf/chor249.json",
+   "endS": 27.566,
+   "maxCh": 4
+  },
+  {
+   "name": "chor250",
+   "group": "Chorales",
+   "title": "Ein feste Burg ist unser Gott",
+   "sct": "BWV 303",
+   "url": "data/perf/chor250.json",
+   "endS": 29.897,
+   "maxCh": 4
+  },
+  {
+   "name": "chor251",
+   "group": "Chorales",
+   "title": "Ich bin ja, Herr, in deiner Macht",
+   "sct": "BWV 345",
+   "url": "data/perf/chor251.json",
+   "endS": 27.585,
+   "maxCh": 4
+  },
+  {
+   "name": "chor252",
+   "group": "Chorales",
+   "title": "Jesu, nun sei gepreiset",
+   "sct": "BWV 362",
+   "url": "data/perf/chor252.json",
+   "endS": 69.701,
+   "maxCh": 4
+  },
+  {
+   "name": "chor253",
+   "group": "Chorales",
+   "title": "Ach Gott, vom Himmel seih darein",
+   "sct": "BWV 77/6",
+   "url": "data/perf/chor253.json",
+   "endS": 44.242,
+   "maxCh": 4
+  },
+  {
+   "name": "chor254",
+   "group": "Chorales",
+   "title": "Weg, mein Herz, mit den Gedanken",
+   "sct": "BWV 25/6",
+   "url": "data/perf/chor254.json",
+   "endS": 35.878,
+   "maxCh": 4
+  },
+  {
+   "name": "chor255",
+   "group": "Chorales",
+   "title": "Was frag ich nach der Welt",
+   "sct": "BWV 64/4",
+   "url": "data/perf/chor255.json",
+   "endS": 44.261,
+   "maxCh": 4
+  },
+  {
+   "name": "chor256",
+   "group": "Chorales",
+   "title": "Jesu, deine tiefen Wunden",
+   "sct": "BWV 194/6",
+   "url": "data/perf/chor256.json",
+   "endS": 36.039,
+   "maxCh": 4
+  },
+  {
+   "name": "chor257",
+   "group": "Chorales",
+   "title": "Nun la\u00dft uns Gott, dem Herren",
+   "sct": "BWV 194/12",
+   "url": "data/perf/chor257.json",
+   "endS": 35.516,
+   "maxCh": 4
+  },
+  {
+   "name": "chor258",
+   "group": "Chorales",
+   "title": "Mein' Augen schlie\u00df ich jetzt",
+   "sct": "BWV 378",
+   "url": "data/perf/chor258.json",
+   "endS": 41.957,
+   "maxCh": 4
+  },
+  {
+   "name": "chor259",
+   "group": "Chorales",
+   "title": "Verleih uns Frieden gn\u00e4diglich",
+   "sct": "BWV 42/7",
+   "url": "data/perf/chor259.json",
+   "endS": 70.636,
+   "maxCh": 4
+  },
+  {
+   "name": "chor260",
+   "group": "Chorales",
+   "title": "Es ist gewi\u00dflich an der Zeit",
+   "sct": "BWV 307",
+   "url": "data/perf/chor260.json",
+   "endS": 27.572,
+   "maxCh": 4
+  },
+  {
+   "name": "chor261",
+   "group": "Chorales",
+   "title": "Christ lag in Todesbanden",
+   "sct": "BWV 158/4 (279)",
+   "url": "data/perf/chor261.json",
+   "endS": 36.5,
+   "maxCh": 4
+  },
+  {
+   "name": "chor262",
+   "group": "Chorales",
+   "title": "Ach Gott, vom Himmel sieh darein",
+   "sct": "BWV 2/6",
+   "url": "data/perf/chor262.json",
+   "endS": 32.295,
+   "maxCh": 4
+  },
+  {
+   "name": "chor263",
+   "group": "Chorales",
+   "title": "Jesu, meine Freude",
+   "sct": "BWV 227/1",
+   "url": "data/perf/chor263.json",
+   "endS": 38.262,
+   "maxCh": 4
+  },
+  {
+   "name": "chor264",
+   "group": "Chorales",
+   "title": "Jesu meines Herzens Freud",
+   "sct": "BWV 361",
+   "url": "data/perf/chor264.json",
+   "endS": 38.591,
+   "maxCh": 4
+  },
+  {
+   "name": "chor265",
+   "group": "Chorales",
+   "title": "Was mein Gott will, das g'schen allzeit",
+   "sct": "BWV 144/6",
+   "url": "data/perf/chor265.json",
+   "endS": 42.128,
+   "maxCh": 4
+  },
+  {
+   "name": "chor266",
+   "group": "Chorales",
+   "title": "Herr Jesu Christ, du h\u00f6chstes Gut",
+   "sct": "BWV 48/7",
+   "url": "data/perf/chor266.json",
+   "endS": 32.532,
+   "maxCh": 4
+  },
+  {
+   "name": "chor267",
+   "group": "Chorales",
+   "title": "Vater unser im Himmelreich",
+   "sct": "BWV 90/5",
+   "url": "data/perf/chor267.json",
+   "endS": 34.261,
+   "maxCh": 4
+  },
+  {
+   "name": "chor268",
+   "group": "Chorales",
+   "title": "Nun lob, mein Seel, den Herren",
+   "sct": "BWV 389",
+   "url": "data/perf/chor268.json",
+   "endS": 51.727,
+   "maxCh": 4
+  },
+  {
+   "name": "chor269",
+   "group": "Chorales",
+   "title": "Jesu, der du meine Seele",
+   "sct": "BWV 353",
+   "url": "data/perf/chor269.json",
+   "endS": 38.442,
+   "maxCh": 4
+  },
+  {
+   "name": "chor270",
+   "group": "Chorales",
+   "title": "Befiehl du deine Wege",
+   "sct": "BWV 161/6",
+   "url": "data/perf/chor270.json",
+   "endS": 34.7,
+   "maxCh": 4
+  },
+  {
+   "name": "chor271",
+   "group": "Chorales",
+   "title": "Gib dich zufrieden und sei stille",
+   "sct": "BWV 315",
+   "url": "data/perf/chor271.json",
+   "endS": 32.29,
+   "maxCh": 4
+  },
+  {
+   "name": "chor272",
+   "group": "Chorales",
+   "title": "Ich dank' dir, lieber Herre",
+   "sct": "BWV 348",
+   "url": "data/perf/chor272.json",
+   "endS": 41.875,
+   "maxCh": 4
+  },
+  {
+   "name": "chor273",
+   "group": "Chorales",
+   "title": "Ein feste Burg ist unser Gott",
+   "sct": "BWV 80/8",
+   "url": "data/perf/chor273.json",
+   "endS": 32.296,
+   "maxCh": 4
+  },
+  {
+   "name": "chor274",
+   "group": "Chorales",
+   "title": "O Ewigkeit, du Donnerwort",
+   "sct": "BWV 397",
+   "url": "data/perf/chor274.json",
+   "endS": 35.881,
+   "maxCh": 4
+  },
+  {
+   "name": "chor275",
+   "group": "Chorales",
+   "title": "O Welt, sieh hier dein Leben",
+   "sct": "BWV 393",
+   "url": "data/perf/chor275.json",
+   "endS": 34.245,
+   "maxCh": 4
+  },
+  {
+   "name": "chor276",
+   "group": "Chorales",
+   "title": "Lobt Gott, ihr Christen allzugleich",
+   "sct": "BWV 375",
+   "url": "data/perf/chor276.json",
+   "endS": 30.134,
+   "maxCh": 4
+  },
+  {
+   "name": "chor277",
+   "group": "Chorales",
+   "title": "Herzlich lieb hab ich dich, o Herr",
+   "sct": "BWV 340",
+   "url": "data/perf/chor277.json",
+   "endS": 49.094,
+   "maxCh": 4
+  },
+  {
+   "name": "chor278",
+   "group": "Chorales",
+   "title": "Wie sch\u00f6n leuchtet der Morgenstern",
+   "sct": "BWV 436",
+   "url": "data/perf/chor278.json",
+   "endS": 37.156,
+   "maxCh": 4
+  },
+  {
+   "name": "chor279",
+   "group": "Chorales",
+   "title": "Ach Gott und Herr",
+   "sct": "BWV 48/3",
+   "url": "data/perf/chor279.json",
+   "endS": 30.134,
+   "maxCh": 4
+  },
+  {
+   "name": "chor280",
+   "group": "Chorales",
+   "title": "Eins ist not, ach Herr, dies eine",
+   "sct": "BWV 304",
+   "url": "data/perf/chor280.json",
+   "endS": 54.434,
+   "maxCh": 4
+  },
+  {
+   "name": "chor281",
+   "group": "Chorales",
+   "title": "Wo soll ich fliehen hin",
+   "sct": "BWV 89/6",
+   "url": "data/perf/chor281.json",
+   "endS": 32.381,
+   "maxCh": 4
+  },
+  {
+   "name": "chor282",
+   "group": "Chorales",
+   "title": "Freu dich sehr, o meine Seele",
+   "sct": "BWV 25/6",
+   "url": "data/perf/chor282.json",
+   "endS": 35.876,
+   "maxCh": 4
+  },
+  {
+   "name": "chor283",
+   "group": "Chorales",
+   "title": "Jesu, meine Freude",
+   "sct": "BWV 227/7",
+   "url": "data/perf/chor283.json",
+   "endS": 38.275,
+   "maxCh": 4
+  },
+  {
+   "name": "chor284",
+   "group": "Chorales",
+   "title": "Herr Jesu Christ, wahr Mensch und Gott",
+   "sct": "BWV 127/5",
+   "url": "data/perf/chor284.json",
+   "endS": 32.292,
+   "maxCh": 4
+  },
+  {
+   "name": "chor285",
+   "group": "Chorales",
+   "title": "W\u00e4r Gott nicht mit uns diese Zeit",
+   "sct": "BWV 257",
+   "url": "data/perf/chor285.json",
+   "endS": 27.573,
+   "maxCh": 4
+  },
+  {
+   "name": "chor286",
+   "group": "Chorales",
+   "title": "Befiehl du deine Wege",
+   "sct": "BWV 270",
+   "url": "data/perf/chor286.json",
+   "endS": 34.686,
+   "maxCh": 4
+  },
+  {
+   "name": "chor287",
+   "group": "Chorales",
+   "title": "Herr, ich habe mi\u00dfgehandelt",
+   "sct": "BWV 331",
+   "url": "data/perf/chor287.json",
+   "endS": 28.847,
+   "maxCh": 4
+  },
+  {
+   "name": "chor288",
+   "group": "Chorales",
+   "title": "Gelobet seist du, Jesu Christ",
+   "sct": "BWV 314",
+   "url": "data/perf/chor288.json",
+   "endS": 27.493,
+   "maxCh": 4
+  },
+  {
+   "name": "chor289",
+   "group": "Chorales",
+   "title": "Nun ruhen alle W\u00e4lder",
+   "sct": "BWV 392",
+   "url": "data/perf/chor289.json",
+   "endS": 32.291,
+   "maxCh": 4
+  },
+  {
+   "name": "chor290",
+   "group": "Chorales",
+   "title": "Es ist das Heil uns kommen her",
+   "sct": "BWV 917",
+   "url": "data/perf/chor290.json",
+   "endS": 27.577,
+   "maxCh": 4
+  },
+  {
+   "name": "chor291",
+   "group": "Chorales",
+   "title": "Was frag ich nach der Welt",
+   "sct": "BWV 64/4 (94/8)",
+   "url": "data/perf/chor291.json",
+   "endS": 44.27,
+   "maxCh": 4
+  },
+  {
+   "name": "chor292",
+   "group": "Chorales",
+   "title": "Nimm von uns, Herr, du treuer Gott",
+   "sct": "BWV 101/7",
+   "url": "data/perf/chor292.json",
+   "endS": 32.313,
+   "maxCh": 4
+  },
+  {
+   "name": "chor293",
+   "group": "Chorales",
+   "title": "Was Gott tut, das ist wohlgetan",
+   "sct": "BWV 12/7 & 69a/16",
+   "url": "data/perf/chor293.json",
+   "endS": 27.575,
+   "maxCh": 4
+  },
+  {
+   "name": "chor294",
+   "group": "Chorales",
+   "title": "Herr Jesu Christ, du h\u00f6chstes Gut",
+   "sct": "BWV 113/8",
+   "url": "data/perf/chor294.json",
+   "endS": 32.277,
+   "maxCh": 4
+  },
+  {
+   "name": "chor295",
+   "group": "Chorales",
+   "title": "Herr Jesu Christ, mein's Lebens Licht",
+   "sct": "BWV 335",
+   "url": "data/perf/chor295.json",
+   "endS": 22.787,
+   "maxCh": 4
+  },
+  {
+   "name": "chor296",
+   "group": "Chorales",
+   "title": "Nun lob, mein Seel, den Herren",
+   "sct": "BWV 390",
+   "url": "data/perf/chor296.json",
+   "endS": 69.472,
+   "maxCh": 4
+  },
+  {
+   "name": "chor297",
+   "group": "Chorales",
+   "title": "Jesu, der du meine Seele",
+   "sct": "BWV 78/7",
+   "url": "data/perf/chor297.json",
+   "endS": 43.239,
+   "maxCh": 4
+  },
+  {
+   "name": "chor298",
+   "group": "Chorales",
+   "title": "Weg, mein Herz, mit den Gedanken",
+   "sct": "BWV 19/7",
+   "url": "data/perf/chor298.json",
+   "endS": 54.457,
+   "maxCh": 4
+  },
+  {
+   "name": "chor299",
+   "group": "Chorales",
+   "title": "Meinen Jesum la\u00df ich nicht, weil",
+   "sct": "BWV 380",
+   "url": "data/perf/chor299.json",
+   "endS": 35.877,
+   "maxCh": 4
+  },
+  {
+   "name": "chor300",
+   "group": "Chorales",
+   "title": "Warum betr\u00fcbst du dich, mein Herz",
+   "sct": "BWV 421",
+   "url": "data/perf/chor300.json",
+   "endS": 27.583,
+   "maxCh": 4
+  },
+  {
+   "name": "chor301",
+   "group": "Chorales",
+   "title": "Ach lieben Christen, seid getrost",
+   "sct": "BWV 114/7",
+   "url": "data/perf/chor301.json",
+   "endS": 27.585,
+   "maxCh": 4
+  },
+  {
+   "name": "chor302",
+   "group": "Chorales",
+   "title": "Hilf, Gott, la\u00df mir's gelingen",
+   "sct": "BWV 343",
+   "url": "data/perf/chor302.json",
+   "endS": 42.651,
+   "maxCh": 4
+  },
+  {
+   "name": "chor303",
+   "group": "Chorales",
+   "title": "Herr Christ, der ein'ge Gotts Sohn",
+   "sct": "BWV 96/6",
+   "url": "data/perf/chor303.json",
+   "endS": 30.124,
+   "maxCh": 4
+  },
+  {
+   "name": "chor304",
+   "group": "Chorales",
+   "title": "Auf meinen lieben Gott",
+   "sct": "BWV 5/7",
+   "url": "data/perf/chor304.json",
+   "endS": 32.382,
+   "maxCh": 4
+  },
+  {
+   "name": "chor305",
+   "group": "Chorales",
+   "title": "Wie sch\u00f6n leuchtet der Morgenstern",
+   "sct": "BWV 36.4",
+   "url": "data/perf/chor305.json",
+   "endS": 37.158,
+   "maxCh": 4
+  },
+  {
+   "name": "chor306",
+   "group": "Chorales",
+   "title": "O Mensch, bewein dein' S\u00fcnde gro\u00df",
+   "sct": "BWV 402",
+   "url": "data/perf/chor306.json",
+   "endS": 46.779,
+   "maxCh": 4
+  },
+  {
+   "name": "chor307",
+   "group": "Chorales",
+   "title": "Christus, der uns selig macht",
+   "sct": "BWV 283",
+   "url": "data/perf/chor307.json",
+   "endS": 45.464,
+   "maxCh": 4
+  },
+  {
+   "name": "chor308",
+   "group": "Chorales",
+   "title": "Ach Gott, wie manches Herzeleid",
+   "sct": "BWV 3/6",
+   "url": "data/perf/chor308.json",
+   "endS": 22.775,
+   "maxCh": 4
+  },
+  {
+   "name": "chor309",
+   "group": "Chorales",
+   "title": "Ein L\u00e4mmelein geht und tr\u00e4gt die Schuld",
+   "sct": "BWV 267",
+   "url": "data/perf/chor309.json",
+   "endS": 44.37,
+   "maxCh": 4
+  },
+  {
+   "name": "chor310",
+   "group": "Chorales",
+   "title": "Mach's mit mir, Gott, nach deiner G\u00fct",
+   "sct": "BWV 245/22",
+   "url": "data/perf/chor310.json",
+   "endS": 22.783,
+   "maxCh": 4
+  },
+  {
+   "name": "chor311",
+   "group": "Chorales",
+   "title": "Dank sei Gott in der H\u00f6he",
+   "sct": "BWV 287",
+   "url": "data/perf/chor311.json",
+   "endS": 34.674,
+   "maxCh": 4
+  },
+  {
+   "name": "chor312",
+   "group": "Chorales",
+   "title": "O Gott, du frommer Gott",
+   "sct": "BWV 398",
+   "url": "data/perf/chor312.json",
+   "endS": 44.253,
+   "maxCh": 4
+  },
+  {
+   "name": "chor313",
+   "group": "Chorales",
+   "title": "Allein Gott in der H\u00f6h sei Ehr",
+   "sct": "BWV 112/5",
+   "url": "data/perf/chor313.json",
+   "endS": 27.578,
+   "maxCh": 4
+  },
+  {
+   "name": "chor314",
+   "group": "Chorales",
+   "title": "Das alte Jahr vergangen ist",
+   "sct": "BWV 289",
+   "url": "data/perf/chor314.json",
+   "endS": 32.383,
+   "maxCh": 4
+  },
+  {
+   "name": "chor315",
+   "group": "Chorales",
+   "title": "O Gott, du frommer Gott",
+   "sct": "BWV 399",
+   "url": "data/perf/chor315.json",
+   "endS": 34.919,
+   "maxCh": 4
+  },
+  {
+   "name": "chor316",
+   "group": "Chorales",
+   "title": "Christus, der ist mein Leben",
+   "sct": "BWV 282",
+   "url": "data/perf/chor316.json",
+   "endS": 39.025,
+   "maxCh": 4
+  },
+  {
+   "name": "chor317",
+   "group": "Chorales",
+   "title": "Herr, wie du willt, so schick's mit mir",
+   "sct": "BWV 156/6",
+   "url": "data/perf/chor317.json",
+   "endS": 34.686,
+   "maxCh": 4
+  },
+  {
+   "name": "chor318",
+   "group": "Chorales",
+   "title": "Herr wie du willst, so schick's mit mir",
+   "sct": "BWV 339",
+   "url": "data/perf/chor318.json",
+   "endS": 35.873,
+   "maxCh": 4
+  },
+  {
+   "name": "chor319",
+   "group": "Chorales",
+   "title": "Sanctus, sanctus Dominus Deus Sabaoth",
+   "sct": "BWV 325",
+   "url": "data/perf/chor319.json",
+   "endS": 45.631,
+   "maxCh": 4
+  },
+  {
+   "name": "chor320",
+   "group": "Chorales",
+   "title": "Gott sei uns gn\u00e4dig und barmherzig",
+   "sct": "BWV 323",
+   "url": "data/perf/chor320.json",
+   "endS": 33.453,
+   "maxCh": 4
+  },
+  {
+   "name": "chor321",
+   "group": "Chorales",
+   "title": "Wir Christenleut",
+   "sct": "BWV 40/3",
+   "url": "data/perf/chor321.json",
+   "endS": 29.978,
+   "maxCh": 4
+  },
+  {
+   "name": "chor322",
+   "group": "Chorales",
+   "title": "Wenn mein St\u00fcndlein vorhanden ist",
+   "sct": "BWV 428",
+   "url": "data/perf/chor322.json",
+   "endS": 41.888,
+   "maxCh": 4
+  },
+  {
+   "name": "chor323",
+   "group": "Chorales",
+   "title": "Wie sch\u00f6n leuchtet der Morgenstern",
+   "sct": "BWV 172/6",
+   "url": "data/perf/chor323.json",
+   "endS": 37.156,
+   "maxCh": 4
+  },
+  {
+   "name": "chor324",
+   "group": "Chorales",
+   "title": "Jesu, meine Freude",
+   "sct": "BWV 81/7",
+   "url": "data/perf/chor324.json",
+   "endS": 38.603,
+   "maxCh": 4
+  },
+  {
+   "name": "chor325",
+   "group": "Chorales",
+   "title": "Mit Fried und Freud ich fahr dahin",
+   "sct": "BWV 83/5",
+   "url": "data/perf/chor325.json",
+   "endS": 32.291,
+   "maxCh": 4
+  },
+  {
+   "name": "chor326",
+   "group": "Chorales",
+   "title": "Allein Gott in der H\u00f6h sei Ehr",
+   "sct": "BWV 104/6",
+   "url": "data/perf/chor326.json",
+   "endS": 27.577,
+   "maxCh": 4
+  },
+  {
+   "name": "chor327",
+   "group": "Chorales",
+   "title": "Jesu, nun sei gepreiset",
+   "sct": "BWV 190/7",
+   "url": "data/perf/chor327.json",
+   "endS": 49.317,
+   "maxCh": 4
+  },
+  {
+   "name": "chor328",
+   "group": "Chorales",
+   "title": "Liebester Jesu, wir sind hier",
+   "sct": "BWV 373",
+   "url": "data/perf/chor328.json",
+   "endS": 31.398,
+   "maxCh": 4
+  },
+  {
+   "name": "chor329",
+   "group": "Chorales",
+   "title": "Sei Lob und Ehr dem h\u00f6chsten Gut",
+   "sct": "BWV 251",
+   "url": "data/perf/chor329.json",
+   "endS": 27.583,
+   "maxCh": 4
+  },
+  {
+   "name": "chor330",
+   "group": "Chorales",
+   "title": "Nun danket alle Gott",
+   "sct": "BWV 252",
+   "url": "data/perf/chor330.json",
+   "endS": 34.679,
+   "maxCh": 4
+  },
+  {
+   "name": "chor331",
+   "group": "Chorales",
+   "title": "Wo soll ich fliehen hin",
+   "sct": "BWV 136/6",
+   "url": "data/perf/chor331.json",
+   "endS": 32.29,
+   "maxCh": 4
+  },
+  {
+   "name": "chor332",
+   "group": "Chorales",
+   "title": "Von Gott will ich nicht lassen",
+   "sct": "BWV 418",
+   "url": "data/perf/chor332.json",
+   "endS": 44.277,
+   "maxCh": 4
+  },
+  {
+   "name": "chor333",
+   "group": "Chorales",
+   "title": "Es woll' uns Gott gen\u00e4dig sein",
+   "sct": "BWV 69/6",
+   "url": "data/perf/chor333.json",
+   "endS": 49.057,
+   "maxCh": 4
+  },
+  {
+   "name": "chor334",
+   "group": "Chorales",
+   "title": "F\u00fcr deinen Thron tret ich hiermit",
+   "sct": "BWV 327",
+   "url": "data/perf/chor334.json",
+   "endS": 33.655,
+   "maxCh": 4
+  },
+  {
+   "name": "chor335",
+   "group": "Chorales",
+   "title": "Es ist das Heil uns kommen her",
+   "sct": "BWV 155/5",
+   "url": "data/perf/chor335.json",
+   "endS": 27.569,
+   "maxCh": 4
+  },
+  {
+   "name": "chor336",
+   "group": "Chorales",
+   "title": "Wo Gott, der Herr, mich bei uns h\u00e4lt",
+   "sct": "BWV 258",
+   "url": "data/perf/chor336.json",
+   "endS": 27.579,
+   "maxCh": 4
+  },
+  {
+   "name": "chor337",
+   "group": "Chorales",
+   "title": "O Gott, du frommer Gott",
+   "sct": "BWV 24/6",
+   "url": "data/perf/chor337.json",
+   "endS": 34.698,
+   "maxCh": 4
+  },
+  {
+   "name": "chor338",
+   "group": "Chorales",
+   "title": "Jesus, meine Zuversicht",
+   "sct": "BWV 145/8",
+   "url": "data/perf/chor338.json",
+   "endS": 24.055,
+   "maxCh": 4
+  },
+  {
+   "name": "chor339",
+   "group": "Chorales",
+   "title": "Wer nur den lieben Gott la\u00dft walten",
+   "sct": "BWV 179/6",
+   "url": "data/perf/chor339.json",
+   "endS": 25.099,
+   "maxCh": 4
+  },
+  {
+   "name": "chor340",
+   "group": "Chorales",
+   "title": "Befiehl du deine Wege",
+   "sct": "BWV 272",
+   "url": "data/perf/chor340.json",
+   "endS": 34.677,
+   "maxCh": 4
+  },
+  {
+   "name": "chor341",
+   "group": "Chorales",
+   "title": "Ich dank dir, lieber Herre",
+   "sct": "BWV 37/6",
+   "url": "data/perf/chor341.json",
+   "endS": 46.916,
+   "maxCh": 4
+  },
+  {
+   "name": "chor342",
+   "group": "Chorales",
+   "title": "Lobt Gott, ihr Christen allzugleich",
+   "sct": "BWV 376",
+   "url": "data/perf/chor342.json",
+   "endS": 30.135,
+   "maxCh": 4
+  },
+  {
+   "name": "chor343",
+   "group": "Chorales",
+   "title": "Nun lieget alles unter dir",
+   "sct": "BWV 11/6",
+   "url": "data/perf/chor343.json",
+   "endS": 45.72,
+   "maxCh": 4
+  },
+  {
+   "name": "chor344",
+   "group": "Chorales",
+   "title": "Vom Himmel hoch, da komm ich her",
+   "sct": "BWV 248/23",
+   "url": "data/perf/chor344.json",
+   "endS": 22.789,
+   "maxCh": 4
+  },
+  {
+   "name": "chor345",
+   "group": "Chorales",
+   "title": "O Haupt voll Blut und Wunden",
+   "sct": "BWV 248/5",
+   "url": "data/perf/chor345.json",
+   "endS": 34.683,
+   "maxCh": 4
+  },
+  {
+   "name": "chor346",
+   "group": "Chorales",
+   "title": "Meines Lebens letzte Zeit",
+   "sct": "BWV 381",
+   "url": "data/perf/chor346.json",
+   "endS": 40.863,
+   "maxCh": 4
+  },
+  {
+   "name": "chor347",
+   "group": "Chorales",
+   "title": "Was Gott tut, das ist wohlgetan",
+   "sct": "BWV 250",
+   "url": "data/perf/chor347.json",
+   "endS": 27.584,
+   "maxCh": 4
+  },
+  {
+   "name": "chor348",
+   "group": "Chorales",
+   "title": "Meinen Jesum la\u00df ich nicht, weil",
+   "sct": "BWV 70 & 70a/11",
+   "url": "data/perf/chor348.json",
+   "endS": 35.888,
+   "maxCh": 4
+  },
+  {
+   "name": "chor349",
+   "group": "Chorales",
+   "title": "Ich hab in Gottes Herz und Sinn",
+   "sct": "BWV 103/6",
+   "url": "data/perf/chor349.json",
+   "endS": 32.379,
+   "maxCh": 4
+  },
+  {
+   "name": "chor350",
+   "group": "Chorales",
+   "title": "Jesu, meiner Freuden Freude",
+   "sct": "BWV 360",
+   "url": "data/perf/chor350.json",
+   "endS": 32.288,
+   "maxCh": 4
+  },
+  {
+   "name": "chor351",
+   "group": "Chorales",
+   "title": "Wenn mein St\u00fcndlein vorhanden ist",
+   "sct": "BWV 430",
+   "url": "data/perf/chor351.json",
+   "endS": 42.134,
+   "maxCh": 4
+  },
+  {
+   "name": "chor352",
+   "group": "Chorales",
+   "title": "Es woll' uns Gott gen\u00e4dig sein",
+   "sct": "BWV 312",
+   "url": "data/perf/chor352.json",
+   "endS": 44.29,
+   "maxCh": 4
+  },
+  {
+   "name": "chor353",
+   "group": "Chorales",
+   "title": "Der Herr ist mein getreuer Hirt",
+   "sct": "BWV 112/5",
+   "url": "data/perf/chor353.json",
+   "endS": 27.577,
+   "maxCh": 4
+  },
+  {
+   "name": "chor354",
+   "group": "Chorales",
+   "title": "Sei Lob und Ehr dem h\u00f6chsten Gut",
+   "sct": "BWV 117/4",
+   "url": "data/perf/chor354.json",
+   "endS": 27.577,
+   "maxCh": 4
+  },
+  {
+   "name": "chor355",
+   "group": "Chorales",
+   "title": "Nun ruhen alle W\u00e4lder",
+   "sct": "BWV 44/7",
+   "url": "data/perf/chor355.json",
+   "endS": 32.378,
+   "maxCh": 4
+  },
+  {
+   "name": "chor356",
+   "group": "Chorales",
+   "title": "Jesu, meine Freude",
+   "sct": "BWV 358",
+   "url": "data/perf/chor356.json",
+   "endS": 38.608,
+   "maxCh": 4
+  },
+  {
+   "name": "chor357",
+   "group": "Chorales",
+   "title": "Warum sollt ich mich denn gr\u00e4men",
+   "sct": "BWV 422",
+   "url": "data/perf/chor357.json",
+   "endS": 36.047,
+   "maxCh": 4
+  },
+  {
+   "name": "chor358",
+   "group": "Chorales",
+   "title": "Meine Seele erhebet den Herrn",
+   "sct": "BWV 10/7",
+   "url": "data/perf/chor358.json",
+   "endS": 60.158,
+   "maxCh": 4
+  },
+  {
+   "name": "chor359",
+   "group": "Chorales",
+   "title": "Allein zu dir, Herr Jesu Christ",
+   "sct": "BWV 261",
+   "url": "data/perf/chor359.json",
+   "endS": 51.022,
+   "maxCh": 4
+  },
+  {
+   "name": "chor360",
+   "group": "Chorales",
+   "title": "Wir Christenleut",
+   "sct": "BWV 248/35",
+   "url": "data/perf/chor360.json",
+   "endS": 29.894,
+   "maxCh": 4
+  },
+  {
+   "name": "chor361",
+   "group": "Chorales",
+   "title": "Du Lebensfurst, Herr Jesu Christ",
+   "sct": "BWV 248/12",
+   "url": "data/perf/chor361.json",
+   "endS": 32.385,
+   "maxCh": 4
+  },
+  {
+   "name": "chor362",
+   "group": "Chorales",
+   "title": "Es ist gewi\u00dflich an der Zeit",
+   "sct": "BWV 248/59",
+   "url": "data/perf/chor362.json",
+   "endS": 27.57,
+   "maxCh": 4
+  },
+  {
+   "name": "chor363",
+   "group": "Chorales",
+   "title": "O Welt, sieh hier dein Leben",
+   "sct": "BWV 395",
+   "url": "data/perf/chor363.json",
+   "endS": 32.357,
+   "maxCh": 4
+  },
+  {
+   "name": "chor364",
+   "group": "Chorales",
+   "title": "Von Gott will ich nicht lassen",
+   "sct": "BWV 417",
+   "url": "data/perf/chor364.json",
+   "endS": 34.924,
+   "maxCh": 4
+  },
+  {
+   "name": "chor365",
+   "group": "Chorales",
+   "title": "Jesu meiner Seelen Wonne",
+   "sct": "BWV 359",
+   "url": "data/perf/chor365.json",
+   "endS": 33.651,
+   "maxCh": 4
+  },
+  {
+   "name": "chor366",
+   "group": "Chorales",
+   "title": "O Welt, sieh hier dein Leben",
+   "sct": "BWV 394",
+   "url": "data/perf/chor366.json",
+   "endS": 32.361,
+   "maxCh": 4
+  },
+  {
+   "name": "chor367",
+   "group": "Chorales",
+   "title": "Befiehl du deine Wege",
+   "sct": "BWV 271",
+   "url": "data/perf/chor367.json",
+   "endS": 34.688,
+   "maxCh": 4
+  },
+  {
+   "name": "chor368",
+   "group": "Chorales",
+   "title": "Hilf, Herr Jesu, la\u00df gelingen",
+   "sct": "BWV 248/42",
+   "url": "data/perf/chor368.json",
+   "endS": 40.33,
+   "maxCh": 4
+  },
+  {
+   "name": "chor369",
+   "group": "Chorales",
+   "title": "Jesu, der du meine Seele",
+   "sct": "BWV 354",
+   "url": "data/perf/chor369.json",
+   "endS": 33.649,
+   "maxCh": 4
+  },
+  {
+   "name": "chor370",
+   "group": "Chorales",
+   "title": "Kommt her zu mir, spricht Gottes Sohn",
+   "sct": "BWV 74/8",
+   "url": "data/perf/chor370.json",
+   "endS": 37.338,
+   "maxCh": 4
+  },
+  {
+   "name": "chor371",
+   "group": "Chorales",
+   "title": "Christ lag in Todesbanden",
+   "sct": "BWV 278",
+   "url": "data/perf/chor371.json",
+   "endS": 34.696,
+   "maxCh": 4
+  }
+ ],
+ "nInstances": 6,
+ "scl": "data/w3.scl"
+}
