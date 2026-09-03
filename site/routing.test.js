@@ -216,6 +216,14 @@ test("titles: engraved names, BWV, the No. 8 enharmonic split", () => {
   assert.deepEqual(pieceTitle("wtc1p01"),
     { main: "Prelude I in C major", bwv: "BWV 846" });
   assert.equal(pieceTitle("wtc1p08").main, "Prelude VIII in E♭ minor");
+  assert.equal(pieceTitle("inv0772").main, "Invention 1 in C major");
+  assert.equal(pieceTitle("inv0772a").bwv, "BWV 772a");
+  assert.equal(pieceTitle("sinf0791").main, "Sinfonia 5 in E♭ major");
+  assert.equal(pieceTitle("artfugue-019").main,
+    "Contrapunctus XIV (unfinished)");
+  assert.equal(pieceTitle("offering-002").main, "Ricercar a 6");
+  assert.equal(pieceTitle("offering-013c").bwv, "BWV 1079");
+  assert.equal(pieceTitle("chor001").main, "chor001"); // falls to manifest
   assert.equal(pieceTitle("wtc1f08").main, "Fugue VIII in D♯ minor");
   assert.deepEqual(pieceTitle("wtc2f24"),
     { main: "Fugue XXIV in B minor", bwv: "BWV 893" });

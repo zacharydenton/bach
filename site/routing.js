@@ -226,8 +226,61 @@ export const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX",
   "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX",
   "XXI", "XXII", "XXIII", "XXIV"];
 
+// Inventions/Sinfonias share one key sequence (BWV 772-786, 787-801).
+const INV_KEYS = ["C major", "C minor", "D major", "D minor",
+  "E\u266d major", "E major", "E minor", "F major", "F minor",
+  "G major", "G minor", "A major", "A minor", "B\u266d major",
+  "B minor"];
+
+// The Art of Fugue, displayed in the COMMON numbering (canons named,
+// mirror fugues by texture, the unfinished fugue as Contrapunctus XIV)
+// — this edition's own titles mix three schemes and two typos.
+const AOF = {
+  "001": "Contrapunctus I", "002": "Contrapunctus II",
+  "003": "Contrapunctus III", "004": "Contrapunctus IV",
+  "005": "Contrapunctus V",
+  "006": "Contrapunctus VI, in Stile francese",
+  "007": "Contrapunctus VII, per Augmentationem et Diminutionem",
+  "008": "Contrapunctus VIII, a 3",
+  "009": "Contrapunctus IX, alla Duodecima",
+  "010": "Contrapunctus X, alla Decima",
+  "011": "Contrapunctus XI",
+  "012": "Canon all'Ottava",
+  "013": "Canon alla Duodecima",
+  "014": "Canon alla Decima",
+  "015": "Canon per Augmentationem in Contrario Motu",
+  "016a": "Mirror Fugue a 3, rectus (Cp. XIII)",
+  "016b": "Mirror Fugue a 3, inversus (Cp. XIII)",
+  "018a": "Mirror Fugue a 4, rectus (Cp. XII)",
+  "018b": "Mirror Fugue a 4, inversus (Cp. XII)",
+  "019": "Contrapunctus XIV (unfinished)",
+};
+
+const OFFERING = {
+  "001": "Ricercar a 3", "002": "Ricercar a 6",
+  "013a": "Trio Sonata — I. Largo",
+  "013b": "Trio Sonata — II. Allegro",
+  "013c": "Trio Sonata — III. Adagio",
+  "013d": "Trio Sonata — IV. Allegro",
+};
+
 export function pieceTitle(slug) {
-  const m = /^wtc([12])([pf])(\d\d)$/.exec(slug);
+  let m = /^(inv|sinf)0?(\d+)(a?)$/.exec(slug);
+  if (m) {
+    const bwv = +m[2];
+    const n = m[1] === "inv" ? bwv - 771 : bwv - 786;
+    const kind = m[1] === "inv" ? "Invention" : "Sinfonia";
+    const variant = m[3] ? " (triplet version)" : "";
+    return { main: `${kind} ${n} in ${INV_KEYS[n - 1]}${variant}`,
+             bwv: `BWV ${bwv}${m[3]}` };
+  }
+  m = /^artfugue-(.+)$/.exec(slug);
+  if (m && AOF[m[1]])
+    return { main: AOF[m[1]], bwv: "BWV 1080" };
+  m = /^offering-(.+)$/.exec(slug);
+  if (m && OFFERING[m[1]])
+    return { main: OFFERING[m[1]], bwv: "BWV 1079" };
+  m = /^wtc([12])([pf])(\d\d)$/.exec(slug);
   if (!m) return { main: slug, bwv: "" };
   const book = +m[1];
   const kind = m[2] === "p" ? "Prelude" : "Fugue";

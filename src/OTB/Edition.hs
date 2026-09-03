@@ -36,7 +36,7 @@ recordOf name t = listToMaybe
 -- @OTL\@EN@ count, the untagged or @\@\@@-primary one wins) and
 -- @!!!SCT@ (e.g. "BWV 269").
 kernTitle :: Text -> (Maybe Text, Maybe Text)
-kernTitle t = (full, recordOf "!!!SCT:" t)
+kernTitle t = (deEntity <$> full, recordOf "!!!SCT:" t)
   where
     otls =
       [ (rank tag, T.strip val)
@@ -60,10 +60,29 @@ kernTitle t = (full, recordOf "!!!SCT:" t)
     -- conversions carry "Two-part Inventions" in OTL and "Inventio 1.
     -- (in C)" in OMV; a movement designation (!!!OMD) disambiguates
     -- generic titles like the trio sonata's three "Trio"s
-    full = case (recordOf "!!!OMV:" t, title, recordOf "!!!OMD:" t) of
+    -- an OMV that is just a number (the Musical Offering's trio
+    -- movements say "1") is an index, not a title
+    meaningful v = T.any (`elem` letters) v
+      where letters = ['a' .. 'z'] <> ['A' .. 'Z']
+    full = case ( recordOf "!!!OMV:" t >>= \v ->
+                    if meaningful v then Just v else Nothing
+                , title, recordOf "!!!OMD:" t ) of
       (Just mv, _, _) -> Just mv
       (_, Just ti, Just md) -> Just (ti <> " — " <> md)
       _ -> title
+
+-- | The chorale OTLs carry HTML entities ("gn&auml;diglich"); decode
+-- the German set the corpus actually uses.
+deEntity :: Text -> Text
+deEntity = go entities
+  where
+    go [] s = s
+    go ((from, to) : rest) s = go rest (T.replace from to s)
+    entities =
+      [ ("&auml;", "ä"), ("&ouml;", "ö"), ("&uuml;", "ü")
+      , ("&Auml;", "Ä"), ("&Ouml;", "Ö"), ("&Uuml;", "Ü")
+      , ("&szlig;", "ß"), ("&eacute;", "é"), ("&egrave;", "è")
+      , ("&amp;", "&"), ("&apos;", "'"), ("&quot;", "\"") ]
 
 -- | The default editions root for a given config path.
 editionsFor :: FilePath -> FilePath
