@@ -45,7 +45,11 @@ kernTitle t = (full, recordOf "!!!SCT:" t)
       , let (tag, v) = T.breakOn ":" rest
       , not (T.null v)
       , let val = T.drop 1 v
-      , not (T.null (T.strip val)) ]
+      , not (T.null (T.strip val))
+      -- an unexpanded template reference (the Art of Fugue's
+      -- movement 14 says literally "@{OTL2}") is not a title; the
+      -- numbered OTL1/OTL2 variants rank behind and take over
+      , not ("@{" `T.isInfixOf` val) ]
     -- untagged beats the @@-marked primary beats any @-translation
     rank tag
       | T.null tag = 0 :: Int
